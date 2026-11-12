@@ -69,7 +69,8 @@ _NEGATION_AFTER_RX = re.compile(
 )
 _RELOCATION_TARGET_RX = re.compile(r"\bto\s+(?:the\s+)?([A-Z][\w-]+(?:\s[A-Z][\w-]+)?)")
 _ANYWHERE_RX = re.compile(
-    r"work from anywhere|anywhere in (?:the )?(?:world|europe|eu|emea)|"
+    # «Remote from anywhere» — да; «from anywhere in the US» — это remote с привязкой к стране
+    r"work from anywhere|remote from anywhere(?!\s+in\b)|anywhere in (?:the )?(?:world|europe|eu|emea)|"
     r"remote (?:with)?in (?:the )?(?:eu|emea|europe)|across (?:the )?(?:eu|emea|europe)|"
     r"any country|from any (?:location|country)|fully distributed",
     re.I,

@@ -1,4 +1,5 @@
 """Все настройки в одном месте: пути, таблица, фильтры."""
+import os
 import re
 import tomllib
 from pathlib import Path
@@ -20,8 +21,10 @@ REPORTS_DIR = ROOT / "reports"
 ERRORS_LOG = ROOT / "errors.log"  # предупреждения и ошибки текущего прогона
 ERRORS_LOG_PREV = ROOT / "errors.prev.log"  # прошлого прогона (перезаписывается при каждом новом)
 STAFFING_FILE = local_or_example(ROOT / "staffing_blacklist.txt")
-SETTINGS_FILE = local_or_example(ROOT / "settings.toml")  # нет своего — settings.example.toml
-PROFILE_FILE = local_or_example(ROOT / "profile.toml")  # нет своего — profile.example.toml
+# нет своего — settings.example.toml / profile.example.toml. JOBHUNTER_SETTINGS — другой файл (тесты берут пример,
+# чтобы не зависеть от личных настроек); JOBHUNTER_PROFILE и JOBHUNTER_CV_BASE — то же для профиля и базы резюме
+SETTINGS_FILE = Path(os.environ.get("JOBHUNTER_SETTINGS") or local_or_example(ROOT / "settings.toml"))
+PROFILE_FILE = Path(os.environ.get("JOBHUNTER_PROFILE") or local_or_example(ROOT / "profile.toml"))
 # Почта с перепиской с рекрутерами (applications.py): OAuth-клиент Google и локальные токен/кэш
 GMAIL_CLIENT_FILE = ROOT / "gmail_client.json"
 GMAIL_TOKEN_FILE = ROOT / "state" / "gmail_token.json"
@@ -32,7 +35,7 @@ MAIL_SYNC_FILE = ROOT / "state" / "mail_sync.json"  # когда почта об
 MANUAL_APPLICATIONS_FILE = ROOT / "applications_manual.toml"
 
 # База резюме для генератора (телефон, почта — личное): нет своей — cv/base.example.toml
-CV_BASE_FILE = local_or_example(ROOT / "cv" / "base.toml")
+CV_BASE_FILE = Path(os.environ.get("JOBHUNTER_CV_BASE") or local_or_example(ROOT / "cv" / "base.toml"))
 
 _SETTINGS = tomllib.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
 
@@ -250,8 +253,8 @@ ROLE_PLATFORM_RX = re.compile(
 )
 
 # --- Тип занятости: только full-time (штат или контракт) ----------------------
-NOT_FULL_TIME_RX = re.compile(
-    r"part[\s-]?time|intern(?:ship)?\b|freelanc\w*|temporary|\btemp\b|hourly|volunteer|per[\s-]diem|"
+NOT_FULL_TIME_RX = re.compile(  # «part_time» — так пишет freehire API
+    r"part[\s_-]?time|intern(?:ship)?\b|freelanc\w*|temporary|\btemp\b|hourly|volunteer|per[\s-]diem|"
     r"seasonal|trainee|werkstudent|working student|mini[\s-]?job|"
     r"частичн\w+ занятост\w+|неполн\w+ (?:день|занятост\w+)|фриланс\w*|подработк\w+|стаж[её]р\w*",
     I,

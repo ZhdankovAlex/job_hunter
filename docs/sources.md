@@ -88,11 +88,13 @@ vacancies in `relocation_hubs` countries go to 🌍 as "relocation (unconfirmed)
 
 ## Career pages and single vacancies
 
-- `[career_pages]`: `Company = "url"` or `{ url = "...", location = "Remote" }` (the company must be in
-  `companies.txt`). `sites.career_page` looks for links with matching titles and opens them: Python / backend
+- `[career_pages]`: `Company = "url"` or `{ url = "...", location = "Remote", links = "https://example.com/careers/" }`
+  (the company must be in `companies.txt`); `links` is the beginning of vacancy addresses, so that menu links with
+  similar titles ("Hire Python Developers") are not taken for vacancies. `sites.career_page` looks for links with matching titles and opens them: Python / backend
   first, up to `PAGE_DETAIL_LIMIT` (100); if there are more, a warning says "открыто N из M". A generic "Apply" button
-  takes the title from the link address (`/job/senior-python-developer`). Staffing companies
-  (`staffing_blacklist.txt`) are not crawled. Pages that build the list with scripts cannot be read this way.
+  takes the title from the link address (`/job/senior-python-developer`). Pages listed here are
+  read even for staffing companies (you chose them by hand) — their vacancies go to the "Staffing/outsourcing"
+  appendix. Pages that build the list with scripts cannot be read this way.
 - `[manual_jobs].urls`: vacancies you found by hand. They are opened every run and go to the report with the
   same filters, Fit and application status; the source is "вручную" (manual). Data comes from JSON-LD
   `JobPosting`, else Next.js page data, else `<title>` and the page text.

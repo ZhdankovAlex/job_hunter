@@ -89,6 +89,7 @@ All keys are commented in `settings.example.toml`.
 | `cvgen.py` | CV builder: picks bullets for a vacancy, one-page version, Markdown → HTML → PDF via headless Chrome |
 | `cover_letter.py` | Cover letter for a vacancy from `cv/base.toml` (`[summary]`, `[cover]`) |
 | `vacancy_lookup.py` | A vacancy by link: from saved reports or from the page (JobPosting) |
+| `coverage.py` | Why a source gave no vacancies to the report — for the "Sources" page |
 | `outreach.py` | LinkedIn people-search links, contacts from the text, message drafts |
 | `interview_prep.py`, `market_check.py` | Interview preparation, CV vs market |
 | `report.py`, `html_report.py` | Markdown and HTML reports |
@@ -109,6 +110,7 @@ All keys are commented in `settings.example.toml`.
 | `rejected_latest.tsv` | Everything the filters dropped, with the reason and a quote |
 | `mail_cache.json`, `mail_sync.json`, `gmail_token.json` | Mail cache, last sync, Gmail token |
 | `salary_samples.json`, `levels_cache.json` | Salary ranges base, levels.fyi cache |
+| `web_cache.json` | Precomputed "CV vs market" and "Skills" pages of the web UI |
 | `cv_text.json` | CV text for matching |
 
 `reports/`, `cv_out/`, `errors.log`, `errors.prev.log`, `last_run.log` are run results; they can be deleted, the

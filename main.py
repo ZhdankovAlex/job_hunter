@@ -360,15 +360,12 @@ def run(args):
     log.info("Компаний к проверке: %d", len(companies))
     by_name = {c.name: c for c in companies}
     career_pages = []
-    # страницы из settings.toml [career_pages]: компания = ссылка или { url, location }
+    # страницы из settings.toml [career_pages]: компания = ссылка или { url, location, links }. Их выбрали руками,
+    # поэтому читаются и у аутсорса — вакансии такой компании уйдут в приложение «Staffing/outsourcing»
     for name, page in geo.S.get("career_pages", {}).items():
         if name in by_name:
             page = page if isinstance(page, dict) else {"url": page}
-            career_pages.append((by_name[name], page["url"], page.get("location", "")))
-    # аутсорс (staffing_blacklist.txt) по карьерным страницам не обходим: его вакансии всё равно уходят в
-    # отдельный раздел, а страницы у таких компаний огромные или битые
-    staffing = Blacklist()
-    career_pages = [p for p in career_pages if not staffing.reason(p[0].name, "", "")]
+            career_pages.append((by_name[name], page["url"], page.get("location", ""), page.get("links", "")))
     progress.start("sources")
     fetched = collect(args, companies, http, ats, career_pages)
     progress.count(fetched=len(fetched))

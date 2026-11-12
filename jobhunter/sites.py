@@ -724,13 +724,15 @@ _GENERIC_LINK_RX = re.compile(r"^(?:apply(?: now)?|learn more|read more|details|
 _JOB_SLUG_RX = re.compile(r"/(?:jobs?|careers?|positions?|vacanc(?:y|ies)|openings?)/([a-z0-9][a-z0-9_-]{3,90})/?(?:[?#]|$)", re.I)
 
 
-def career_page(http: Http, company, url: str, location: str = "") -> list[Job]:
+def career_page(http: Http, company, url: str, location: str = "", links: str = "") -> list[Job]:
     """Ищет на карьерной странице ссылки на вакансии подходящих ролей и читает их текст.
 
     Работает только для страниц, которые отдают список вакансий в HTML; если список
     строится скриптами, ссылок не будет — это видно в отчёте о доступности.
     location — метка по умолчанию, если на странице вакансии нет ни Remote, ни домашней страны
     (например, «Remote» для компании, которая целиком работает удалённо).
+    links — начало адреса вакансий («https://example.com/careers/»), если в меню сайта есть ссылки
+    с похожими названиями, которые вакансиями не являются («Hire Python Developers»).
     """
     from urllib.parse import urljoin
 
@@ -755,8 +757,11 @@ def career_page(http: Http, company, url: str, location: str = "") -> list[Job]:
             # кнопка «Apply», а название — в соседнем блоке: берём из адреса /job/senior-python-developer
             slug = _JOB_SLUG_RX.search(href)
             title = slug.group(1).replace("-", " ").replace("_", " ").strip().title() if slug else ""
+        link = urljoin(r.url, href)
+        if links and (not link.startswith(links) or link.rstrip("/") == links.rstrip("/")):
+            continue
         if 5 <= len(title) <= 110 and filters.title_candidate(title):
-            candidates.setdefault(urljoin(r.url, href), title)
+            candidates.setdefault(link, title)
     status["links"] = len(candidates)
     # сначала Python / backend, потом остальные инженерные роли — при обрезке лимитом теряются наименее подходящие
     ranked = sorted(candidates.items(), key=lambda kv: (0 if _CORE_TITLE_RX.search(kv[1]) else 1))

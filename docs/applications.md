@@ -16,7 +16,7 @@ last letter dates, days of silence, the history and a link to the last letter.
   per second.
 - Letters are parsed by patterns (`jobhunter/mail.py`): the company comes from the ATS sender name (Greenhouse,
   Lever, Ashby, Workable…), the subject ("Thank you for applying to X", "… at X"), job site texts or the corporate
-  domain (`anna@acme.com` → Acme). Letter type: offer > rejection > stage / application in the subject > a real
+  domain (`jane@acme.com` → Acme). Letter type: offer > rejection > stage / application in the subject > a real
   invitation in the text (a call link, Calendly, "please share your availability") > application confirmation >
   description of stages. Only the letter's own text is parsed: quoted history ("On … wrote:", lines with ">") is
   cut off. Conditional phrases ("If you are not selected…", "if your profile fits, we will schedule an interview")
@@ -24,10 +24,23 @@ last letter dates, days of silence, the history and a link to the last letter.
 - Final status and row colour (`applications_report.effective_status`):
   - 🟢 green — stages are going (an invitation by mail, or an interview event in `applications_manual.toml`), offer;
   - 🟡 yellow — waiting: you applied, no answer yet, no more than `timeout_days` (14) days passed;
-  - 🟠 orange — you declined (a `declined` event);
+  - 🟠 orange — you declined (the last event is `declined`; a new application or stage after it makes the process
+    live again);
   - 🔴 red — any rejection: a rejection letter, a `rejected` event, or more than `timeout_days` days of silence
     after an application or a stage.
-  A new application by mail after a rejection letter is a new attempt: 🟡 again.
+  A new application after a rejection is a new process: its status counts only events after the first new
+  application — with stages there it is 🟢, otherwise 🟡; stages before it (for another vacancy) do not count.
+- **Cancelled meetings.** A series of stage letters (pick a slot → confirmation → reminder) that ends with a
+  cancellation is not a stage in the funnel; in the history such a letter is "отмена". A "Meeting cancelled" after a
+  rejection does not make it look like silence after a stage. Events written by hand in `applications_manual.toml`
+  are never dropped from such a series.
+- **Days of silence** — only for live processes (waiting, stages going); empty for rejections and offers; 0, not a
+  negative number, for events scheduled in the future.
+- "While this opportunity may not be the right fit…" in an application confirmation is a caveat, not a rejection;
+  typographic apostrophes (won’t, can’t) are normalised before parsing. Letters are split into sentences before
+  conditional phrases and disclaimers are cut, so parsing hundreds of letters takes well under a second.
+- Times of events in `applications_manual.toml` are in this computer's time zone (summer and winter differ);
+  `[mail].utc_offset_hours` sets it explicitly (useful in Docker with `TZ=UTC`).
 - Applications not from mail (Telegram, LinkedIn, calls) go to `applications_manual.toml`: company, source and
   events (`applied` / `interview` / `rejected` / `offer` / `declined` / `other`) with a date, a note and an optional
   vacancy `url`. If the company is also in the mail, the events are merged into one row. Events with a `url` also

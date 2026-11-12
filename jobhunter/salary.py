@@ -25,6 +25,7 @@ _CURRENCY_RX = re.compile(r"(\$|€|£|₽|\busd\b|\beur\b|\bgbp\b|\bpln\b|zł|\
 _CURRENCY = {"$": "USD", "usd": "USD", "€": "EUR", "eur": "EUR", "£": "GBP", "gbp": "GBP", "pln": "PLN",
              "zł": "PLN", "chf": "CHF", "cad": "CAD", "aud": "AUD", "₽": "RUB", "rub": "RUB", "руб": "RUB"}
 _NUMBER_RX = re.compile(r"(\d{1,3}(?:[  .,]\d{3})+|\d+(?:[.,]\d+)?)\s?([kкKК])?(?![\w%])")
+_RANGE_GAP_RX = re.compile(r"\s*(?:-|–|—|to|до)\s*[$€£]?\s*", re.I)  # между числами диапазона: «4.5 – €5.5k»
 _YEAR_RX = re.compile(r"year|annual|annum|/\s?yr|\bp\.?a\.?\b|в год|год", re.I)
 _HOUR_RX = re.compile(r"hour|/\s?hr?\b|/h\b|в час|час", re.I)
 _DAY_RX = re.compile(r"\bday\b|/\s?day|в день", re.I)
@@ -150,7 +151,16 @@ def parse(text: str) -> tuple[int, int] | None:
     if not currency or _HOUR_RX.search(text) or _DAY_RX.search(text):
         return None
     rate = rates().get(_CURRENCY[currency.group(1).lower()], 0)
-    numbers = [_number(n, k) for n, k in _NUMBER_RX.findall(text)]
+    matches = list(_NUMBER_RX.finditer(text))
+    found = []
+    for i, m in enumerate(matches):
+        n, k = m.groups()
+        nxt = matches[i + 1] if i + 1 < len(matches) else None
+        # «4.5–5.5k EUR»: «k» стоит только у второго числа диапазона, но относится к обоим
+        if not k and nxt and nxt.group(2) and _RANGE_GAP_RX.fullmatch(text[m.end():nxt.start()]):
+            k = nxt.group(2)
+        found.append((n, k))
+    numbers = [_number(n, k) for n, k in found]
     numbers = [n for n in numbers if n >= 300]
     if not numbers or not rate:
         return None

@@ -3,7 +3,7 @@
 # События добавляются на страницу reports/applications.html вместе с письмами;
 # если компания есть и в почте, события объединяются.
 #
-# kind: applied (отклик / первый контакт) | interview (этап) | rejected (отказ) | offer | other
+# kind: applied (отклик / первый контакт) | interview (этап) | rejected (отказ) | declined (отказался сам) | offer | other
 # date — время переписки, note — что произошло, url — ссылка на вакансию (необязательно).
 
 [[application]]

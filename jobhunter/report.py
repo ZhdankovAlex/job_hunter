@@ -411,7 +411,7 @@ def _outreach_section(picked):
         lines += [f"{n}. **{_cell(j.company) or '—'}** — {_cell(j.title, 80)}: {' · '.join(links) or 'компания не указана'}",
                   *([f"   📇 контакты из вакансии: {' · '.join(direct)}"] if direct else []),
                   f"   > ✉️ рекрутеру: {outreach.draft(j)}",
-                  f"   >",
+                  "   >",
                   f"   > 🤝 инженеру, реферал: {outreach.referral_draft(j)}", ""]
     return lines
 

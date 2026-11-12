@@ -26,7 +26,7 @@ _SHEET_DECLINED_RX = re.compile(r"отказался|отказалась", re.I
 _SHEET_REJECTED_RX = re.compile(r"^отказ\b", re.I)
 _SHEET_IGNORED_RX = re.compile(r"игнор", re.I)
 KIND_NAMES = {
-    mail.OFFER: "оффер", mail.INTERVIEW: "этап", mail.APPLIED: "отклик", mail.REJECTED: "отказ", mail.OTHER: "письмо",
+    mail.OFFER: "оффер", mail.INTERVIEW: "этап", mail.APPLIED: "отклик", mail.REJECTED: "отказ", mail.DECLINED: "отказался сам", mail.OTHER: "письмо",
 }
 # Воронка: до какого этапа дошли с компанией. Этап письма/заметки — по словам в теме; на один этап приходит
 # пачка писем (приглашение, подтверждение, напоминание), поэтому считаем не письма, а самый дальний этап.
@@ -45,9 +45,39 @@ _TECH_RX = re.compile(
 )
 
 
+SERIES_GAP_DAYS = 14  # письма об одном этапе (выбор слота, подтверждение, напоминание) приходят плотной серией
+
+
+def _cancelled_series(events) -> list:
+    """Письма-этапы, которые так и не состоялись: серия писем об этапе, последнее из которых — отмена.
+
+    Пример: «Select availability for Screen Call» → «Confirmation» → «Reminder» → «Interview cancelled».
+    Серии разделяет перерыв больше SERIES_GAP_DAYS дней. События, записанные руками (applications_manual.toml,
+    у них нет письма), не выбрасываются: это то, что владелец знает точно.
+    """
+    series, current, last = [], [], None
+    for e in sorted((e for e in events if e.kind == mail.INTERVIEW), key=lambda e: e.when):
+        if last and (e.when - last).days > SERIES_GAP_DAYS:
+            series.append(current)
+            current = []
+        current.append(e)
+        last = e.when
+    if current:
+        series.append(current)
+    return [e for s in series if _CANCELLED_RX.search(s[-1].subject) for e in s if e.thread]
+
+
+def _base_status(app) -> str:
+    """Последнее значимое событие, без писем об отмене встречи: «Meeting cancelled» после отказа — не новый этап."""
+    meaningful = [e for e in app.ordered if e.kind != mail.OTHER
+                  and not (e.kind == mail.INTERVIEW and _CANCELLED_RX.search(e.subject))]
+    return meaningful[-1].kind if meaningful else app.status
+
+
 def funnel_stage(app, in_sheet: str = "") -> str:
     """Самый дальний этап с компанией: applied / screen / tech / final / offer."""
     best = "applied"
+    cancelled = _cancelled_series(app.events)
 
     def bump(stage):
         nonlocal best
@@ -57,7 +87,7 @@ def funnel_stage(app, in_sheet: str = "") -> str:
     for e in app.events:
         if e.kind == mail.OFFER:
             bump(OFFER)
-        elif e.kind == mail.INTERVIEW and not _CANCELLED_RX.search(e.subject):
+        elif e.kind == mail.INTERVIEW and e not in cancelled:
             done = _PLAN_RX.split(e.subject, 1)[0]  # «…; дальше тестовое» — план, а не пройденный этап
             bump(FINAL if _FINAL_RX.search(done) else TECH if _TECH_RX.search(done) else SCREEN)
     for s in (in_sheet or "").split(","):
@@ -107,23 +137,30 @@ def effective_status(app, in_applied: str, now: datetime) -> tuple[str, str]:
 
     🟢 этапы: приглашение на этап по почте или собеседование / тестовое в applications_manual.toml;
     🟡 ждём ответа: был отклик, ответа ещё нет, но прошло не больше TIMEOUT_DAYS;
-    🟠 отказался сам: так отмечено в applications_manual.toml;
+    🟠 отказался сам: последнее событие в applications_manual.toml — declined;
     🔴 отказ: письмо с отказом, «Отказ» в applications_manual.toml или молчание дольше TIMEOUT_DAYS.
     Отказ как самое последнее событие важнее этапа из файла. Новый отклик в почте после письма-отказа — повторная попытка: она снова ждёт ответа.
     """
     sheet = [s.strip() for s in in_applied.split(",") if s.strip()] if in_applied else []
-    silent = (now - app.last.when).days
+    silent = max(0, (now - app.last.when).days)  # событие на будущее (назначенная встреча) — не тишина
     if app.status == mail.OFFER:
         return OFFER, ""
+    if app.status == mail.DECLINED:  # новый отклик или этап после отказа снова сделает процесс живым
+        return DECLINED, ""
     stage_rows = [s for s in sheet if _SHEET_STAGE_RX.search(s)]
     # статусы по компании без дат, поэтому отказ как самое последнее событие важнее этапа
     if stage_rows and app.last.kind != mail.REJECTED:
         return ACTIVE, f"по откликам: {stage_rows[0]}"
     rejects = [e.when for e in app.events if e.kind == mail.REJECTED]
     reapplied = bool(rejects) and any(e.kind == mail.APPLIED and e.when > max(rejects) for e in app.events)
-    base, why = app.status, ""
+    base, why = _base_status(app), ""
     if reapplied:
-        base, why = mail.APPLIED, "повторный отклик после отказа"
+        # новый процесс начинается с первого отклика после последнего отказа; этапы до него
+        # (например, отменённый звонок по другой вакансии) к нему не относятся
+        restart = min(e.when for e in app.events if e.kind == mail.APPLIED and e.when > max(rejects))
+        dropped = _cancelled_series(app.events)
+        later = [e for e in app.events if e.when > restart and e.kind == mail.INTERVIEW and e not in dropped]
+        base, why = (mail.INTERVIEW if later else mail.APPLIED), "повторный отклик после отказа"
     elif any(_SHEET_DECLINED_RX.search(s) for s in sheet):
         return DECLINED, ""
     elif any(_SHEET_REJECTED_RX.search(s) for s in sheet):
@@ -181,7 +218,7 @@ class StatusIndex:
         """Счётчики по статусам и кому пора напомнить о себе."""
         nudge = []
         for _, app, status, _why in self.items:
-            silent = (self.now - app.last.when).days
+            silent = max(0, (self.now - app.last.when).days)
             if status == ACTIVE and silent >= self.NUDGE_AFTER_DAYS:
                 nudge.append((app.company, silent, app.last.subject[:90]))
         counts = {s: sum(1 for *_, st, _w in self.items if st == s) for s in STATUS}
@@ -208,8 +245,11 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
         stages.append(stage)
         label, css = STATUS[status]
         counts[status] = counts.get(status, 0) + 1
-        silent = (now - app.last.when).days
-        history = " → ".join(f"{KIND_NAMES[e.kind]} {e.when:%d.%m}" for e in app.ordered if e.kind != mail.OTHER)
+        # дни тишины важны только живым процессам: ждём ответа (через TIMEOUT_DAYS — отказ) и этапы (напомнить о себе)
+        silent = max(0, (now - app.last.when).days) if status in (ACTIVE, WAITING) else None
+        def kind_name(e):  # «этап», но письмо об отмене встречи — «отмена»
+            return "отмена" if e.kind == mail.INTERVIEW and _CANCELLED_RX.search(e.subject) else KIND_NAMES[e.kind]
+        history = " → ".join(f"{kind_name(e)} {e.when:%d.%m}" for e in app.ordered if e.kind != mail.OTHER)
         rows.append(
             f'<tr class="{css}" data-{status}="1">'
             f"<td><b>{_e(app.company)}</b></td>"
@@ -218,7 +258,7 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
             f'<td data-sort="{_FUNNEL_RANK[stage]}">{_e(stage_names[stage])}</td>'
             f'<td data-sort="{app.first:%Y%m%d}">{app.first:%Y-%m-%d}</td>'
             f'<td data-sort="{app.last.when:%Y%m%d}">{app.last.when:%Y-%m-%d}</td>'
-            f'<td class="n">{silent}</td>'
+            f'<td class="n" data-sort="{-1 if silent is None else silent}">{"" if silent is None else silent}</td>'
             f'<td class="small">{_e(history)}</td>'
             f'<td class="small">{_last_cell(app.last, address)}</td>'
             "</tr>"

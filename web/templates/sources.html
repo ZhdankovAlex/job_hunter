@@ -6,13 +6,14 @@
 <p class="muted">{% if built %}По последнему прогону ({{ built }}).{% else %}Данные появятся после первого прогона с новой версией скрипта.{% endif %}
   Сколько вакансий дал каждый источник до фильтров.</p>
 
-<section class="tiles wide" style="--n: {{ kinds|length + 2 }}">
+<section class="tiles wide" style="--n: {{ kinds|length + 3 }}">
   {% for kind, k in kinds.items() %}
   <div class="tile"><b>{{ k.jobs }}</b><span>{{ kind_names.get(kind, kind) }}: {{ k.sources }} источников
     · пустых {{ k.empty }}{% if k.errors %} · <em class="bad">ошибок {{ k.errors }}</em>{% endif %}</span></div>
   {% endfor %}
   <div class="tile"><b>{{ telegram|length }}</b><span>Telegram-каналов</span></div>
   <div class="tile"><b>{{ freehire|length }}</b><span>запросов freehire.me</span></div>
+  <a class="tile tile-link" href="#all-sources" id="gaps-tile"><b>{{ gaps.rows|length }}</b><span>компаний без вакансий в отчёте ↓</span></a>
 </section>
 
 <section class="grid two">
@@ -40,49 +41,93 @@
   </div>
 </section>
 
-<section class="card">
-  <div class="table-head">
-    <h2>Все источники <span class="muted small">{{ rows|length }}</span></h2>
-    <div class="feed-filter" id="kind-filter">
-      <button class="on" data-kind="">все</button>
-      {% for kind in kinds %}<button data-kind="{{ kind }}">{{ kind_names.get(kind, kind) }}</button>{% endfor %}
-      <button data-kind="error">с ошибкой</button>
-      <button data-kind="empty">пустые</button>
+{% set not_read = ("error", "verify", "manual", "no_board") %}
+{% set titles = {} %}{% for g in gaps.groups %}{% set _ = titles.update({g.key: g.title}) %}{% endfor %}
+<details class="card fold" id="all-sources">
+  <summary>
+    <h2>Все источники <span class="muted small">{{ rows|length }} · без вакансий в отчёте {{ gaps.rows|length }}</span></h2>
+    <span class="muted small">Сколько вакансий дал каждый источник и почему пусто, если пусто.
+      {% if gaps.reports is not none %}«Подходящих нет» — по {{ gaps.reports }} последним отчётам.{% endif %}</span>
+  </summary>
+  <div class="filter-block">
+    <div class="filters">
+      <div class="feed-filter" id="kind-filter">
+        <span class="filter-sep">вид:</span>
+        <button class="on" data-kind="">все</button>
+        {% for kind in kinds %}<button data-kind="{{ kind }}">{{ kind_names.get(kind, kind) }}</button>{% endfor %}
+      </div>
+      <div class="filters" id="reason-filter">  <!-- одна группа кнопок на три строки -->
+        <div class="feed-filter">
+          <span class="filter-sep">результат:</span>
+          <button class="on" data-reason="">все</button>
+          <button data-reason="ok" title="У компании есть вакансии в отчётах; агрегаторы и доски — дали вакансии в последнем прогоне">есть в отчёте {{ rows|length - gaps.rows|length }}</button>
+          <button data-reason="gap" title="Источник ничего не дал в отчёт: не читаем совсем или читаем, но пусто">без вакансий {{ gaps.rows|length }}</button>
+        </div>
+        <div class="feed-filter">
+          <span class="filter-sep">не читаем:</span>
+          {% for g in gaps.groups if g.key in not_read %}<button data-reason="{{ g.key }}" title="{{ g.hint }}">{{ g.title }} {{ g.count }}</button>{% endfor %}
+        </div>
+        <div class="feed-filter">
+          <span class="filter-sep">читаем, но пусто:</span>
+          {% for g in gaps.groups if g.key not in not_read %}<button data-reason="{{ g.key }}" title="{{ g.hint }}">{{ g.title }} {{ g.count }}</button>{% endfor %}
+        </div>
+      </div>
+      <div class="feed-filter">
+        <span class="filter-sep">поиск:</span>
+        <input id="q" class="filter-search" type="search" placeholder="Название источника…">
+      </div>
     </div>
-    <input id="q" type="search" placeholder="Поиск по названию…">
   </div>
+  <p class="muted small" id="reason-hint"></p>
   <table class="data" id="sources">
-    <thead><tr><th>Источник</th><th>Вид</th><th>ATS / slug</th><th class="num">Вакансий</th><th>Ошибка</th></tr></thead>
+    <thead><tr><th>Источник</th><th>Вид</th><th>ATS / борд</th><th class="num">Вакансий</th><th>Почему пусто</th><th>Проверено</th></tr></thead>
     <tbody>
     {% for r in rows %}
-    <tr data-kind="{{ r.kind }}" data-error="{{ 1 if r.error else 0 }}" data-empty="{{ 1 if r.jobs == 0 and not r.error else 0 }}">
+    <tr data-kind="{{ r.kind }}" data-reason="{{ r.reason or 'ok' }}">
       <td>{{ r.name }}</td>
       <td class="muted small">{{ kind_names.get(r.kind, r.kind) }}</td>
-      <td class="small">{% if r.platform %}{{ r.platform }} / {{ r.slug }}{% elif r.kind == "ats" %}<span class="muted">не найден</span>{% endif %}</td>
+      <td class="small">{% if r.platform %}{{ r.platform }} / {{ r.slug }}{% elif r.empty_board %}{{ r.empty_board|replace("/", " / ") }}{% elif r.kind == "ats" %}<span class="muted">не найден</span>{% endif %}</td>
       <td class="num">{% if r.jobs %}<b>{{ r.jobs }}</b>{% else %}<span class="muted">0</span>{% endif %}</td>
-      <td class="small bad">{{ r.error }}</td>
+      <td class="small">{% if r.reason %}<span class="{{ 'bad' if r.reason == 'error' }}">{{ titles[r.reason] }}</span>{% if r.detail %}<span class="muted"> · {{ r.detail }}</span>{% endif %}{% endif %}</td>
+      <td class="small muted">{{ r.checked }}</td>
     </tr>
     {% endfor %}
     </tbody>
   </table>
-</section>
+  <p class="muted small">Сайты и Telegram-каналы, которые не подключены вовсе (закрыты в robots.txt, вакансии собирает скрипт…),
+    перечислены с причинами в <code>docs/sources.md</code>.</p>
+</details>
 {% endblock %}
 {% block scripts %}
 <script>
-let kind = '';
-const rows = [...document.querySelectorAll('#sources tbody tr')], q = document.getElementById('q');
+// «Все источники»: свёрнут по умолчанию, состояние помнится; фильтры по виду и результату + поиск
+const box = document.getElementById('all-sources'), q = document.getElementById('q'), hint = document.getElementById('reason-hint');
+const rows = [...document.querySelectorAll('#sources tbody tr')];
+let kind = '', reason = '';
 function apply() {
   const text = q.value.trim().toLowerCase();
   for (const r of rows) {
-    const okKind = !kind || (kind === 'error' ? r.dataset.error === '1' : kind === 'empty' ? r.dataset.empty === '1' : r.dataset.kind === kind);
-    r.hidden = !(okKind && (!text || r.cells[0].textContent.toLowerCase().includes(text)));
+    const rr = r.dataset.reason;
+    const okReason = !reason || (reason === 'gap' ? rr !== 'ok' : rr === reason);
+    r.hidden = !((!kind || r.dataset.kind === kind) && okReason && (!text || r.cells[0].textContent.toLowerCase().includes(text)));
   }
 }
-document.querySelectorAll('#kind-filter button').forEach(b => b.addEventListener('click', () => {
-  kind = b.dataset.kind;
-  document.querySelectorAll('#kind-filter button').forEach(x => x.classList.toggle('on', x === b));
-  apply();
+function pick(group, btn) {
+  document.querySelectorAll(`#${group} button`).forEach(x => x.classList.toggle('on', x === btn));
+}
+document.querySelectorAll('#kind-filter button').forEach(b => b.addEventListener('click', () => { kind = b.dataset.kind; pick('kind-filter', b); apply(); }));
+document.querySelectorAll('#reason-filter button').forEach(b => b.addEventListener('click', () => {
+  reason = b.dataset.reason; pick('reason-filter', b); hint.textContent = b.title || ''; apply();
 }));
 q.addEventListener('input', apply);
+
+box.open = localStorage.getItem('sources-open') === '1' || location.hash === '#gaps';
+box.addEventListener('toggle', () => localStorage.setItem('sources-open', box.open ? '1' : '0'));
+function showGaps() {
+  box.open = true;
+  document.querySelector('#reason-filter button[data-reason="gap"]').click();
+}
+document.getElementById('gaps-tile').addEventListener('click', showGaps);
+if (location.hash === '#gaps') showGaps();
 </script>
 {% endblock %}

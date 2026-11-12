@@ -23,7 +23,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from jobhunter import config, cover_letter, cvgen, interview_prep, manual_apps, market_check, progress, relevance, vacancy_lookup
+from jobhunter import config, cover_letter, coverage, cvgen, interview_prep, manual_apps, market_check, progress, relevance, vacancy_lookup
 
 ROOT = config.ROOT
 WEB = Path(__file__).parent
@@ -121,6 +121,7 @@ class Runner:
                     break
         self.queue = []
         self.process = None
+        warm_caches()  # новый отчёт — пересчитать «Рынок» и «Навыки», пока их никто не открыл
 
     def stop(self) -> int:
         """Полная остановка: очередь сбрасывается, идущий скрипт завершается вместе с дочерними процессами.
@@ -234,7 +235,10 @@ def sources_payload() -> dict:
         sources = {}
     built = datetime.fromtimestamp(SOURCES_FILE.stat().st_mtime) if SOURCES_FILE.exists() else None
     from jobhunter import geo
-    rows = [{"name": k, **v} for k, v in sources.items()]
+    gaps = coverage.gaps(sources)
+    why = {g["name"]: g for g in gaps["rows"]}  # почему источник не дал вакансий в отчёт
+    rows = [{"name": k, **v, **{f: why.get(k, {}).get(f, "") for f in ("reason", "detail", "checked")}}
+            for k, v in sources.items()]
     rows.sort(key=lambda r: (-r["jobs"], r["name"].lower()))
     kinds: dict[str, dict] = {}
     for r in rows:
@@ -248,6 +252,7 @@ def sources_payload() -> dict:
         "rows": rows, "kinds": kinds,
         "telegram": list(config.TELEGRAM_CHANNELS) if config.TELEGRAM_ENABLED else [],
         "freehire": freehire_queries(geo.S.get("freehire", {})),
+        "gaps": gaps,
     }
 
 
@@ -316,7 +321,7 @@ def applications_page(request: Request, company: str = "", title: str = "", url:
     exists = (REPORTS / "applications.html").exists()
     prefill = {"company": company, "title": title, "url": url, "kind": kind or ("applied" if url else "")}
     return page(request, "applications", exists=exists, prefill=prefill, kinds=manual_apps.KINDS,
-                companies=manual_apps.companies())
+                companies=application_companies())
 
 
 @app.get("/cv", response_class=HTMLResponse, include_in_schema=False)
@@ -329,22 +334,67 @@ def cover_page(request: Request):
     return page(request, "cover")
 
 
-_market_cache: dict[tuple, dict] = {}
+# Долгие расчёты страниц («Рынок» — анализ всех вакансий отчёта, «Навыки» — поиск каждого навыка по их
+# текстам) хранятся и в памяти, и на диске: после перезапуска сервера страница открывается сразу.
+# Ключ — имена и время изменения входных файлов; поменялся файл — пересчёт.
+WEB_CACHE_FILE = ROOT / "state" / "web_cache.json"
+_cache_lock = threading.Lock()
+_memory_cache: dict[str, dict] = {}
+
+
+def _cached(name: str, key: list, compute):
+    """Значение из кэша, если ключ совпал; иначе compute() и запись в кэш."""
+    key = json.loads(json.dumps(key, default=str))  # tuple -> list, Path -> str: сравнимо с прочитанным с диска
+    with _cache_lock:
+        if not _memory_cache and WEB_CACHE_FILE.exists():
+            try:
+                _memory_cache.update(json.loads(WEB_CACHE_FILE.read_text(encoding="utf-8")))
+            except ValueError:
+                pass
+        entry = _memory_cache.get(name)
+        if entry and entry.get("key") == key:
+            return entry["value"]
+    value = compute()
+    with _cache_lock:
+        _memory_cache[name] = {"key": key, "value": value}
+        WEB_CACHE_FILE.parent.mkdir(exist_ok=True)
+        WEB_CACHE_FILE.write_text(json.dumps(_memory_cache, ensure_ascii=False, default=str), encoding="utf-8")
+    return value
+
+
+def _mtime(path: Path) -> float:
+    return path.stat().st_mtime if path.exists() else 0
 
 
 def market_report(day: str = "") -> dict:
-    """market_check.analyze + выводы; пересчёт, только если поменялись вакансии дня или резюме (~8 с)."""
+    """market_check.analyze + выводы; пересчёт (~10 с), только если поменялись вакансии дня или резюме."""
     files = sorted(config.JOBS_ARCHIVE_DIR.glob("*.json"))
     path = next((f for f in files if f.stem == day), files[-1] if files else None)
     cv_files = [config.CV_BASE_FILE, *(Path(p) for p in market_check.geo.S.get("cv", {}).get("files", []))]
-    key = (path and path.name, path and path.stat().st_mtime,
-           *(f.stat().st_mtime if f.exists() else 0 for f in cv_files))
-    if key not in _market_cache:
+    key = [path and path.name, path and path.stat().st_mtime, *(_mtime(f) for f in cv_files)]
+
+    def compute():
         report = market_check.analyze(path.stem if path else "")
         report["advice"] = market_check.advice(report)
-        _market_cache.clear()
-        _market_cache[key] = report
-    return _market_cache[key]
+        return report
+
+    # отчёт за другой день смотрят редко — он вытесняет последний; за последний ключ «market»
+    return _cached("market" if path == (files[-1] if files else None) else "market:other", key, compute)
+
+
+def application_companies() -> list[str]:
+    """Подсказки компаний в форме «Отклики» (разбор всех писем ~1 с) — до изменения писем или откликов."""
+    key = [_mtime(config.MANUAL_APPLICATIONS_FILE), _mtime(config.MAIL_CACHE_FILE)]
+    return _cached("companies", key, manual_apps.companies)
+
+
+def warm_caches() -> None:
+    """Считает «Рынок», «Навыки» и подсказки «Откликов» заранее — в фоне при старте сервера и после прогона."""
+    for fn in (application_companies, market_report, skills_payload):
+        try:
+            fn()
+        except Exception as e:  # прогрев — не главное: страница посчитает сама и покажет ошибку
+            print(f"прогрев кэша {fn.__name__}: {e}", file=sys.stderr)
 
 
 @app.get("/market", response_class=HTMLResponse, include_in_schema=False)
@@ -430,7 +480,8 @@ def api_reports():
 
 @app.get("/api/sources", summary="Источники последнего прогона",
          description="По каждому источнику: вид (ats / aggregator / site / career_page), сколько вакансий "
-                     "дал, ошибка; для ATS — платформа и slug. Плюс Telegram-каналы и запросы freehire.")
+                     "дал, ошибка; для ATS — платформа и slug. Плюс Telegram-каналы, запросы freehire "
+                     "и `gaps` — компании без вакансий в отчёте с причиной (борд не найден, пустой, подходящих нет…).")
 def api_sources():
     return sources_payload()
 
@@ -534,16 +585,43 @@ def skills_payload() -> dict:
 
     rows = relevance.skill_table()
     files = sorted(config.JOBS_ARCHIVE_DIR.glob("*.json"))
-    jobs = json.loads(files[-1].read_text(encoding="utf-8")) if files else []
-    texts = [f"{j['title']}\n{j.get('text', '')}" for j in jobs if market_check.RELEVANT_TITLE_RX.search(j["title"])]
-    for row in rows:
+    texts: list[str] | None = None
+
+    def load_texts() -> list[str]:
+        nonlocal texts
+        if texts is None:
+            jobs = json.loads(files[-1].read_text(encoding="utf-8")) if files else []
+            texts = [f"{j['title']}\n{j.get('text', '')}" for j in jobs
+                     if market_check.RELEVANT_TITLE_RX.search(j["title"])]
+        return texts
+
+    def count(pattern: str) -> int | None:
         try:
-            rx = _re.compile(row["pattern"], _re.I)
-            row["matches"] = sum(bool(rx.search(t)) for t in texts)
+            rx = _re.compile(pattern, _re.I)
         except _re.error:
-            row["matches"], row["invalid"] = 0, True
-        row["share"] = round(100 * row["matches"] / len(texts)) if texts else 0
-    return {"skills": rows, "relevant": len(texts), "day": files[-1].stem if files else ""}
+            return None
+        return sum(bool(rx.search(t)) for t in load_texts())
+
+    # сколько вакансий у каждого шаблона — кэш на последний отчёт: смена веса или выключение навыка
+    # шаблон не меняют и пересчёта не вызывают; новый навык считается один (~0.2 с), остальные — из кэша
+    key = [files[-1].name if files else "", _mtime(files[-1]) if files else 0]
+    counts = dict(_cached("skills", key, lambda: {"relevant": len(load_texts()), "matches": {}}))
+    matches = dict(counts["matches"])
+    missing = [r["pattern"] for r in rows if r["pattern"] not in matches]
+    if missing:
+        matches.update({p: count(p) for p in missing})
+        counts = {**counts, "matches": matches}
+        with _cache_lock:
+            _memory_cache["skills"] = {"key": json.loads(json.dumps(key)), "value": counts}
+            WEB_CACHE_FILE.write_text(json.dumps(_memory_cache, ensure_ascii=False, default=str), encoding="utf-8")
+    relevant = counts["relevant"]
+    for row in rows:
+        n = matches.get(row["pattern"])
+        row["matches"] = n or 0
+        if n is None:
+            row["invalid"] = True
+        row["share"] = round(100 * row["matches"] / relevant) if relevant else 0
+    return {"skills": rows, "relevant": relevant, "day": files[-1].stem if files else ""}
 
 
 class SkillChange(BaseModel):
@@ -619,8 +697,9 @@ def api_skill_reset(name: str):
 class ApplicationEvent(BaseModel):
     """Событие отклика: пишется в applications_manual.toml, страница откликов пересобирается из кэша писем."""
     company: str = Field(min_length=1, description="Компания — как в отчёте, по ней событие склеится с письмами")
-    kind: Literal["applied", "interview", "rejected", "offer", "other"] = Field(
-        description="applied — отклик, interview — этап, rejected — отказ, offer — оффер, other — заметка")
+    kind: Literal["applied", "interview", "rejected", "declined", "offer", "other"] = Field(
+        description="applied — отклик, interview — этап, rejected — отказ, declined — отказался сам, offer — оффер, "
+                    "other — заметка")
     note: str = Field("", description="Что произошло")
     url: str = Field("", description="Ссылка на вакансию: в отчётах она будет помечена «🔁 уже откликался»")
     source: str = Field("", description="Откуда: сайт компании, LinkedIn, Telegram…")
@@ -684,3 +763,9 @@ def api_prep(body: CvRequest):
     job = resolve_job(body)
     return interview_prep.build(body.company or job.get("company") or "Company", body.title or job.get("title") or "Vacancy",
                                 job["text"], job.get("location", ""))
+
+
+# «Рынок» и «Навыки» считаются заранее, чтобы первое открытие после перезапуска не ждало ~10 с
+# (в тестах выключено: фоновый расчёт на настоящих данных мешал бы подменённым путям)
+if not os.environ.get("JOBHUNTER_NO_WARM"):
+    threading.Thread(target=warm_caches, name="warm-caches", daemon=True).start()

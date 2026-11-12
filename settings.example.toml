@@ -250,8 +250,8 @@ timeout_days = 14
 ignore_senders = ["jobalerts-noreply@linkedin.com", "newsletters-noreply@linkedin.com", "notifications-noreply@linkedin.com"]
 # ваше имя, как оно бывает в отправителе / подписи: не путать с названием компании
 own_names = []
-# часовой пояс для дат без времени в applications_manual.toml, часы от UTC
-utc_offset_hours = 0
+# часовой пояс событий в applications_manual.toml, часы от UTC; не задан — пояс этого компьютера
+# utc_offset_hours = 1
 
 # написание компании в письмах -> как показывать (если ATS пишет юрлицо или домен)
 [mail.company_aliases]

@@ -72,6 +72,8 @@ TECH = {
     "React": r"\breact\b(?!\s*native)", "Vue": r"\bvue(?:\.js)?\b", "Angular": r"\bangular\b",
 }
 TECH_RX = {name: re.compile(rx, 0 if name == "Go" else _I) for name, rx in TECH.items()}
+# «есть ли здесь хоть одна технология» одним проходом вместо ~100 отдельных поисков (Go — с учётом регистра)
+_TECH_ANY_RX = re.compile("|".join(f"(?:{rx})" if name == "Go" else f"(?i:{rx})" for name, rx in TECH.items()))
 
 # Что в резюме написано другими словами
 CV_ALIASES = {
@@ -197,10 +199,22 @@ class CvProfile:
         self.cv_text = text.lower()
         self.have = {name for name, rx in TECH_RX.items() if rx.search(text)}
         self.have |= {name for name, rx in CV_ALIASES.items() if re.search(rx, text, _I)}
+        self._known = {n.lower() for n in TECH_RX} | {n.lower() for n in CV_ALIASES}
+        self._term_known: dict[str, bool] = {}  # термин -> уже известен (словарь / резюме); одни и те же термины
+        # встречаются в сотнях вакансий, а проверка по тексту резюме — это поиск регуляркой
+
+    def _known_term(self, term: str) -> bool:
+        """Термин не нужен в «чего нет в резюме»: короткий, общий, из словаря технологий или уже в резюме."""
+        if term not in self._term_known:
+            low = term.lower()
+            self._term_known[term] = bool(
+                len(term) < 2 or low in _GENERIC_TERMS or low in self._known
+                or re.search(rf"(?<![a-z0-9]){re.escape(low)}(?![a-z0-9])", self.cv_text)
+                or _TECH_ANY_RX.search(term))
+        return self._term_known[term]
 
     def _unknown_terms(self, job, text: str) -> dict[str, int]:
         """Технические термины вне словаря, которых нет в резюме: {термин: сколько раз в тексте}."""
-        known = {n.lower() for n in TECH_RX} | {n.lower() for n in CV_ALIASES}
         company = (getattr(job, "company", "") or "").lower()
         # шаблонные строки (зарплата, бенефиты, equal opportunity) — не про навыки
         lines = [line for line in text.splitlines() if not _BOILERPLATE_RX.search(line)]
@@ -215,10 +229,7 @@ class CvProfile:
         found = {}
         for term in set(mid) | title_terms:
             low = term.lower()
-            if (len(term) < 2 or low in _GENERIC_TERMS or low in known
-                    or re.search(rf"(?<![a-z0-9]){re.escape(low)}(?![a-z0-9])", self.cv_text)
-                    or (company and (low in company or company.startswith(low)))
-                    or any(rx.search(term) for rx in TECH_RX.values())):
+            if self._known_term(term) or (company and (low in company or company.startswith(low))):
                 continue
             # обычное слово хоть раз пишется со строчной («learning», «range», «pay»), название — никогда
             if term != low and re.search(rf"(?<![\w-]){re.escape(low)}(?![\w])", plain):
@@ -241,6 +252,8 @@ class CvProfile:
         core_have, core_missing, nice_have, nice_missing = set(), set(), set(), set()
         for m in _SENTENCE_RX.finditer(f"{job.title}\n{text}"):
             sentence = m.group()
+            if not _TECH_ANY_RX.search(sentence):  # большинство предложений — без технологий
+                continue
             hits = [name for name, rx in TECH_RX.items() if rx.search(sentence)]
             if not hits:
                 continue
@@ -251,7 +264,7 @@ class CvProfile:
             # «Nice to have: Go, Rust and Kafka» — оговорка в начале предложения действует на всё предложение
             header_nice = bool(_NICE_RX.search(sentence[:40]))
 
-            def clause_of(name):
+            def clause_of(name, sentence=sentence, cuts=cuts):  # вызывается тут же, в этой итерации
                 m = TECH_RX[name].search(sentence)
                 pos = m.start() if m else 0
                 return next(i for i, (a, b) in enumerate(zip(cuts, cuts[1:])) if a <= pos < b)

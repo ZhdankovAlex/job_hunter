@@ -128,6 +128,7 @@ Daily runs via Task Scheduler / cron or Docker: [docs/pipeline.md](docs/pipeline
 
 | File | About |
 |---|---|
+| [docs/architecture.md](docs/architecture.md) | How the project works: the big picture and the reasons behind it |
 | [docs/web-ui.md](docs/web-ui.md) | Web UI pages, starting and skipping stages, API |
 | [docs/pipeline.md](docs/pipeline.md) | Run stages, progress, `main.py` flags, daily runs |
 | [docs/sources.md](docs/sources.md) | ATS boards, freehire, aggregators, career pages, Telegram, fixing `ats_mapping.json` |
@@ -140,6 +141,20 @@ Daily runs via Task Scheduler / cron or Docker: [docs/pipeline.md](docs/pipeline
 | [docs/market-check.md](docs/market-check.md) | CV vs market: a local ATS checker |
 | [docs/docker.md](docs/docker.md) | Running in Docker |
 | [docs/configuration.md](docs/configuration.md) | Where things are: settings, code, data, personal files and examples |
+| [docs/testing.md](docs/testing.md) | Tests, linter and CI |
+
+## Development
+
+Tests run without network and personal files, in about a second; CI runs the linter and the tests on every
+pull request ([docs/testing.md](docs/testing.md)):
+
+```bash
+.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+```
+
+```bash
+.venv\Scripts\python.exe -m pytest
+```
 
 ## License
 

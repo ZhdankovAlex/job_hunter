@@ -328,7 +328,7 @@ def parse_habr_digest(channel, post_id, when, raw):
     return jobs
 
 
-_ABROAD_REMOTE_RX = re.compile(r"\(?\s*вне\s+(?:РФ|России)(?:\s+и\s+(?:РБ|Беларуси))?\s*\)?", re.I)
+_ABROAD_REMOTE_RX = re.compile(r"\s*\(?\s*вне\s+(?:РФ|России)(?:\s+и\s+(?:РБ|Беларуси))?\s*\)?", re.I)
 
 
 def parse_zarubezhom(channel, post_id, when, raw):

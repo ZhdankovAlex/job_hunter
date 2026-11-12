@@ -109,6 +109,7 @@ _BODY_COMPANY_RXS = [
 # --- Что это за письмо ----------------------------------------------------------------------
 
 OFFER, REJECTED, INTERVIEW, APPLIED, OTHER = "offer", "rejected", "interview", "applied", "other"
+DECLINED = "declined"  # отказался сам — только в applications_manual.toml, из писем не определяется
 _OFFER_RX = re.compile(
     r"offer letter|job offer|pleased to (?:extend|offer)|extend (?:you )?an offer|оффер|предложение о работе", re.I)
 _REJECT_RX = re.compile(
@@ -129,9 +130,11 @@ _REJECT_RX = re.compile(
 # «Unfortunately, due to the volume of applications, we can't reply to everyone» — дисклеймер в
 # подтверждении отклика, а не отказ: такие предложения при поиске отказа не учитываются
 _DISCLAIMER_RX = re.compile(
-    r"[^.!?\n]*(?:(?:can(?:no|')t|unable to|not (?:be )?able to)\s+(?:\w+\s+){0,3}?(?:reply|respond|answer|get back|"
+    r"(?:(?:can(?:no|')t|unable to|not (?:be )?able to)\s+(?:\w+\s+){0,3}?(?:reply|respond|answer|get back|"
     r"contact|provide (?:individual )?feedback)|due to (?:the )?(?:high |large )?(?:volume|number)|"
-    r"не (?:сможем|можем) ответить (?:всем|каждому))[^.!?\n]*",
+    # «While this opportunity may not be the right fit…» — оговорка в подтверждении отклика, а не отказ
+    r"\b(?:may|might|could) not be (?:the |a )?(?:right |good )?(?:fit|match)|"
+    r"не (?:сможем|можем) ответить (?:всем|каждому))",
     re.I,
 )
 # начало процитированной переписки: всё ниже — старые письма, не это
@@ -175,7 +178,19 @@ _IGNORE_SUBJECT_RX = re.compile(
 )
 
 
-_CONDITIONAL_RX = re.compile(r"[^.!?\n]*\b(?:if|should|once|whether|если|в случае)\b[^.!?\n]*", re.I)
+_CONDITIONAL_RX = re.compile(r"\b(?:if|should|once|whether|если|в случае)\b", re.I)
+_SENTENCE_END_RX = re.compile(r"([.!?\n])")
+
+
+def _drop_sentences(text: str, *patterns) -> str:
+    """Предложения, где нашёлся любой из шаблонов, заменяются пробелом; знаки конца предложения остаются.
+
+    Раньше то же делал re.sub с шаблоном «[^.!?\\n]*…[^.!?\\n]*», но на длинных письмах он работал за
+    квадратичное время: разбор ~440 писем из кэша занимал 13 с, и страница «Отклики» открывалась долго.
+    """
+    parts = _SENTENCE_END_RX.split(text)  # [предложение, знак, предложение, знак, …]
+    return "".join(" " if i % 2 == 0 and any(p.search(part) for p in patterns) else part
+                   for i, part in enumerate(parts))
 
 
 def own_text(body: str) -> str:
@@ -193,8 +208,9 @@ def classify(subject: str, body: str) -> str:
     we will schedule an interview», «if we decide not to move forward…») и дисклеймеры («we can't
     reply to everyone») не считаются ни приглашением, ни отказом.
     """
-    body = own_text(body)
-    plain = _DISCLAIMER_RX.sub(" ", _CONDITIONAL_RX.sub(" ", body))
+    # «won’t», «we’ve»: типографский апостроф — к обычному, иначе правила с ' не срабатывают
+    subject, body = subject.replace("’", "'"), own_text(body).replace("’", "'")
+    plain = _drop_sentences(body, _CONDITIONAL_RX, _DISCLAIMER_RX)
     rejected = bool(_REJECT_RX.search(subject) or _REJECT_RX.search(plain))
     # «Confirmation of Application Receipt»: в описании процесса бывает «…to a much-anticipated offer letter» —
     # оффер из текста не засчитываем, если тема — подтверждение отклика
@@ -528,9 +544,10 @@ def _add_event(apps: dict, company: str, event: Event) -> None:
     app.events.append(event)
 
 
-# часовой пояс дат без времени в applications_manual.toml: settings.toml [mail].utc_offset_hours;
-# для статусов точность до часа не важна
-_LOCAL_TZ = timezone(timedelta(hours=float(geo.S.get("mail", {}).get("utc_offset_hours", 0))))
+# часовой пояс событий без пояса в applications_manual.toml: по умолчанию — этого компьютера (летом и зимой
+# разный); settings.toml [mail].utc_offset_hours задаёт его явно (например, в Docker с TZ=UTC)
+_OFFSET = geo.S.get("mail", {}).get("utc_offset_hours")
+_LOCAL_TZ = timezone(timedelta(hours=float(_OFFSET))) if _OFFSET is not None else None
 
 
 def manual_events() -> list[tuple[str, Event]]:
@@ -546,10 +563,10 @@ def manual_events() -> list[tuple[str, Event]]:
             when = e["date"]
             if not isinstance(when, datetime):  # дата без времени
                 when = datetime(when.year, when.month, when.day, 12)
-            if when.tzinfo is None:
-                when = when.replace(tzinfo=_LOCAL_TZ)
+            if when.tzinfo is None:  # время как в чате — по часовому поясу этого компьютера (или из настроек)
+                when = when.replace(tzinfo=_LOCAL_TZ) if _LOCAL_TZ else when.astimezone()
             kind = e.get("kind", OTHER)
-            if kind not in (OFFER, REJECTED, INTERVIEW, APPLIED, OTHER):
+            if kind not in (OFFER, REJECTED, INTERVIEW, APPLIED, OTHER, DECLINED):
                 log.warning("%s: неизвестный kind %r в %s", entry["company"], kind, config.MANUAL_APPLICATIONS_FILE.name)
                 kind = OTHER
             result.append((entry["company"], Event(when, kind, e.get("note", ""), entry.get("source", "вручную"), "")))

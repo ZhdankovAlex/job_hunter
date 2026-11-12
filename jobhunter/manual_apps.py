@@ -13,8 +13,8 @@ from datetime import datetime
 
 from . import config
 
-KINDS = {"applied": "Отклик", "interview": "Этап / собеседование", "rejected": "Отказ", "offer": "Оффер",
-         "other": "Заметка"}
+KINDS = {"applied": "Отклик", "interview": "Этап / собеседование", "rejected": "Отказ", "declined": "Отказался сам",
+         "offer": "Оффер", "other": "Заметка"}
 
 
 def _toml_str(value: str) -> str:
@@ -28,7 +28,7 @@ def add_event(company: str, kind: str, note: str = "", url: str = "", source: st
 
     Args:
         company: компания (как в отчёте — по ней событие склеится с письмами).
-        kind: applied / interview / rejected / offer / other.
+        kind: applied / interview / rejected / declined / offer / other.
         note: что произошло, своими словами.
         url: ссылка на вакансию — в отчётах она будет помечена «🔁 уже откликался».
         source: откуда отклик (сайт компании, LinkedIn, Telegram…).
@@ -64,7 +64,7 @@ def add_event(company: str, kind: str, note: str = "", url: str = "", source: st
 
 
 def companies() -> list[str]:
-    """Компании из applications_manual.toml и кэша писем — подсказки в форме."""
+    """Компании из applications_manual.toml и кэша писем — подсказки в форме (веб-интерфейс кэширует)."""
     from . import mail
 
     names = set()

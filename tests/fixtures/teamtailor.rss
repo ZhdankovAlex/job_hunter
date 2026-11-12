@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:tt="https://teamtailor.com/locations">
+<channel><title>Jobs</title>
+<item>
+  <title>Python Developer</title>
+  <link>https://career.example.com/jobs/1-python-developer</link>
+  <pubDate>Wed, 28 Oct 2026 10:00:00 +0000</pubDate>
+  <description>&lt;p&gt;asyncio, FastAPI, RabbitMQ&lt;/p&gt;</description>
+  <remoteStatus>fully</remoteStatus>
+  <tt:locations><tt:location><tt:city>Lisbon</tt:city><tt:country>Portugal</tt:country></tt:location>
+  <tt:location><tt:name>Europe</tt:name></tt:location></tt:locations>
+</item>
+<item>
+  <title>Office Manager</title>
+  <link>https://career.example.com/jobs/2-office-manager</link>
+  <pubDate>not a date</pubDate>
+  <description>Office</description>
+  <remoteStatus>none</remoteStatus>
+</item>
+</channel></rss>

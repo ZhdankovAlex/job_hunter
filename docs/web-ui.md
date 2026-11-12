@@ -20,7 +20,7 @@ The interface is in Russian.
 | **Подготовка** (Prep) | For a vacancy ("🎤" in the report, a link, or pasted text for a vacancy without a link): tell-me-about-yourself in English, requirements with proving bullets, gaps, stories for behavioural questions, an HR checklist with the levels.fyi median, questions to the company |
 | **Резюме vs рынок** (CV vs market) | A local ATS checker over the day's vacancies: market technologies and where they are in your CV, vacancy titles vs your headline, bullet hygiene, conclusions |
 | **Навыки** (Skills) | Profile skills with weights and the share of vacancies: on / off, weight (negative is a penalty), your own skills; edits go to `profile_overrides.json` on top of `profile.toml` and apply from the next run |
-| **Источники** (Sources) | Every source of the last run: kind, ATS and slug, how many vacancies, error; "empty" and "with error" filters; Telegram channels; freehire queries with name, parameters and counts |
+| **Источники** (Sources) | Every source of the last run: kind, ATS and slug, how many vacancies, error; **why a source gave no vacancies to the report** (`jobhunter/coverage.py`): request error, marked VERIFY in `companies.txt`, own page without an ATS, board not found (with the date of the next attempt), empty board, no vacancies, none matching in the reports of the last 14 days. The table of all sources is collapsed by default (the state is remembered); filters by kind and by reason, search; the "… without vacancies in the report" badge opens the table with that filter. Telegram channels; freehire queries with name, parameters and counts |
 
 **Skipping stages.** In advance — "без: почты / Telegram / freehire / агрегаторов" checkboxes next to the run
 buttons (mail — do not run `applications.py`, the rest are `--no-…` flags for `main.py`; the checkboxes are
@@ -38,6 +38,11 @@ A run started from the UI is a child process of the server in its own process gr
 does not stop it, but **restarting or closing the server interrupts a running run** — restart the server when
 nothing is running. Only one run at a time — the UI knows it even if the run was started from a terminal or a
 scheduler (checked via `state/progress.json` and whether the process is alive). Output goes to `last_run.log`.
+
+**Speed.** "Резюме vs рынок" and "Навыки" are computed in the background when the server starts and after each
+run and kept in `state/web_cache.json` (keyed by the modification time of vacancies, CVs and letters): after a
+restart every tab opens in a fraction of a second. In "Skills" the cache is per pattern: changing a weight does not
+recompute, a new skill is counted alone. `JOBHUNTER_NO_WARM=1` turns the background computation off.
 
 Code: `web/app.py` (FastAPI: pages and API), `web/templates/` (Jinja2), `web/static/` (CSS and JS without a build).
 API: `GET /api/progress`, `GET /api/progress/stream` (SSE), `POST /api/runs`, `POST /api/runs/current/skip`,
