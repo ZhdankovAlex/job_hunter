@@ -1,26 +1,26 @@
 {% extends "base.html" %}
-{% block title %}Пайплайн · job-hunter{% endblock %}
+{% block title %}Pipeline · job-hunter{% endblock %}
 {% block content %}
 <section class="hero card">
   <div class="hero-head">
     <div>
       <div class="eyebrow" id="script">—</div>
-      <h1 id="headline">Загружаю состояние…</h1>
+      <h1 id="headline">Loading the state…</h1>
       <div class="muted" id="subline"></div>
     </div>
     <div class="actions-col">
       <div class="actions">
-        <button class="primary" data-run="all" data-skips="mail telegram freehire aggregators" title="Как run_daily.bat: сначала почта, потом вакансии">▶ Запустить прогон</button>
-        <button data-run="main" data-skips="telegram freehire aggregators" title="Галочка «без почты» здесь не действует">Только вакансии</button>
-        <button data-run="applications" data-skips="" title="Галочки «без …» здесь не действуют">Только почта</button>
-        <button class="stop-btn" id="stop-btn" hidden title="Завершить прогон целиком, включая следующие скрипты очереди. Собранное в этом прогоне не сохранится">⏹ Остановить прогон</button>
+        <button class="primary" data-run="all" data-skips="mail telegram freehire aggregators" title="Like run_daily.bat: mail first, then vacancies">▶ Start run</button>
+        <button data-run="main" data-skips="telegram freehire aggregators" title="The &quot;no mail&quot; checkbox does not apply here">Vacancies only</button>
+        <button data-run="applications" data-skips="" title="The &quot;no …&quot; checkboxes do not apply here">Mail only</button>
+        <button class="stop-btn" id="stop-btn" hidden title="End the whole run, including the next scripts in the queue. What this run collected will not be saved">⏹ Stop run</button>
       </div>
-      <div class="skip-opts" title="Выключить этапы заранее. Действуют только подходящие кнопке: у «Только вакансии» — всё, кроме почты; у «Только почта» — ничего">
-        <span class="muted small">без:</span>
-        <label><input type="checkbox" value="mail"> почты</label>
+      <div class="skip-opts" title="Turn stages off in advance. Only the ones that fit the button apply: for &quot;Vacancies only&quot; — all but mail; for &quot;Mail only&quot; — none">
+        <span class="muted small">no:</span>
+        <label><input type="checkbox" value="mail"> mail</label>
         <label><input type="checkbox" value="telegram"> Telegram</label>
         <label><input type="checkbox" value="freehire"> freehire</label>
-        <label><input type="checkbox" value="aggregators"> агрегаторов</label>
+        <label><input type="checkbox" value="aggregators"> aggregators</label>
       </div>
     </div>
   </div>
@@ -32,14 +32,14 @@
 
 <section class="grid pipe">
   <div class="card stages-card">
-    <h2>Этапы</h2>
+    <h2>Stages</h2>
     <ol class="stages" id="stages"></ol>
   </div>
 
   <div class="col">
     <div class="card now">
-      <div class="now-head"><h2>Сейчас</h2>
-        <button class="skip-btn" id="skip-btn" hidden title="Остановить этап: собранное до этого пойдёт дальше">⏭ Пропустить этап</button>
+      <div class="now-head"><h2>Now</h2>
+        <button class="skip-btn" id="skip-btn" hidden title="Stop the stage: what was collected so far goes on">⏭ Skip stage</button>
       </div>
       <div class="now-title" id="now-title">—</div>
       <div class="big-bar"><i id="now-fill"></i><span id="now-count"></span></div>
@@ -50,39 +50,39 @@
     <div class="tiles" id="tiles"></div>
 
     <div class="card">
-      <h2>Что отбрасываем <span class="muted small" id="rejects-total"></span></h2>
+      <h2>What we reject <span class="muted small" id="rejects-total"></span></h2>
       <div class="hbars" id="rejects"></div>
     </div>
 
     <div class="card grow">
-      <h2>Откуда вакансии</h2>
+      <h2>Where vacancies come from</h2>
       <div class="hbars" id="kinds"></div>
     </div>
   </div>
 
   <div class="card feed-card">
-    <h2>Лента</h2>
+    <h2>Feed</h2>
     <div class="feed-filter">
-      <button class="on" data-kind="all">всё</button>
-      <button data-kind="found">найдено</button>
-      <button data-kind="reject">отброшено</button>
-      <button data-kind="source">источники</button>
+      <button class="on" data-kind="all">all</button>
+      <button data-kind="found">found</button>
+      <button data-kind="reject">rejected</button>
+      <button data-kind="source">sources</button>
     </div>
     <div class="feed-wrap"><ul class="feed" id="feed"></ul></div>
     <div class="errors-box" id="errors-box" hidden>
       <details class="err-group" data-group="action" open>
-        <summary>🛠 Нужно действие <span class="muted small" data-count></span></summary>
-        <p class="muted small">борд пропал или не найден, обрезано лимитом, не задан файл — смотреть руками</p>
+        <summary>🛠 Needs action <span class="muted small" data-count></span></summary>
+        <p class="muted small">a board is gone or not found, cut by a limit, a file is not set — look at it yourself</p>
         <ul class="errors"></ul>
       </details>
       <details class="err-group" data-group="code">
-        <summary>🐞 Проблемы кода <span class="muted small" data-count></span></summary>
-        <p class="muted small">изменился формат ответа, исключения — чинить в коде</p>
+        <summary>🐞 Code problems <span class="muted small" data-count></span></summary>
+        <p class="muted small">a response format changed, exceptions — fix in code</p>
         <ul class="errors"></ul>
       </details>
       <details class="err-group" data-group="site">
-        <summary>🌐 Сбои сайтов <span class="muted small" data-count></span></summary>
-        <p class="muted small">robots.txt недоступен, HTTP 4xx/5xx, SSL, таймауты — обычно проходит само</p>
+        <summary>🌐 Site failures <span class="muted small" data-count></span></summary>
+        <p class="muted small">robots.txt unavailable, HTTP 4xx/5xx, SSL, timeouts — usually pass by themselves</p>
         <ul class="errors"></ul>
       </details>
     </div>

@@ -1,4 +1,4 @@
-"""Резюме под вакансию (cvgen, база — cv/base.example.toml) и сборка отчёта (report, html_report)."""
+"""A CV for a vacancy (cvgen, base — cv/base.example.toml) and building the report (report, html_report)."""
 from datetime import date, datetime, timezone
 
 import pytest
@@ -17,10 +17,10 @@ def base():
 
 def test_build_markdown_for_vacancy(base):
     md = cvgen.build_markdown(base, "Acme", "Senior Software Engineer", VACANCY)
-    assert md.startswith("<!-- вакансия: Acme")  # служебная пометка: под какую вакансию собрано
+    assert md.startswith("<!-- vacancy: Acme")  # a service note: which vacancy the CV was built for
     assert "\n# " in md and "## Education" in md
     assert "Python" in md and "PostgreSQL" in md
-    assert "Senior Software Engineer (Backend)" in md  # заголовок подстроен под название вакансии
+    assert "Senior Software Engineer (Backend)" in md  # the headline adapted to the vacancy title
 
 
 def test_one_page_variant_is_shorter(base):
@@ -32,7 +32,7 @@ def test_one_page_variant_is_shorter(base):
 def test_picks_explain_choice(base):
     picks = []
     cvgen.build_markdown(base, "Acme", "Senior Software Engineer", VACANCY, picks=picks)
-    assert picks, "должны записываться выбранные пункты и почему"
+    assert picks, "the picked bullets and the reasons must be recorded"
 
 
 def test_markdown_to_html(base):
@@ -42,7 +42,7 @@ def test_markdown_to_html(base):
 
 @pytest.mark.parametrize("title,expected_role", [
     ("Software Engineer, Payments", "Senior Software Engineer (Backend)"),
-    ("Office Manager", "Senior Backend Engineer"),  # нет совпадения — заголовок как в базе
+    ("Office Manager", "Senior Backend Engineer"),  # no match — the headline as in the base
 ])
 def test_headline_for(title, expected_role):
     assert cvgen.headline_for(title, "Senior Backend Engineer | Python · PostgreSQL").startswith(expected_role)
@@ -52,7 +52,7 @@ def test_slug():
     assert cvgen.slug("Acme / Senior Python Developer (Remote)") == "Acme_Senior_Python_Developer_Remote"
 
 
-# --- отчёт -----------------------------------------------------------------------------------
+# --- report -------------------------------------------------------------------------------------
 
 def job(title, company="Acme", **kw):
     return Job(company=company, title=title, location="Remote", url=f"https://{company.lower()}.example/{title}",
@@ -64,12 +64,12 @@ STATS = {"matched": 3, "in_applied": 0, "mapped": 1, "companies": 2, "fetched": 
 
 
 def test_report_sections():
-    jobs = [job("Senior Python Developer"), job("AI Engineer (Python / LLM)", "Globex", staffing="чёрный список"),
-            job("Backend Engineer", "Beta", manual_check="текст вакансии недоступен")]
+    jobs = [job("Senior Python Developer"), job("AI Engineer (Python / LLM)", "Globex", staffing="blacklist"),
+            job("Backend Engineer", "Beta", manual_check="vacancy text unavailable")]
     md = report.render(date(2026, 11, 12), jobs, dict(STATS))
-    assert md.startswith("# Вакансии за 2026-11-12")
+    assert md.startswith("# Vacancies for 2026-11-12")
     assert "Senior Python Developer" in md
-    # аутсорс — в отдельном приложении, после основных разделов
+    # outsourcing — in a separate appendix, after the main sections
     assert md.index("Senior Python Developer") < md.index("Globex")
     assert "Backend Engineer" in md
 

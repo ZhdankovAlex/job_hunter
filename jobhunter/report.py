@@ -4,7 +4,7 @@ from collections import Counter
 from . import config, cv_match, geo, outreach, tiers
 from .keys import company_key
 
-# приоритет компании из companies.txt (0–3) — звёздочки перед названием
+# company priority from companies.txt (0–3) — stars before the name
 FLAGS = {3: "★★★", 2: "★★", 1: "★", 0: ""}
 SOURCE_LINKS = (
     "[Greenhouse](https://www.greenhouse.com), [Lever](https://www.lever.co), "
@@ -15,25 +15,25 @@ SOURCE_LINKS = (
 
 
 def _was_rejected(job):
-    """Убирать ли вакансию в раздел «Ранее отказ» (settings.toml: hide_previous_rejections)."""
+    """Whether to move the vacancy to the "Rejected before" section (settings.toml: hide_previous_rejections)."""
     if not geo.S.get("hide_previous_rejections", False):
         return False
-    return "отказ" in f"{job.applied_status} {' '.join(job.history_marks)}".lower()
+    return any(w in f"{job.applied_status} {' '.join(job.history_marks)}".lower() for w in ("reject", "declin", "отказ"))
 
 
 def _blocked(job):
-    """Компания в активном процессе (собеседование) — не для «Нового» и топа; отказ и игнор не мешают."""
+    """The company is in an active process (interviews) — not for "New" and the top; rejections and silence do not block."""
     return bool(config.APPLIED_BLOCK_RX.search(f"{job.applied_status} {' '.join(job.history_marks)}"))
 
 
 def sort_key(job):
-    """Порядок в приложениях: свежесть, затем балл (без категорий)."""
+    """Order in the appendixes: freshness, then score (no categories)."""
     ts = job.posted.timestamp() if job.posted else 0
     return (tiers.age_bucket(job), -job.score, job.language_mismatch_warning, -ts)
 
 
 def section_key(job):
-    """Порядок внутри раздела: компании с «Отказ» в откликах — в конце."""
+    """Order within a section: companies with "Rejected" in applications go last."""
     return (_was_rejected(job), *sort_key(job))
 
 
@@ -57,31 +57,31 @@ def _marks(job):
     if job.language_mismatch_warning:
         marks.append(f"⚠️ Python not primary language ({job.mismatch_lang})")
     if job.location_check and not job.reloc_type:
-        marks.append("❓ remote привязан к стране — проверить")
+        marks.append("❓ remote tied to a country — check")
     if job.referral:
-        marks.append("🤝 возможна рефка")
+        marks.append("🤝 referral possible")
     marks += job.lang_marks
     if job.note.upper().startswith("VERIFY"):
         marks.append(f"🔍 {job.note}")
     if job.app_status:
         marks.append(f"📬 {job.app_status}")
     if job.applied_status:
-        marks.append(f"ℹ️ в компанию уже был отклик: {job.applied_status}")
+        marks.append(f"ℹ️ already applied to this company: {job.applied_status}")
     marks += job.history_marks
     marks += _penalty_marks(job)
     if _was_rejected(job):
-        marks.append("↓ ранее отказ")
+        marks.append("↓ rejected before")
     return "; ".join(marks)
 
 
 PER_COMPANY_LIMIT = 5
-PRIORITY_TITLE = "✅ Remote без привязки к конкретной стране" + (
-    f" / явно включает {config.HOME_COUNTRY}" if config.HOME_COUNTRY else "")
-TABLE_HEAD = ["| Компания | Вакансия | Локация | Дата | Ссылка | Пометки |", "|---|---|---|---|---|---|"]
+PRIORITY_TITLE = "✅ Remote not tied to a specific country" + (
+    f" / explicitly includes {config.HOME_COUNTRY}" if config.HOME_COUNTRY else "")
+TABLE_HEAD = ["| Company | Vacancy | Location | Date | Link | Marks |", "|---|---|---|---|---|---|"]
 
 
 def _table(jobs, overflow, max_rows=None):
-    """Таблица с лимитом на компанию (и на число строк); лишнее — в overflow[company]."""
+    """A table with a per-company limit (and a row limit); the rest goes to overflow[company]."""
     jobs = sorted(jobs, key=section_key)
     by_company = {}
     for j in jobs:
@@ -95,7 +95,7 @@ def _table(jobs, overflow, max_rows=None):
             overflow.setdefault(company, []).extend(newest[PER_COMPANY_LIMIT:])
     visible = [j for j in jobs if id(j) in shown]
     cut = 0
-    if max_rows and len(visible) > max_rows:  # оставляем самые свежие
+    if max_rows and len(visible) > max_rows:  # keep the freshest
         newest = sorted(visible, key=lambda j: -(j.posted.timestamp() if j.posted else 0))
         keep = {id(j) for j in newest[:max_rows]}
         for j in newest[max_rows:]:
@@ -114,14 +114,14 @@ def _table(jobs, overflow, max_rows=None):
         if last_row[j.company] == i and j.company in extra:
             lines.append(f"| | + {extra[j.company]} more at {_cell(j.company)} → see appendix | | | | |")
     if cut:
-        lines.append(f"| | + ещё {cut} более старых вакансий → see appendix | | | | |")
+        lines.append(f"| | + {cut} more older vacancies → see appendix | | | | |")
     lines.append("")
     return lines
 
 
 def _relocation_section(reloc, overflow):
-    """🌍: подразделы по странам, внутри — сначала подтверждённая релокация."""
-    lines = [f"## 🌍 Релокация и remote по странам — {len(reloc)}", ""]
+    """🌍: subsections by country, confirmed relocation first within each."""
+    lines = [f"## 🌍 Relocation and remote by country — {len(reloc)}", ""]
     for country in [*geo.COUNTRIES, geo.OTHER]:
         group = [j for j in reloc if j.reloc_country == country]
         if not group:
@@ -129,7 +129,7 @@ def _relocation_section(reloc, overflow):
         group.sort(key=lambda j: (_was_rejected(j), geo.TYPE_ORDER.index(j.reloc_type), sort_key(j)))
         lines += [f"### {country} — {len(group)}", ""]
         lines += [
-            "| Компания | Вакансия | Страна / город | Тип | Маркер релокации | Зарплата | Ссылка | Пометки |",
+            "| Company | Vacancy | Country / city | Kind | Relocation marker | Salary | Link | Marks |",
             "|---|---|---|---|---|---|---|---|",
         ]
         per_company = Counter()
@@ -140,7 +140,7 @@ def _relocation_section(reloc, overflow):
                 hidden[j.company] += 1
                 overflow.setdefault(j.company, []).append(j)
                 continue
-            quote = f"«{_cell(j.reloc_quote)}»" if j.reloc_quote else "—"
+            quote = f'"{_cell(j.reloc_quote)}"' if j.reloc_quote else "—"
             lines.append(
                 f"| {_cell(j.company)} | {_cell(j.title, 90)} | {_cell(j.location, 60)} | {j.reloc_type} | "
                 f"{quote} | {_cell(j.salary or '—', 30)} | [{j.source}]({j.url}) | {_cell(_marks(j))} |"
@@ -153,34 +153,34 @@ def _relocation_section(reloc, overflow):
 
 def _status(job):
     if hasattr(job, "channel"):  # Telegram
-        return f"❓ проверить вручную: {job.manual_check}" if job.manual_check else job.label
+        return f"❓ check by hand: {job.manual_check}" if job.manual_check else job.label
     if job.manual_check:
-        return f"❓ проверить вручную: {job.manual_check}"
+        return f"❓ check by hand: {job.manual_check}"
     if job.reloc_type:
         return f"🌍 {job.reloc_country}: {job.reloc_type}"
     if job.location_check:
-        return "❓ remote в стране"
+        return "❓ remote within a country"
     return f"✅ {config.HOME_COUNTRY}" if config.HOME_RX.search(job.location or "") else "✅ remote"
 
 
 PENALTY_NAMES = {
-    "experience_7": "требуют 7 лет опыта", "experience_8": "требуют 8+ лет опыта", "level": "уровень Staff/Principal",
-    "role": "смежная роль", "language": "основной язык не Python",
-    "ops_heavy": "по тексту — DevOps/инфраструктура, а не продукт",
+    "experience_7": "7 years of experience required", "experience_8": "8+ years of experience required", "level": "Staff/Principal level",
+    "role": "related role", "language": "primary language is not Python",
+    "ops_heavy": "by the text — DevOps/infrastructure, not product work",
 }
 
 
 def _penalty_marks(job):
-    return [f"⬇ штраф: {PENALTY_NAMES.get(p, p)}" for p in job.penalties]
+    return [f"⬇ penalty: {PENALTY_NAMES.get(p, p)}" for p in job.penalties]
 
 
 SKILL_GAPS_TOP = 15
 
 
 def skill_gaps(jobs, tg_jobs) -> dict:
-    """Каких навыков чаще всего не хватает в подходящих вакансиях (Backend и ML / AI).
+    """Which skills are missing most often in fitting vacancies (Backend and ML / AI).
 
-    -> {"total": N, "core": [(навык, сколько вакансий)], "nice": [...]}: по своим вакансиям, а не по всему рынку.
+    -> {"total": N, "core": [(skill, how many vacancies)], "nice": [...]}: over your vacancies, not the whole market.
     """
     pool = [j for j in [*jobs, *tg_jobs] if j.tier in (tiers.BACKEND, tiers.ML)]
     core, nice = Counter(), Counter()
@@ -195,53 +195,53 @@ def _skill_gaps_section(jobs, tg_jobs):
     if not gaps["total"]:
         return []
     total = gaps["total"]
-    lines = [f"## 📊 Каких навыков чаще всего не хватает — по {total} подходящим вакансиям (Backend, ML / AI)", "",
-             "| Навык | Ключевой (нет в резюме) | Nice-to-have |", "|---|---|---|"]
+    lines = [f"## 📊 Skills missing most often — over {total} fitting vacancies (Backend, ML / AI)", "",
+             "| Skill | Key (not in the CV) | Nice-to-have |", "|---|---|---|"]
     nice = dict(gaps["nice"])
     for name, n in gaps["core"]:
         extra = nice.pop(name, 0)
         lines.append(f"| {name} | {n} ({round(100 * n / total)}%) | {f'{extra} ({round(100 * extra / total)}%)' if extra else '—'} |")
     for name, n in list(nice.items())[:5]:
         lines.append(f"| {name} | — | {n} ({round(100 * n / total)}%) |")
-    lines += ["", "Ключевой — навык требуется без оговорок, nice-to-have — «будет плюсом». "
-              "Считаются и термины вне словаря (Odoo, ERP…), если вакансия упоминает их 3+ раза.", ""]
+    lines += ["", "Key — the skill is required without reservations, nice-to-have — \"is a plus\". "
+              "Terms outside the dictionary (Odoo, ERP…) count too if a vacancy mentions them 3+ times.", ""]
     return lines
 
 
 def _applications_block(stats):
-    """📬 Отклики: сводка по статусам и кому напомнить о себе (почта + Telegram-истории)."""
+    """📬 Applications: a summary by status and who to follow up with (mail + Telegram stories)."""
     digest = stats.get("applications")
     if not digest:
         return []
     c = digest["counts"]
     lines = [
-        "## 📬 Отклики",
+        "## 📬 Applications",
         "",
-        f"🟢 этапы {c.get('active', 0) + c.get('offer', 0)} · 🟡 ждём ответа {c.get('waiting', 0)} · "
-        f"🟠 отказался сам {c.get('declined', 0)} · 🔴 отказ {c.get('rejected', 0)} — "
-        "подробно в reports/applications.html",
+        f"🟢 in stages {c.get('active', 0) + c.get('offer', 0)} · 🟡 waiting for an answer {c.get('waiting', 0)} · "
+        f"🟠 declined by you {c.get('declined', 0)} · 🔴 rejected {c.get('rejected', 0)} — "
+        "details in reports/applications.html",
         "",
     ]
     if digest.get("warning"):
         lines += [f"> ⚠️ **{_cell(digest['warning'])}**", ""]
     if digest["nudge"]:
-        lines += ["**Напомнить о себе** (после этапа тишина):", ""]
-        lines += [f"- **{_cell(company)}** — {days} дн. без ответа; последнее: {_cell(subject)}"
+        lines += ["**Follow up** (silence after a stage):", ""]
+        lines += [f"- **{_cell(company)}** — {days} days without an answer; last: {_cell(subject)}"
                   for company, days, subject in digest["nudge"]]
         lines.append("")
     return lines
 
 
 def _new_section(jobs, tg_jobs):
-    """🆕 Вакансии, которых не было в прошлых прогонах (state/seen.json)."""
+    """🆕 Vacancies not seen in past runs (state/seen.json)."""
     new = [j for j in jobs if j.is_new_today and not _blocked(j)]
     new.sort(key=tiers.sort_key)
     new_tg = sorted((j for j in tg_jobs if j.is_new_today and not _blocked(j)), key=tiers.sort_key)
-    lines = [f"## 🆕 Новое за сутки — {len(new) + len(new_tg)}", ""]
+    lines = [f"## 🆕 New in the last day — {len(new) + len(new_tg)}", ""]
     if not new and not new_tg:
-        return lines + ["Новых вакансий с прошлого запуска нет.", ""]
+        return lines + ["No new vacancies since the last run.", ""]
     lines += [
-        "| Балл | Компания | Вакансия | Локация | Статус | Дата | Источник | Ссылка | Не хватает / пометки |",
+        "| Score | Company | Vacancy | Location | Status | Date | Source | Link | Missing / marks |",
         "|---|---|---|---|---|---|---|---|---|",
     ]
     for j in new:
@@ -250,11 +250,11 @@ def _new_section(jobs, tg_jobs):
         marks = [m for m in _marks(j).split("; ") if m and m != "🆕" and not m.startswith("❓")]
         lines.append(
             f"| **{j.relevance}** | {company} | {_cell(j.title, 90)} | {_cell(j.location or 'Remote', 60)} | "
-            f"{_status(j)} | {posted} | {_source(j)} | [оригинал]({j.url}) | {_cell('; '.join([_missing(j), *marks]))} |"
+            f"{_status(j)} | {posted} | {_source(j)} | [original]({j.url}) | {_cell('; '.join([_missing(j), *marks]))} |"
         )
     for j in new_tg:
         posted = j.posted.date().isoformat() if j.posted else "—"
-        link = f"[Apply]({j.url})" if j.url else f"{j.contact or '—'} · [пост]({j.post_url})"
+        link = f"[Apply]({j.url})" if j.url else f"{j.contact or '—'} · [post]({j.post_url})"
         lines.append(
             f"| **{j.relevance}** | {_cell(j.company)} | {_cell(j.title, 90)} | {_cell(j.location or '—', 60)} | "
             f"{j.label} | {posted} | {_source(j)} | {link} | {_cell('; '.join([_missing(j), *j.marks]))} |"
@@ -264,27 +264,27 @@ def _new_section(jobs, tg_jobs):
 
 
 def _source(job):
-    """Источники вакансии: freehire, ATS, агрегатор или Telegram-канал."""
+    """Vacancy sources: freehire, ATS, aggregator or Telegram channel."""
     if hasattr(job, "channel"):
         return f"telegram @{job.channel}"
     return " + ".join(job.sources or [job.source])
 
 
 def _missing(job, limit=6):
-    """Недостающие ключевые навыки (для таблиц Markdown-отчёта)."""
+    """Missing key skills (for the Markdown report tables)."""
     names = list(getattr(job, "cv_core_missing", []))[:limit]
-    return ("не хватает: " + ", ".join(names)) if names else "все ключевые навыки есть"
+    return ("missing: " + ", ".join(names)) if names else "all key skills present"
 
 
 def _skills(job, limit=6):
-    """Совпавшие навыки одной строкой (самые весомые первыми)."""
+    """Matched skills in one line (the heaviest first)."""
     names = job.matched_skills[:limit]
     more = len(job.matched_skills) - len(names)
     return ", ".join(names) + (f" +{more}" if more > 0 else "")
 
 
 def _ranked(jobs, tg_jobs):
-    """Все вакансии (ATS + Telegram) по убыванию балла; без компаний в активном процессе (собеседование)."""
+    """All vacancies (ATS + Telegram) by score, descending; without companies in an active process (interviews)."""
     rows = [(j, j.url, _status(j), _marks(j)) for j in jobs if not _blocked(j)]
     rows += [
         (j, j.url or j.post_url, _status(j),
@@ -298,7 +298,7 @@ def _ranked(jobs, tg_jobs):
 
 
 def _top_section(jobs, tg_jobs):
-    """🎯 Топ-N по релевантности резюме (profile.toml), не больше top_per_company на компанию."""
+    """🎯 Top-N by relevance to the CV (profile.toml), at most top_per_company per company."""
     limit = int(geo.S.get("top_limit", 100))
     per_company_limit = int(geo.S.get("top_per_company", 3))
     picked, per_company = [], Counter()
@@ -310,11 +310,11 @@ def _top_section(jobs, tg_jobs):
         picked.append(row)
         if len(picked) == limit:
             break
-    lines = [f"## 🎯 Топ-{limit} по релевантности резюме — {len(picked)}", ""]
+    lines = [f"## 🎯 Top {limit} by relevance to the CV — {len(picked)}", ""]
     if not picked:
-        return lines + ["Подходящих вакансий нет.", ""]
+        return lines + ["No fitting vacancies.", ""]
     lines += [
-        "| # | Балл | Компания | Вакансия | Локация | Статус | Дата | Источник | Ссылка | Не хватает | Пометки |",
+        "| # | Score | Company | Vacancy | Location | Status | Date | Source | Link | Missing | Marks |",
         "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for n, (j, link, status, marks) in enumerate(picked, 1):
@@ -323,7 +323,7 @@ def _top_section(jobs, tg_jobs):
         marks = "; ".join(m for m in marks.split("; ") if m and not m.startswith("❓"))
         lines.append(
             f"| {n} | **{j.relevance}** | {company} | {_cell(j.title, 80)} | {_cell(j.location or 'Remote', 50)} | "
-            f"{status} | {posted} | {_source(j)} | [оригинал]({link}) | {_cell(_missing(j))} | {_cell(marks)} |"
+            f"{status} | {posted} | {_source(j)} | [original]({link}) | {_cell(_missing(j))} | {_cell(marks)} |"
         )
     lines.append("")
     return lines
@@ -334,28 +334,28 @@ TOP_BLOCKING_PENALTIES = {"level", "language", "experience_7", "experience_8"}
 
 
 def _why(job):
-    """Одна строка «почему подходит»: главные совпавшие навыки и условие по локации."""
+    """One line "why it fits": the main matched skills and the location condition."""
     location = job.location or ""
     if config.HOME_RX.search(location):
-        place = f"работа в стране проживания ({config.HOME_COUNTRY})"
+        place = f"work in your country of residence ({config.HOME_COUNTRY})"
     elif re.search(r"world|global|anywhere", location, re.I):
-        place = "remote по миру"
+        place = "remote worldwide"
     elif re.search(r"europe|emea|\beu\b", location, re.I):
-        place = "remote по Европе"
+        place = "remote in Europe"
     else:
-        place = "remote без привязки к стране"
+        place = "remote not tied to a country"
     if getattr(job, "reloc_type", "") == geo.RELOCATION:
-        place = f"релокация: {job.reloc_country}"
-    extras = ["приоритетная компания"] if getattr(job, "score", 0) >= 2 else []
+        place = f"relocation: {job.reloc_country}"
+    extras = ["priority company"] if getattr(job, "score", 0) >= 2 else []
     return ", ".join([*job.matched_skills[:3], place, *extras])
 
 
 def pick_review(jobs, tg_jobs):
-    """Вакансии для «Топа для разбора»: [(job, ссылка)], не больше TOP_REVIEW_LIMIT."""
+    """Vacancies for "Top to review": [(job, link)], at most TOP_REVIEW_LIMIT."""
     def eligible(job):
         return not (job.manual_check or _blocked(job) or TOP_BLOCKING_PENALTIES & set(job.penalties))
 
-    # ✅ remote / домашняя страна либо 🌍 с подтверждённой релокацией
+    # ✅ remote / home country, or 🌍 with confirmed relocation
     rows = [(j, j.url) for j in jobs if eligible(j)
             and (j.reloc_type == geo.RELOCATION or (not j.location_check and not j.reloc_type))]
     rows += [(j, j.url or j.post_url) for j in tg_jobs if eligible(j) and j.label.startswith("✅")]
@@ -373,13 +373,13 @@ def pick_review(jobs, tg_jobs):
 
 
 def _review_section(jobs, tg_jobs):
-    """⭐ До 15 вакансий: локация подтверждена текстом, без штрафов, текст прочитан."""
+    """⭐ Up to 15 vacancies: location confirmed by the text, no penalties, the text was read."""
     picked = pick_review(jobs, tg_jobs)
-    lines = [f"## ⭐ Топ для разбора — {len(picked)}", ""]
+    lines = [f"## ⭐ Top to review — {len(picked)}", ""]
     if not picked:
-        return lines + ["Вакансий, прошедших все проверки, сейчас нет.", ""]
+        return lines + ["No vacancies have passed all checks yet.", ""]
     lines += [
-        "| # | Категория | Балл | Компания | Вакансия | Локация | Статус | Дата | Источник | Ссылка | Почему подходит | Соответствие резюме |",
+        "| # | Category | Score | Company | Vacancy | Location | Status | Date | Source | Link | Why it fits | Match with the CV |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for n, (j, link) in enumerate(picked, 1):
@@ -388,7 +388,7 @@ def _review_section(jobs, tg_jobs):
         lines.append(
             f"| {n} | {tiers.NAMES[j.tier]} | **{j.relevance}** | {company} | {_cell(j.title, 80)} | "
             f"{_cell(j.location or 'Remote', 50)} | "
-            f"{_status(j)} | {posted} | {_source(j)} | [оригинал]({link}) | {_cell(_why(j))} | "
+            f"{_status(j)} | {posted} | {_source(j)} | [original]({link}) | {_cell(_why(j))} | "
             f"{_cell(cv_match.summary(j))} |"
         )
     lines.append("")
@@ -396,30 +396,30 @@ def _review_section(jobs, tg_jobs):
 
 
 def _outreach_section(picked):
-    """✉️ Кому написать по вакансиям топа: поиск людей в LinkedIn и черновик сообщения.
+    """✉️ Who to write to about the top vacancies: LinkedIn people search and a message draft.
 
-    Ссылки только собираются, в LinkedIn скрипт не ходит; отправляет пользователь сам.
+    Links are only built, the script does not visit LinkedIn; the user sends messages themselves.
     """
-    lines = ["### ✉️ Написать живому человеку", "",
-             "Ссылки открывают поиск людей в LinkedIn; черновик — заметка к запросу на контакт (до 300 символов).", ""]
+    lines = ["### ✉️ Write to a real person", "",
+             "The links open a LinkedIn people search; the draft is a note to a connection request (up to 300 characters).", ""]
     for n, (j, _) in enumerate(picked, 1):
         links = [f"[{label}]({url})" for label, url in outreach.search_links(j.company)]
         if outreach.telegram_contact(j):
-            links.insert(0, f"[автор поста в Telegram]({outreach.telegram_contact(j)})")
+            links.insert(0, f"[post author in Telegram]({outreach.telegram_contact(j)})")
         text = getattr(j, "description", "") or getattr(j, "text", "")
         direct = [f"[{label}]({href})" for _, label, href in outreach.contacts(text, getattr(j, "channel", ""))]
-        lines += [f"{n}. **{_cell(j.company) or '—'}** — {_cell(j.title, 80)}: {' · '.join(links) or 'компания не указана'}",
-                  *([f"   📇 контакты из вакансии: {' · '.join(direct)}"] if direct else []),
-                  f"   > ✉️ рекрутеру: {outreach.draft(j)}",
+        lines += [f"{n}. **{_cell(j.company) or '—'}** — {_cell(j.title, 80)}: {' · '.join(links) or 'company not named'}",
+                  *([f"   📇 contacts from the vacancy: {' · '.join(direct)}"] if direct else []),
+                  f"   > ✉️ to a recruiter: {outreach.draft(j)}",
                   "   >",
-                  f"   > 🤝 инженеру, реферал: {outreach.referral_draft(j)}", ""]
+                  f"   > 🤝 to an engineer, referral: {outreach.referral_draft(j)}", ""]
     return lines
 
 
 def _manual_section(jobs):
-    """❓ Вакансии, которые нельзя подтвердить по тексту — в топ не попадают."""
-    lines = [f"## ❓ Проверить вручную — {len(jobs)}", ""]
-    lines += ["| Балл | Компания | Вакансия | Локация | Почему ❓ | Дата | Ссылка | Пометки |", "|---|---|---|---|---|---|---|---|"]
+    """❓ Vacancies that cannot be confirmed by the text — they do not get into the top."""
+    lines = [f"## ❓ Check by hand — {len(jobs)}", ""]
+    lines += ["| Score | Company | Vacancy | Location | Why ❓ | Date | Link | Marks |", "|---|---|---|---|---|---|---|---|"]
     for j in sorted(jobs, key=tiers.sort_key):
         posted = j.posted.date().isoformat() if j.posted else "—"
         lines.append(
@@ -434,16 +434,16 @@ REFUSED_PER_COMPANY = 4
 
 
 def _previously_rejected_section(jobs, tg_jobs, filtered):
-    """Компании со статусом «Отказ» в откликах — отдельно, вне основных разделов и топа.
+    """Companies with a "Rejected" status in applications — separately, outside the main sections and the top.
 
-    filtered — их вакансии, которые к тому же не прошли фильтры (причина в последней колонке).
+    filtered — their vacancies that also did not pass the filters (the reason is in the last column).
     """
     rows = [(j, j.url, "") for j in jobs] + [(j, j.url or j.post_url, "") for j in tg_jobs]
     rows += [(j, j.url or getattr(j, "post_url", ""), j.reject) for j in filtered]
     rows.sort(key=lambda r: (r[0].company.lower(), bool(r[2]), -r[0].relevance))
-    lines = [f"## Ранее отказ — {len({r[0].company for r in rows})} компаний, {len(rows)} вакансий", ""]
+    lines = [f"## Rejected before — {len({r[0].company for r in rows})} companies, {len(rows)} vacancies", ""]
     lines += [
-        "| Компания | Вакансия | Локация | Дата | Ссылка | Отклики | Фильтры |",
+        "| Company | Vacancy | Location | Date | Link | Applications | Filters |",
         "|---|---|---|---|---|---|---|",
     ]
     per_company = Counter()
@@ -455,48 +455,48 @@ def _previously_rejected_section(jobs, tg_jobs, filtered):
         history = "; ".join(filter(None, [j.applied_status, *j.history_marks]))
         lines.append(
             f"| {_cell(j.company)} | {_cell(j.title, 80)} | {_cell(j.location or 'Remote', 50)} | {posted} | "
-            f"[{_source(j)}]({link}) | {_cell(history)} | {('не прошла: ' + reason) if reason else 'прошла'} |"
+            f"[{_source(j)}]({link}) | {_cell(history)} | {('did not pass: ' + reason) if reason else 'passed'} |"
         )
     hidden = sum(max(0, n - REFUSED_PER_COMPANY) for n in per_company.values())
     if hidden:
-        lines.append(f"| | + ещё {hidden} вакансий этих компаний (не больше {REFUSED_PER_COMPANY} на компанию) | | | | | |")
+        lines.append(f"| | + {hidden} more vacancies of these companies (at most {REFUSED_PER_COMPANY} per company) | | | | | |")
     lines.append("")
     return lines
 
 
 REJECTED_LIMIT = 50
-REJECTED_PER_BULK_REASON = 3  # «по метке источника» и «старше N дней» — массовые причины
+REJECTED_PER_BULK_REASON = 3  # "by the source label" and "older than N days" are bulk reasons
 
 
 def pick_rejected(rejected):
-    """До REJECTED_LIMIT отброшенных вакансий: сначала правила по тексту, затем массовые причины."""
+    """Up to REJECTED_LIMIT rejected vacancies: rules by the text first, then bulk reasons."""
     def is_bulk(job):
-        return job.reject.startswith(("локация по метке", "старше"))
+        return job.reject.startswith(("location by the source label", "older than"))
 
-    # rejected уже отсортированы по исходному баллу; правила по тексту показываем первыми
+    # rejected are already sorted by the raw score; rules by the text are shown first
     bulk_rows, bulk = [], Counter()
     for j in filter(is_bulk, rejected):
         if bulk[j.reject] < REJECTED_PER_BULK_REASON:
             bulk[j.reject] += 1
             bulk_rows.append(j)
-    # отказы по локации из текста — самое важное правило, они идут первыми
+    # location rejects from the text are the most important rule, they go first
     by_text = sorted(
         (j for j in rejected if not is_bulk(j)),
-        key=lambda j: (not j.reject.startswith(("on-site", "привязка")), -j.relevance),
+        key=lambda j: (not j.reject.startswith(("on-site", "tied to country")), -j.relevance),
     )
     return by_text[: REJECTED_LIMIT - len(bulk_rows)] + bulk_rows
 
 
 def _rejected_section(rejected):
-    """Вакансии подходящей роли, скрытые фильтрами: причина и цитата из текста."""
+    """Vacancies of a fitting role hidden by the filters: the reason and a quote from the text."""
     shown = pick_rejected(rejected)
     by_reason = Counter(re.sub(r"\d+", "N", j.reject) for j in rejected)
-    lines = [f"## Отброшено фильтрами — {len(rejected)} (показано {len(shown)})", ""]
-    lines += ["По причинам: " + "; ".join(f"{k} — {v}" for k, v in by_reason.most_common()), ""]
-    lines += ["| Исх. балл | Компания | Вакансия | Причина | Цитата | Ссылка |", "|---|---|---|---|---|---|"]
+    lines = [f"## Rejected by filters — {len(rejected)} (shown {len(shown)})", ""]
+    lines += ["By reason: " + "; ".join(f"{k} — {v}" for k, v in by_reason.most_common()), ""]
+    lines += ["| Raw score | Company | Vacancy | Reason | Quote | Link |", "|---|---|---|---|---|---|"]
     for j in shown:
         link = j.url or getattr(j, "post_url", "")
-        quote = f"«{_cell(j.reject_quote, 110)}»" if j.reject_quote else "—"
+        quote = f'"{_cell(j.reject_quote, 110)}"' if j.reject_quote else "—"
         lines.append(
             f"| {j.relevance} | {_cell(j.company)} | {_cell(j.title, 80)} | {j.reject} | {quote} | "
             f"[{_source(j)}]({link}) |"
@@ -511,26 +511,26 @@ def _tg_sort_key(job):
 
 
 def _telegram_section(tg_jobs, stats):
-    lines = [f"## Telegram-каналы — {len(tg_jobs)}", ""]
+    lines = [f"## Telegram channels — {len(tg_jobs)}", ""]
     for channel in stats.get("tg_failed", []):
-        lines += [f"> ⚠️ Канал @{channel} прочитать не удалось (см. errors.log).", ""]
+        lines += [f"> ⚠️ Could not read the channel @{channel} (see errors.log).", ""]
     if not tg_jobs:
-        return lines + ["Подходящих вакансий нет.", ""]
+        return lines + ["No fitting vacancies.", ""]
     lines += [
-        "| Канал | Дата | Должность | Компания | Локация / формат | Зарплата | Ссылка или контакт | Пометки |",
+        "| Channel | Date | Title | Company | Location / format | Salary | Link or contact | Marks |",
         "|---|---|---|---|---|---|---|---|",
     ]
     for j in sorted(tg_jobs, key=_tg_sort_key):
         parts = [f"[Apply]({j.url})"] if j.url else []
         if j.contact or not j.url:
-            parts.append(j.contact or "контакт не найден")
-        link = " · ".join([*parts, f"[пост]({j.post_url})"])
+            parts.append(j.contact or "contact not found")
+        link = " · ".join([*parts, f"[post]({j.post_url})"])
         marks = [j.label, *j.marks]
         if j.applied_status:
-            marks.append(f"ℹ️ в компанию уже был отклик: {j.applied_status}")
+            marks.append(f"ℹ️ already applied to this company: {j.applied_status}")
         marks += j.history_marks
         if _was_rejected(j):
-            marks.append("↓ ранее отказ")
+            marks.append("↓ rejected before")
         posted = j.posted.date().isoformat() if j.posted else "—"
         lines.append(
             f"| @{j.channel} | {posted} | {_cell(j.title, 90)} | {_cell(j.company, 40)} | "
@@ -541,7 +541,7 @@ def _telegram_section(tg_jobs, stats):
 
 
 def _compact_appendix(title, groups, link_of, suffix_of=lambda j: ""):
-    """Компактный список по компаниям: заголовок — локация — ссылка."""
+    """A compact list by company: title — location — link."""
     lines = [f"## {title}", ""]
     for company in sorted(groups, key=str.lower):
         lines += [f"**{_cell(company)}**" + suffix_of(groups[company][0]), ""]
@@ -554,40 +554,40 @@ def _compact_appendix(title, groups, link_of, suffix_of=lambda j: ""):
 def render(day, jobs, stats, tg_jobs=None):
     all_jobs = sorted(jobs, key=sort_key)
     all_tg = tg_jobs or []
-    # 🚫 нужен местный язык — убираем из всех разделов в отдельное приложение
+    # 🚫 local language required — removed from all sections into a separate appendix
     lang_blocked = [j for j in [*all_jobs, *all_tg] if j.lang_required]
     all_jobs = [j for j in all_jobs if not j.lang_required]
     all_tg = [j for j in all_tg if not j.lang_required]
     staffing = [j for j in all_jobs if j.staffing] + [j for j in all_tg if j.staffing]
     all_jobs = [j for j in all_jobs if not j.staffing]
     all_tg = [j for j in all_tg if not j.staffing]
-    # компании со статусом «Отказ» — отдельный раздел в конце, не в основных и не в топе
+    # companies with a "Rejected" status — a separate section at the end, not in the main sections or the top
     refused = [j for j in all_jobs if _was_rejected(j)]
     refused_tg = [j for j in all_tg if _was_rejected(j)]
     jobs = [j for j in all_jobs if not _was_rejected(j)]
     tg_main = [j for j in all_tg if not _was_rejected(j)]
     manual = [j for j in jobs if j.manual_check]
-    # всё, что прошло фильтр по локации без пометки ❓: домашняя страна,
-    # Worldwide/Global/EMEA/Europe либо просто "Remote" без региона
+    # everything that passed the location filter without a ❓ mark: home country,
+    # Worldwide/Global/EMEA/Europe, or just "Remote" without a region
     reloc = [j for j in jobs if j.reloc_type]
     priority = [j for j in jobs if not j.location_check and not j.reloc_type and not j.manual_check]
     rest = [j for j in jobs if j.location_check and not j.reloc_type]
     overflow = {}
 
-    lines = [f"# Вакансии за {day.isoformat()}", ""]
+    lines = [f"# Vacancies for {day.isoformat()}", ""]
     if not jobs:
-        lines += ["Новых подходящих вакансий нет.", ""]
+        lines += ["No new fitting vacancies.", ""]
 
     lines += _applications_block(stats)
     lines += _new_section(jobs, tg_main)
     lines += _review_section(jobs, tg_main)
     lines += _skill_gaps_section(jobs, tg_main)
     lines += _top_section(jobs, tg_main)
-    lines += ["---", "", "# Appendix: все актуальные вакансии", ""]
+    lines += ["---", "", "# Appendix: all current vacancies", ""]
 
     if priority:
         shown = min(len(priority), config.PRIORITY_MAX_ROWS)
-        lines += [f"## {PRIORITY_TITLE} — {len(priority)} (показано до {shown} самых свежих)", ""]
+        lines += [f"## {PRIORITY_TITLE} — {len(priority)} (up to {shown} freshest shown)", ""]
         lines += _table(priority, overflow, config.PRIORITY_MAX_ROWS)
 
     if manual:
@@ -600,7 +600,7 @@ def render(day, jobs, stats, tg_jobs=None):
         group = [j for j in rest if j.score == score]
         if not group:
             continue
-        title = f"{FLAGS[score]} Приоритет компании {score}".strip()
+        title = f"{FLAGS[score]} Company priority {score}".strip()
         lines += [f"## {title} — {len(group)}", ""]
         lines += _table(group, overflow)
 
@@ -624,7 +624,7 @@ def render(day, jobs, stats, tg_jobs=None):
         for j in lang_blocked:
             groups.setdefault(j.company, []).append(j)
         lines += _compact_appendix(
-            f"Appendix: Требуется местный язык — {len(lang_blocked)}", groups,
+            f"Appendix: Local language required — {len(lang_blocked)}", groups,
             lambda j: j.url or j.post_url,
         )
 
@@ -644,11 +644,11 @@ def render(day, jobs, stats, tg_jobs=None):
     must_lines = []
     for name, found, passed, reason in stats.get("must_report", []):
         if reason:
-            must_lines.append(f"- {name}: ATS-борд не найден, см. errors.log (причина: {reason})")
+            must_lines.append(f"- {name}: ATS board not found, see errors.log (reason: {reason})")
         else:
             must_lines.append(
-                f"- {name}: найдено вакансий на борде — {found}, прошло фильтры — {passed}"
-                + ("" if passed else " (Python-вакансий сейчас нет)")
+                f"- {name}: vacancies found on the board — {found}, passed the filters — {passed}"
+                + ("" if passed else " (no Python vacancies right now)")
             )
     reported = {company_key(row[0]) for row in stats.get("must_report", [])}
     for name, has_board in stats.get("referral", []):
@@ -656,58 +656,58 @@ def render(day, jobs, stats, tg_jobs=None):
             continue
         if not any(company_key(j.company) == company_key(name) for j in [*jobs, *tg_main]):
             referral_lines.append(
-                f"- {name}: Python-вакансий сейчас нет"
-                + ("" if has_board else " (ATS-борд не найден — проверьте карьерный сайт вручную)")
+                f"- {name}: no Python vacancies right now"
+                + ("" if has_board else " (ATS board not found — check the career site by hand)")
             )
     lines += [
-        "## Сводка",
+        "## Summary",
         "",
-        f"- Всего найдено (прошли фильтр): **{stats['matched']}**",
-        f"- Уже есть отклик (скрыто): {stats['in_applied']}",
-        f"- Дублей объединено (одна вакансия в нескольких локациях): {stats.get('merged', 0)}",
+        f"- Found in total (passed the filter): **{stats['matched']}**",
+        f"- Already applied (hidden): {stats['in_applied']}",
+        f"- Duplicates merged (one vacancy in several locations): {stats.get('merged', 0)}",
         *(
-            [f"- freehire: получено {fh['fetched']} (запросов в сеть {fh['requests']}, из кэша {fh['cache_hits']}; "
-             f"по запросам: " + ", ".join(f"{k} — {v}" for k, v in fh['totals'].items()) + "), "
-             f"добавлено новых {fh['added']}, совпало с другими источниками {fh['twins']}, "
-             f"полных текстов получено {fh['described']} из {fh.get('candidates', 0)}, "
-             f"не прошло проверку {fh['dropped']}",
-             *(f"- freehire, запрос {name} вернул 0: {text}" for name, text in fh.get("diagnosis", {}).items())]
+            [f"- freehire: received {fh['fetched']} (network requests {fh['requests']}, from cache {fh['cache_hits']}; "
+             f"by query: " + ", ".join(f"{k} — {v}" for k, v in fh['totals'].items()) + "), "
+             f"new added {fh['added']}, matched other sources {fh['twins']}, "
+             f"full texts received {fh['described']} of {fh.get('candidates', 0)}, "
+             f"failed the check {fh['dropped']}",
+             *(f"- freehire, query {name} returned 0: {text}" for name, text in fh.get("diagnosis", {}).items())]
             if (fh := stats.get("freehire")) and fh["enabled"] else []
         ),
-        f"- Ранее отказ (отдельный раздел): {len(refused) + len(refused_tg) + len(refused_filtered)}",
-        f"- ❓ Проверить вручную: {len(manual)}",
-        f"- Отброшено фильтрами (подходящая роль): {len(filtered_out)} — полный список в state/rejected_latest.tsv",
+        f"- Rejected before (separate section): {len(refused) + len(refused_tg) + len(refused_filtered)}",
+        f"- ❓ Check by hand: {len(manual)}",
+        f"- Rejected by filters (fitting role): {len(filtered_out)} — full list in state/rejected_latest.tsv",
         *(
-            [f"- База зарплатных вилок: {sal['samples']} вакансий с указанной зарплатой (EUR/мес, медианы). "
+            [f"- Salary range base: {sal['samples']} vacancies with a stated salary (EUR/month, medians). "
              + " | ".join(sal["summary"])]
             if (sal := stats.get("salary")) and sal["samples"] else []
         ),
-        f"- Отброшено как старше {stats.get('max_age_days', 30)} дней: {stats.get('stale', 0)}",
-        f"- Вынесено в Staffing/outsourcing: {len(staffing)}",
-        f"- В основном отчёте: **{len(jobs)}**, из них впервые увидены сегодня: "
+        f"- Dropped as older than {stats.get('max_age_days', 30)} days: {stats.get('stale', 0)}",
+        f"- Moved to Staffing/outsourcing: {len(staffing)}",
+        f"- In the main report: **{len(jobs)}**, of them first seen today: "
         f"{sum(j.is_new_today for j in jobs)}",
-        f"- {PRIORITY_TITLE} (подтверждено текстом): **{len(priority)}** вакансий",
-        f"- В разделе 🌍: **{len(reloc)}** вакансий"
+        f"- {PRIORITY_TITLE} (confirmed by the text): **{len(priority)}** vacancies",
+        f"- In the 🌍 section: **{len(reloc)}** vacancies"
         + (" — " + ", ".join(
-            f"{c}: {n} (подтв. релокация: {confirmed.get(c, 0)})" for c, n in by_country.items()
+            f"{c}: {n} (confirmed relocation: {confirmed.get(c, 0)})" for c, n in by_country.items()
         ) if reloc else ""),
-        f"- Remote в стране, допускающий работу вне её: "
+        f"- Remote within a country that allows working from outside it: "
         f"{sum(j.reloc_type == geo.REMOTE_OK for j in reloc)}",
-        f"- Отброшено по языку (🚫 нужен местный язык): {len(lang_blocked)}",
+        f"- Dropped for language (🚫 local language required): {len(lang_blocked)}",
         *must_lines,
         *referral_lines,
-        "- По приоритету компании: " + ", ".join(f"{s} → {by_score.get(s, 0)}" for s in (3, 2, 1, 0)),
-        f"- С пометкой ⚠️ language mismatch: {sum(j.language_mismatch_warning for j in jobs)}",
+        "- By company priority: " + ", ".join(f"{s} → {by_score.get(s, 0)}" for s in (3, 2, 1, 0)),
+        f"- Marked ⚠️ language mismatch: {sum(j.language_mismatch_warning for j in jobs)}",
         *(
-            [f"- Telegram-каналы: {len(tg_main)} вакансий, из них ✅ — "
+            [f"- Telegram channels: {len(tg_main)} vacancies, of them ✅ — "
              f"{sum(j.label.startswith('✅') for j in tg_main)}"]
             if tg_jobs is not None else []
         ),
-        f"- Компаний с найденным ATS-бордом: {stats['mapped']} из {stats['companies']} "
-        f"(остальные — в errors.log)",
-        f"- Просмотрено вакансий до фильтра: {stats['fetched']}",
+        f"- Companies with a found ATS board: {stats['mapped']} of {stats['companies']} "
+        f"(the rest are in errors.log)",
+        f"- Vacancies looked at before the filter: {stats['fetched']}",
         "",
-        f"Источники: {SOURCE_LINKS}.",
+        f"Sources: {SOURCE_LINKS}.",
         "",
     ]
     return "\n".join(lines)

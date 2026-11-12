@@ -1,4 +1,4 @@
-"""Релокация и remote с привязкой к стране (страны и компании — в settings.toml)."""
+"""Relocation and remote tied to a country (countries and companies are in settings.toml)."""
 import re
 import tomllib
 
@@ -10,12 +10,12 @@ COUNTRIES = list(S.get("relocation_countries", []))
 ANY_COUNTRY = bool(S.get("any_country", False))
 OTHER = "Other"
 
-# Типы в порядке показа внутри страны: сначала подтверждённая релокация
-RELOCATION = "релокация"
-UNCONFIRMED = "релокация (не подтверждена)"
-REMOTE_OK = "remote: допускает работу вне страны"
-REMOTE_UNCLEAR = "remote: неясно, можно ли вне страны"
-RESIDENTS_ONLY = "❌ только резиденты"
+# Kinds in display order within a country: confirmed relocation first
+RELOCATION = "relocation"
+UNCONFIRMED = "relocation (unconfirmed)"
+REMOTE_OK = "remote: work from outside the country allowed"
+REMOTE_UNCLEAR = "remote: unclear if work from outside the country is allowed"
+RESIDENTS_ONLY = "❌ residents only"
 TYPE_ORDER = [RELOCATION, UNCONFIRMED, REMOTE_OK, REMOTE_UNCLEAR, RESIDENTS_ONLY]
 
 
@@ -33,22 +33,22 @@ RELOCATION_COMPANIES = {
 RELOCATION_ENABLED = bool(S.get("relocation_enabled", True))
 COUNTRY_BOUND_REMOTE = bool(S.get("country_bound_remote", True))
 PRIORITY_COMPANIES = {company_key(n) for n in S.get("priority_companies", [])}
-# Крупные компании (bigtech.py) пишут о релокации в тексте вакансии редко, хотя обычно её дают:
-# их вакансии в этих странах идут в 🌍 как «релокация (не подтверждена)».
+# Big companies (bigtech.py) rarely mention relocation in the vacancy text, although they usually offer it:
+# their vacancies in these countries go to 🌍 as "relocation (unconfirmed)".
 BIGTECH_SOURCES = {"microsoft", "workday", "oracle", "amazon"}
 BIGTECH_HUBS_RX = _names_rx(S.get("bigtech", {}).get("relocation_hubs", []) or ["-"])
-# компании с обычных ATS, к которым то же правило (крупные трейдинговые и т.п.)
+# companies on regular ATS boards that get the same rule (big trading firms and the like)
 BIGTECH_COMPANIES = {company_key(n) for n in S.get("bigtech", {}).get("companies", [])}
 REFERRAL_COMPANIES = {company_key(n) for n in S.get("referral_companies", [])}
 
-# "Georgia" — страна, а не штат США
+# "Georgia" is a country, not a US state
 _GEORGIA_CITY_RX = re.compile(r"tbilisi|batumi|kutaisi", re.I)
 _GEORGIA_COUNTRY_CONTEXT_RX = re.compile(r"tbilisi|batumi|kutaisi|caucasus|\bGEL\b")
 _US_CONTEXT_RX = re.compile(r"\bUSA?\b|U\.S\.|United States|Atlanta|\bGA\b")
 
 _SENTENCE_SPLIT_RX = re.compile(r"[\n.!?;•]+")
-# Только предложение помощи: "relocation package", "visa sponsorship", "we sponsor visas".
-# "eager to relocate", "relocation to Tokyo after onboarding" сюда не попадают.
+# Only an offer of help: "relocation package", "visa sponsorship", "we sponsor visas".
+# "eager to relocate", "relocation to Tokyo after onboarding" do not count.
 _RELOCATION_RX = re.compile(
     r"relocation\W+(?:\w+\W+){0,2}?(?:support|package|assistance|bonus|allowance|budget|help|benefits?)|"
     r"(?:support|help|assist\w*|cover\w*|pay\w*)\W+(?:\w+\W+){0,3}?relocat\w+|"
@@ -60,7 +60,7 @@ _RELOCATION_RX = re.compile(
     r"визов\w+ поддержк\w+|оплат\w+ (?:переезд\w*|релокац\w+)",
     re.I,
 )
-# "we do not offer relocation" — отрицание прямо перед фразой
+# "we do not offer relocation" — a negation right before the phrase
 _NEGATION_RX = re.compile(
     r"\b(?:no|not|unable|cannot|can't|don't|doesn't|won't|without|unfortunately)\b|\bне\b|\bбез\b", re.I
 )
@@ -69,7 +69,7 @@ _NEGATION_AFTER_RX = re.compile(
 )
 _RELOCATION_TARGET_RX = re.compile(r"\bto\s+(?:the\s+)?([A-Z][\w-]+(?:\s[A-Z][\w-]+)?)")
 _ANYWHERE_RX = re.compile(
-    # «Remote from anywhere» — да; «from anywhere in the US» — это remote с привязкой к стране
+    # "Remote from anywhere" — yes; "from anywhere in the US" is remote tied to a country
     r"work from anywhere|remote from anywhere(?!\s+in\b)|anywhere in (?:the )?(?:world|europe|eu|emea)|"
     r"remote (?:with)?in (?:the )?(?:eu|emea|europe)|across (?:the )?(?:eu|emea|europe)|"
     r"any country|from any (?:location|country)|fully distributed",
@@ -87,7 +87,7 @@ _SALARY_RX = re.compile(
 
 
 def detect_country(location, description=""):
-    """Целевая страна по локации вакансии (город или страна) либо ''."""
+    """Target country by the vacancy location (city or country), or ''."""
     for country, rx in COUNTRY_RX.items():
         if not rx.search(location):
             continue
@@ -101,13 +101,13 @@ def detect_country(location, description=""):
 
 
 def relocation_quote(text, country="", max_words=12):
-    """Цитата (≤12 слов вокруг фразы) с предложением релокации В эту страну либо ''."""
+    """A quote (≤12 words around the phrase) offering relocation TO this country, or ''."""
     for m in _RELOCATION_RX.finditer(text):
         if _NEGATION_RX.search(text[max(0, m.start() - 45): m.start()]):
             continue
         if _NEGATION_AFTER_RX.match(text[m.end(): m.end() + 60]):
             continue
-        # "relocation support to Tokyo" — релокация не туда
+        # "relocation support to Tokyo" — relocation to another place
         target = _RELOCATION_TARGET_RX.match(text[m.end(): m.end() + 40].lstrip())
         if target and country in COUNTRY_RX and not COUNTRY_RX[country].search(target.group(1)):
             continue
@@ -120,7 +120,7 @@ def relocation_quote(text, country="", max_words=12):
 
 
 def role_fits(job):
-    """Раздел 🌍 — только инженерные Python-роли."""
+    """The 🌍 section — only engineering Python roles."""
     if config.RELOC_EXCLUDE_TITLE_RX.search(job.title):
         return False
     text = f"{job.title}\n{job.description}"
@@ -130,7 +130,7 @@ def role_fits(job):
 
 
 def classify(job, is_remote):
-    """Заполняет job.reloc_* для вакансии, привязанной к стране. True — вакансия берётся."""
+    """Fills job.reloc_* for a vacancy tied to a country. True — the vacancy is taken."""
     if not role_fits(job):
         return False
     country = detect_country(job.location, job.description)

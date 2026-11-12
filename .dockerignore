@@ -1,4 +1,4 @@
-# в образ попадает только requirements.txt (код и данные монтируются volume'ом)
+# the image gets only requirements.txt (code and data are mounted as a volume)
 .venv/
 __pycache__/
 state/

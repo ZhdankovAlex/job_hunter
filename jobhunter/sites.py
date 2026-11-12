@@ -1,7 +1,7 @@
-"""Карьерные страницы без стандартной ATS: Aiven, Bolt, fin.dev, Gurtam, Paychex (примеры адаптеров).
+"""Career pages without a standard ATS: Aiven, Bolt, fin.dev, Gurtam, Paychex (example adapters).
 
-У этих компаний нет публичного JSON API, поэтому читается HTML их собственных
-страниц (robots.txt проверяется клиентом Http, лимит — 1 запрос в секунду на хост).
+These companies have no public JSON API, so the HTML of their own
+pages is read (the Http client checks robots.txt, the limit is 1 request per second per host).
 """
 from __future__ import annotations
 
@@ -22,11 +22,11 @@ _JSONLD_RX = re.compile(r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</sc
 _NOISE_RX = re.compile(r"<(script|style|svg|nav|header|footer|noscript)\b.*?</\1>", re.S | re.I)
 
 
-_HTML = {"Accept": "text/html,*/*;q=0.8"}  # некоторые сайты отвечают 404 на Accept: application/json
+_HTML = {"Accept": "text/html,*/*;q=0.8"}  # some sites answer 404 to Accept: application/json
 
 
 def _get(http: Http, url: str) -> str:
-    """HTML страницы; любой не-200 ответ — FetchError."""
+    """Page HTML; any non-200 answer is a FetchError."""
     r = http.get(url, headers=_HTML)
     if r.status_code != 200:
         raise FetchError(f"{url}: HTTP {r.status_code}")
@@ -34,12 +34,12 @@ def _get(http: Http, url: str) -> str:
 
 
 def _page_text(page: str) -> str:
-    """Текст страницы без скриптов, навигации и подвала."""
+    """Page text without scripts, navigation and footer."""
     return html_to_text(_NOISE_RX.sub(" ", page))
 
 
 def _jsonld(page: str, kind: str) -> dict:
-    """Первый JSON-LD объект страницы с нужным @type либо {}."""
+    """The first JSON-LD object of the page with the needed @type, or {}."""
     for raw in _JSONLD_RX.findall(page):
         try:
             data = json.loads(raw)
@@ -52,13 +52,13 @@ def _jsonld(page: str, kind: str) -> dict:
 
 
 def findev(http: Http) -> Iterator[Job]:
-    """fin.dev: список — JSON-LD ItemList, вакансия — JSON-LD JobPosting."""
+    """fin.dev: the list is a JSON-LD ItemList, a vacancy is a JSON-LD JobPosting."""
     listing = _get(http, "https://fin.dev/career/open-positions/")
     urls = [e.get("url") for e in _jsonld(listing, "ItemList").get("itemListElement", [])]
     for url in filter(None, urls):
         posting = _jsonld(_get(http, url), "JobPosting")
         if not posting:
-            log.warning("fin.dev: на странице %s нет JobPosting", url)
+            log.warning("fin.dev: no JobPosting on the page %s", url)
             continue
         countries = [c.get("name", "") for c in posting.get("applicantLocationRequirements") or []]
         remote = posting.get("jobLocationType") == "TELECOMMUTE"
@@ -76,7 +76,7 @@ def findev(http: Http) -> Iterator[Job]:
 
 
 def gurtam(http: Http) -> Iterator[Job]:
-    """Gurtam: карточки вакансий на /career, текст — со страницы вакансии."""
+    """Gurtam: vacancy cards on /career, the text comes from the vacancy page."""
     listing = _get(http, "https://gurtam.com/career")
     cards = re.findall(r'<a\s+href="(/career/[^"#?]+)"([^>]*vacancy-card[^>]*)>(.*?)</a>', listing, re.S)
     for path, attrs, body in cards:
@@ -95,7 +95,7 @@ def gurtam(http: Http) -> Iterator[Job]:
 
 
 def bolt(http: Http) -> Iterator[Job]:
-    """Bolt: постраничный список; страница вакансии читается только для подходящих названий."""
+    """Bolt: a paged list; the vacancy page is read only for fitting titles."""
     seen: set[str] = set()
     for page_no in range(1, 16):
         page = _get(http, "https://bolt.eu/en/careers/positions/" + (f"?page={page_no}" if page_no > 1 else ""))
@@ -133,10 +133,10 @@ def bolt(http: Http) -> Iterator[Job]:
 
 
 def _turbo_stream(raw: str):
-    """Ответ загрузчика React Router (`*.data`, формат turbo-stream): плоский массив со ссылками -> объект.
+    """A React Router loader response (`*.data`, turbo-stream format): a flat array with references -> an object.
 
-    Объект {"_<i>": <j>}: ключ — строка arr[i], значение — arr[j]; список — индексы элементов;
-    отрицательные индексы — служебные значения (undefined, null…), здесь они None.
+    An object {"_<i>": <j>}: the key is the string arr[i], the value is arr[j]; a list holds element indexes;
+    negative indexes are special values (undefined, null…), here they are None.
     """
     arr = json.loads(raw.splitlines()[0])
     memo: dict[int, object] = {}
@@ -158,18 +158,18 @@ def _turbo_stream(raw: str):
 
 
 def aiven(http: Http) -> Iterator[Job]:
-    """Aiven: сайт рисует вакансии скриптом, но данные страницы отдаёт загрузчик /careers/job.data
-    (публичные ATS-борды Greenhouse под их slug закрыты). Текст — со страницы careers.aiven.io/openings/<id>
-    (её /api/ закрыт в robots.txt, страницы вакансий — нет); открывается только для подходящих названий."""
+    """Aiven: the site draws vacancies with a script, but the page data comes from the loader /careers/job.data
+    (the public Greenhouse boards under their slug are closed). Text — from the page careers.aiven.io/openings/<id>
+    (its /api/ is closed in robots.txt, vacancy pages are not); opened only for fitting titles."""
     r = http.get("https://aiven.io/careers/job.data")
     if r.status_code != 200:
         raise FetchError(f"aiven.io/careers/job.data: HTTP {r.status_code}")
     try:
         data = _turbo_stream(r.text)["routes/careers/job"]["data"]
     except (ValueError, KeyError, TypeError, IndexError) as e:
-        raise FetchError(f"aiven.io: формат job.data изменился ({e})") from e
+        raise FetchError(f"aiven.io: job.data format changed ({e})") from e
     if data.get("jobsUnavailable"):
-        raise FetchError("aiven.io: список вакансий недоступен (jobsUnavailable)")
+        raise FetchError("aiven.io: vacancy list unavailable (jobsUnavailable)")
     for item in data.get("jobs") or []:
         title, url = item.get("title") or "", item.get("url") or ""
         if not url or not filters.title_candidate(title):
@@ -187,8 +187,8 @@ def aiven(http: Http) -> Iterator[Job]:
 
 
 def paychex(http: Http) -> Iterator[Job]:
-    """Paychex: карьерный сайт на iCIMS Jibe, открытый JSON /api/jobs с текстом вакансии (robots.txt: crawl-delay 5).
-    Вакансий немного (~60, в основном продажи в США) — читаем все, роль и локацию отсеют фильтры."""
+    """Paychex: a career site on iCIMS Jibe, an open JSON /api/jobs with the vacancy text (robots.txt: crawl-delay 5).
+    There are few vacancies (~60, mostly sales in the US) — all are read, the filters drop role and location."""
     seen, page = 0, 1
     while page <= 5:
         r = http.get("https://careers.paychex.com/api/jobs", params={"page": page, "limit": 100})
@@ -221,7 +221,7 @@ SOURCES = {"aiven": aiven, "bolt": bolt, "fin.dev": findev, "gurtam": gurtam, "p
 
 
 def enabled_sources() -> list[str]:
-    """Источники из SOURCES без выключенных в settings.toml [sources].disabled."""
+    """Sources from SOURCES minus those turned off in settings.toml [sources].disabled."""
     from . import geo
 
     disabled = {n.lower() for n in geo.S.get("sources", {}).get("disabled", [])}
@@ -229,31 +229,31 @@ def enabled_sources() -> list[str]:
 
 
 def fetch(name: str, http: Http) -> list[Job]:
-    """Собирает что успеет; при ошибке возвращает уже полученное и пишет в errors.log."""
+    """Collects what it can; on an error returns what it already has and writes to errors.log."""
     jobs: list[Job] = []
     try:
         for job in SOURCES[name](http):
             jobs.append(job)
     except FetchError as e:
-        log.warning("сайт %s: %s", name, e)
+        log.warning("site %s: %s", name, e)
     return jobs
 
 
-# --- Доски вакансий: Remote Rocketship, Brenxor, justjoin.it, remote.com, Cryptocurrency Jobs ---
+# --- Job boards: Remote Rocketship, Brenxor, justjoin.it, remote.com, Cryptocurrency Jobs ---
 
 _NEXT_DATA_RX = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 _NEXT_F_RX = re.compile(r'self\.__next_f\.push\(\[1,"(.*?)"\]\)</script>', re.S)
 
 
 def _boards() -> dict:
-    """Секция [boards] из settings.toml."""
-    from . import geo  # импорт здесь: geo читает settings.toml при загрузке
+    """The [boards] section of settings.toml."""
+    from . import geo  # imported here: geo reads settings.toml on import
 
     return geo.S.get("boards", {})
 
 
 def _next_payload(page: str) -> str:
-    """Склеенный поток данных Next.js (self.__next_f.push) со страницы."""
+    """The joined Next.js data stream (self.__next_f.push) of the page."""
     parts = _NEXT_F_RX.findall(page)
     try:
         return json.loads('"' + "".join(parts) + '"') if parts else ""
@@ -262,7 +262,7 @@ def _next_payload(page: str) -> str:
 
 
 def _array_after(payload: str, marker: str) -> list:
-    """JSON-массив, который начинается сразу после marker в потоке данных."""
+    """The JSON array that starts right after marker in the data stream."""
     start = payload.find(marker)
     if start < 0:
         return []
@@ -273,7 +273,7 @@ def _array_after(payload: str, marker: str) -> list:
 
 
 def remoterocketship(http: Http) -> Iterator[Job]:
-    """Remote Rocketship: вакансии лежат в __NEXT_DATA__ страницы поиска; url — оригинал в ATS."""
+    """Remote Rocketship: vacancies are in __NEXT_DATA__ of the search page; url is the original in the ATS."""
     cfg = _boards()
     base = cfg.get("remoterocketship_url", "")
     if not base:
@@ -282,7 +282,7 @@ def remoterocketship(http: Http) -> Iterator[Job]:
         page = _get(http, f"{base}&page={page_no}")
         m = _NEXT_DATA_RX.search(page)
         if not m:
-            raise FetchError("remoterocketship: на странице нет __NEXT_DATA__ (изменилась вёрстка)")
+            raise FetchError("remoterocketship: no __NEXT_DATA__ on the page (the page format changed)")
         openings = json.loads(m.group(1))["props"]["pageProps"].get("initialJobOpenings") or []
         if not openings:
             break
@@ -313,7 +313,7 @@ def remoterocketship(http: Http) -> Iterator[Job]:
 
 
 def brenxor(http: Http) -> Iterator[Job]:
-    """Brenxor: список — карточки, полный текст — JSON-LD JobPosting на странице вакансии."""
+    """Brenxor: the list is cards, the full text is a JSON-LD JobPosting on the vacancy page."""
     cfg = _boards()
     base = cfg.get("brenxor_url", "")
     if not base:
@@ -323,7 +323,7 @@ def brenxor(http: Http) -> Iterator[Job]:
     for page_no in range(1, int(cfg.get("brenxor_pages", 4)) + 1):
         r = http.get(base + (f"?page={page_no}" if page_no > 1 else ""))
         if r.status_code == 404 and page_no > 1:
-            break  # страницы списка закончились
+            break  # no more list pages
         if r.status_code != 200:
             raise FetchError(f"brenxor: HTTP {r.status_code}")
         cards = r.text.split('<a class="job-listing-details"')[1:]
@@ -360,13 +360,13 @@ def brenxor(http: Http) -> Iterator[Job]:
 
 
 def justjoin(http: Http) -> Iterator[Job]:
-    """justjoin.it: вакансии в потоке данных страницы списка (без текста — только название и навыки)."""
+    """justjoin.it: vacancies are in the data stream of the list page (no text — only title and skills)."""
     url = _boards().get("justjoin_url", "")
     if not url:
         return
     offers = _array_after(_next_payload(_get(http, url)), '"offers":[{"applyUrl"')
     if not offers:
-        raise FetchError("justjoin.it: вакансии на странице не найдены (изменилась вёрстка)")
+        raise FetchError("justjoin.it: no vacancies found on the page (the page format changed)")
     for o in offers:
         cities = list(dict.fromkeys(
             filter(None, [o.get("city"), *(m.get("city") for m in o.get("multilocation") or [])])
@@ -387,7 +387,7 @@ def justjoin(http: Http) -> Iterator[Job]:
 
 
 def remotecom(http: Http) -> Iterator[Job]:
-    """remote.com/jobs: поиск по запросу; в списке есть название, компания и страны найма."""
+    """remote.com/jobs: search by query; the list has the title, company and hiring countries."""
     cfg = _boards()
     query = cfg.get("remotecom_query", "")
     if not query:
@@ -418,14 +418,14 @@ def remotecom(http: Http) -> Iterator[Job]:
 
 
 def cryptocurrencyjobs(http: Http) -> Iterator[Job]:
-    """Cryptocurrency Jobs: общий RSS-фид (последние вакансии всех категорий)."""
+    """Cryptocurrency Jobs: a common RSS feed (latest vacancies of all categories)."""
     import xml.etree.ElementTree as ET
     from email.utils import parsedate_to_datetime
 
     try:
         root = ET.fromstring(_get(http, "https://cryptocurrencyjobs.co/index.xml"))
     except ET.ParseError as e:
-        raise FetchError(f"cryptocurrencyjobs: не удалось разобрать RSS ({e})")
+        raise FetchError(f"cryptocurrencyjobs: could not parse RSS ({e})")
     for item in root.iter("item"):
         title, _, company = (item.findtext("title") or "").rpartition(" at ")
         text = html_to_text(item.findtext("description"))
@@ -455,7 +455,7 @@ def cryptocurrencyjobs(http: Http) -> Iterator[Job]:
 
 
 def rivian(http: Http) -> Iterator[Job]:
-    """Rivian: карьерный сайт на iCIMS/Jibe отдаёт вакансии JSON-ом (/api/jobs), текст — в ответе."""
+    """Rivian: a career site on iCIMS/Jibe returns vacancies as JSON (/api/jobs), the text is in the response."""
     seen = 0
     for page_no in range(1, 11):
         r = http.get("https://careers.rivian.com/api/jobs", params={"page": page_no, "limit": 100})
@@ -491,13 +491,13 @@ HABR_MAX_PAGES = 6
 
 
 def habr_career(http: Http) -> Iterator[Job]:
-    """Habr Career (career.habr.com): remote-вакансии с навыком Python, свежие первыми (данные — SSR-JSON страницы)."""
+    """Habr Career (career.habr.com): remote vacancies with the Python skill, freshest first (data — the page SSR JSON)."""
     for page_no in range(1, HABR_MAX_PAGES + 1):
         page = _get(http, f"{_HABR}/vacancies?skills[]={HABR_PYTHON_SKILL}&remote=true&type=all"
                           f"&sort=date&page={page_no}")
         m = _SSR_RX.search(page)
         if not m:
-            raise FetchError("habr career: нет SSR-данных (изменилась вёрстка)")
+            raise FetchError("habr career: no SSR data (the page format changed)")
         data = json.loads(html.unescape(m.group(1))).get("vacancies") or {}
         for item in data.get("list") or []:
             title = item.get("title") or ""
@@ -520,7 +520,7 @@ def habr_career(http: Http) -> Iterator[Job]:
                 location=", ".join(["Remote"] if item.get("remoteWork") else places),
                 url=url,
                 posted=parse_date((item.get("publishedDate") or {}).get("date")),
-                description=f"{body}\nНавыки: {skills}" if body else "",
+                description=f"{body}\nSkills: {skills}" if body else "",
                 remote=bool(item.get("remoteWork")),
                 employment=(item.get("employment") or "").replace("_", "-"),
                 salary=salary,
@@ -537,10 +537,10 @@ _ZERO_ONE_FORMAT_RX = re.compile(r"\b(Remote|Hybrid|On site)\b")
 
 
 def zero_one_tech(http: Http) -> Iterator[Job]:
-    """01.tech (iGaming): список подгружается кнопкой «Load more», но id всех вакансий есть в данных страницы.
+    """01.tech (iGaming): the list loads with a "Load more" button, but the ids of all vacancies are in the page data.
 
-    Открываем каждую по id; название — из <title>, формат (Remote / Hybrid / On site) — из шапки.
-    Город офиса на сайте не указан, релокация — после испытательного срока.
+    Each one is opened by id; the title comes from <title>, the format (Remote / Hybrid / On site) from the header.
+    The site does not name the office city, relocation comes after the probation period.
     """
     page = _get(http, f"{_ZERO_ONE}/vacancies")
     for vid in dict.fromkeys(_ZERO_ONE_ID_RX.findall(page)):
@@ -548,7 +548,7 @@ def zero_one_tech(http: Http) -> Iterator[Job]:
         try:
             detail = _get(http, url)
         except FetchError:
-            continue  # не всякий id в данных страницы — вакансия
+            continue  # not every id in the page data is a vacancy
         m = re.search(r"<title>\s*Vacancy:\s*(.*?)\s*</title>", detail, re.S)
         if not m:
             continue
@@ -570,7 +570,7 @@ RELOCATE_ME_PAGES = 5
 
 
 def relocate_me(http: Http) -> Iterator[Job]:
-    """relocate.me: вакансии с релокацией и визовой поддержкой; поиск по «python», ссылка = /страна/город/компания/…"""
+    """relocate.me: vacancies with relocation and visa support; search for "python", link = /country/city/company/…"""
     seen = set()
     for page_no in range(1, RELOCATE_ME_PAGES + 1):
         page = _get(http, f"{_RELOCATE_ME}/international-jobs?query=python&page={page_no}")
@@ -597,10 +597,10 @@ def relocate_me(http: Http) -> Iterator[Job]:
 
 
 def manual_jobs(http: Http) -> Iterator[Job]:
-    """Отдельные вакансии из settings.toml [manual_jobs].urls — найденные руками, открываются каждый прогон.
+    """Single vacancies from settings.toml [manual_jobs].urls — found by hand, opened on every run.
 
-    Данные: JSON-LD JobPosting, иначе данные Next.js (pageProps.position), иначе
-    <title> и текст страницы. Компания — из JSON-LD или из домена (example.com -> Example).
+    Data: JSON-LD JobPosting, otherwise Next.js data (pageProps.position), otherwise
+    <title> and the page text. The company comes from JSON-LD or from the domain (example.com -> Example).
     """
     from urllib.parse import urlsplit
 
@@ -647,7 +647,7 @@ def manual_jobs(http: Http) -> Iterator[Job]:
                 title = html.unescape(t.group(1)).split("|")[0].strip() if t else url
                 text = _page_text(page)
         yield Job(company=company, title=title, location=location, url=url, description=text[:20000],
-                  remote=remote, source="вручную")
+                  remote=remote, source="manual")
 
 
 _HIREHI = "https://hirehi.ru"
@@ -655,7 +655,7 @@ HIREHI_SECTIONS = ("/vacancies/python", "/vacancies/backend")
 
 
 def hirehi(http: Http) -> Iterator[Job]:
-    """HireHi: список раздела — JSON-LD ItemList на странице, вакансия — JSON-LD JobPosting (API закрыт в robots.txt)."""
+    """HireHi: the section list is a JSON-LD ItemList on the page, a vacancy is a JSON-LD JobPosting (API closed in robots.txt)."""
     seen = set()
     for section in HIREHI_SECTIONS:
         page = _get(http, _HIREHI + section)
@@ -686,7 +686,7 @@ def hirehi(http: Http) -> Iterator[Job]:
             pay = ld.get("baseSalary") or {}
             amount = (pay.get("value") or {}).get("value") if isinstance(pay.get("value"), dict) else pay.get("value")
             unit = ((pay.get("value") or {}).get("unitText") or "") if isinstance(pay.get("value"), dict) else ""
-            salary = f"{amount} {pay.get('currency', '')}{' в год' if unit == 'YEAR' else ''}" if amount else ""
+            salary = f"{amount} {pay.get('currency', '')}{' per year' if unit == 'YEAR' else ''}" if amount else ""
             yield Job(
                 company=(ld.get("hiringOrganization") or {}).get("name") or "—", title=ld.get("title") or title,
                 location=place or ("Remote" if remote else ""), url=url, posted=parse_date(ld.get("datePosted")),
@@ -710,29 +710,29 @@ SOURCES.update({
 })
 
 
-# --- Карьерные страницы компаний без поддерживаемой ATS (settings.toml [career_pages]) ------
+# --- Company career pages without a supported ATS (settings.toml [career_pages]) ------------
 
-PAGE_STATUS: dict[str, dict] = {}  # компания -> что удалось прочитать (для отчёта о доступности)
-PAGE_DETAIL_LIMIT = 100  # предохранитель от неверно разобранной страницы; самые подходящие — первыми
+PAGE_STATUS: dict[str, dict] = {}  # company -> what could be read (for the availability report)
+PAGE_DETAIL_LIMIT = 100  # a guard against a wrongly parsed page; the best-fitting go first
 _ANCHOR_RX = re.compile(r'<a\s([^>]*?href="([^"#]+)"[^>]*)>(.*?)</a>', re.S | re.I)
 _LABEL_RX = re.compile(r'(?:aria-label|title)="([^"]+)"', re.I)
 
 
-# текст ссылки, который не название вакансии; тогда название — из адреса (/job/<slug>, /careers/<slug>)
+# link text that is not a vacancy title; then the title comes from the address (/job/<slug>, /careers/<slug>)
 _CORE_TITLE_RX = re.compile(r"python|django|fastapi|back[\s-]?end|бэкенд|бекенд", re.I)
 _GENERIC_LINK_RX = re.compile(r"^(?:apply(?: now)?|learn more|read more|details|view(?: job| role)?|more|подробнее|откликнуться|смотреть)\W*$", re.I)
 _JOB_SLUG_RX = re.compile(r"/(?:jobs?|careers?|positions?|vacanc(?:y|ies)|openings?)/([a-z0-9][a-z0-9_-]{3,90})/?(?:[?#]|$)", re.I)
 
 
 def career_page(http: Http, company, url: str, location: str = "", links: str = "") -> list[Job]:
-    """Ищет на карьерной странице ссылки на вакансии подходящих ролей и читает их текст.
+    """Finds links to vacancies of fitting roles on a career page and reads their text.
 
-    Работает только для страниц, которые отдают список вакансий в HTML; если список
-    строится скриптами, ссылок не будет — это видно в отчёте о доступности.
-    location — метка по умолчанию, если на странице вакансии нет ни Remote, ни домашней страны
-    (например, «Remote» для компании, которая целиком работает удалённо).
-    links — начало адреса вакансий («https://example.com/careers/»), если в меню сайта есть ссылки
-    с похожими названиями, которые вакансиями не являются («Hire Python Developers»).
+    Works only for pages that serve the vacancy list in HTML; if the list
+    is built by scripts, there will be no links — this shows in the availability report.
+    location — the default label if the vacancy page names neither Remote nor the home country
+    (for example, "Remote" for a company that works fully remotely).
+    links — the start of vacancy addresses ("https://example.com/careers/") if the site menu has links
+    with similar names that are not vacancies ("Hire Python Developers").
     """
     from urllib.parse import urljoin
 
@@ -751,10 +751,10 @@ def career_page(http: Http, company, url: str, location: str = "", links: str = 
     for attrs, href, inner in _ANCHOR_RX.findall(r.text):
         lines = [line.strip() for line in html_to_text(inner).split("\n") if line.strip()]
         label = _LABEL_RX.search(attrs)
-        # ссылка-кнопка без текста: название вакансии есть только в aria-label / title («Должность, Отдел»)
+        # a button link without text: the vacancy title is only in aria-label / title ("Title, Department")
         title = lines[0] if lines else (html.unescape(label.group(1)).split(",")[0].strip() if label else "")
         if _GENERIC_LINK_RX.match(title):
-            # кнопка «Apply», а название — в соседнем блоке: берём из адреса /job/senior-python-developer
+            # an "Apply" button with the title in a neighbouring block: take it from the address /job/senior-python-developer
             slug = _JOB_SLUG_RX.search(href)
             title = slug.group(1).replace("-", " ").replace("_", " ").strip().title() if slug else ""
         link = urljoin(r.url, href)
@@ -763,11 +763,11 @@ def career_page(http: Http, company, url: str, location: str = "", links: str = 
         if 5 <= len(title) <= 110 and filters.title_candidate(title):
             candidates.setdefault(link, title)
     status["links"] = len(candidates)
-    # сначала Python / backend, потом остальные инженерные роли — при обрезке лимитом теряются наименее подходящие
+    # Python / backend first, then other engineering roles — a limit cut loses the least fitting ones
     ranked = sorted(candidates.items(), key=lambda kv: (0 if _CORE_TITLE_RX.search(kv[1]) else 1))
     if len(ranked) > PAGE_DETAIL_LIMIT:
-        log.warning("%s: открыто %d из %d подходящих вакансий на карьерной странице — остальные пропущены "
-                    "(лимит PAGE_DETAIL_LIMIT в sites.py)", company.name, PAGE_DETAIL_LIMIT, len(ranked))
+        log.warning("%s: opened %d of %d fitting vacancies on the career page — the rest were skipped "
+                    "(PAGE_DETAIL_LIMIT in sites.py)", company.name, PAGE_DETAIL_LIMIT, len(ranked))
     jobs: list[Job] = []
     for link, title in ranked[:PAGE_DETAIL_LIMIT]:
         try:
@@ -794,7 +794,7 @@ def career_page(http: Http, company, url: str, location: str = "", links: str = 
     return jobs
 
 
-# --- Крупные компании (jobhunter/bigtech.py): Microsoft, Workday-сайты, Oracle, Amazon ----
+# --- Big companies (jobhunter/bigtech.py): Microsoft, Workday sites, Oracle, Amazon ----
 from .bigtech import SOURCES as BIGTECH_SOURCES  # noqa: E402
 
 SOURCES.update(BIGTECH_SOURCES)

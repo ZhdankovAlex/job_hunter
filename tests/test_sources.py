@@ -1,4 +1,4 @@
-"""Разбор источников на сохранённых образцах страниц — без сети."""
+"""Parsing sources on saved page samples — no network."""
 from types import SimpleNamespace
 
 from conftest import FakeHttp, fixture_text
@@ -10,7 +10,7 @@ def test_findev_reads_jobposting_and_skips_pages_without_it():
     http = FakeHttp({
         "https://fin.dev/career/open-positions/": fixture_text("findev_list.html"),
         "https://fin.dev/career/open-positions/python-developer-1": fixture_text("findev_job.html"),
-        "https://fin.dev/career/open-positions/broken-2": "<html>нет разметки</html>",
+        "https://fin.dev/career/open-positions/broken-2": "<html>no markup</html>",
     })
     jobs = list(sites.findev(http))
     assert len(jobs) == 1
@@ -23,7 +23,7 @@ def test_findev_reads_jobposting_and_skips_pages_without_it():
 
 
 def test_career_page_links_prefix_skips_menu_ads():
-    """«Hire Python Developers» в меню — реклама, а не вакансия; links оставляет только /careers/…"""
+    """"Hire Python Developers" in the menu is an ad, not a vacancy; links keeps only /careers/…"""
     base = "https://globex.example/careers/"
     http = FakeHttp({
         base: fixture_text("career_page.html"),
@@ -34,7 +34,7 @@ def test_career_page_links_prefix_skips_menu_ads():
     jobs = sites.career_page(http, company, base, "Remote", base)
     titles = {j.title for j in jobs}
     assert "AI Engineer (Python / LLM)" in titles
-    assert "Senior Backend Engineer (Python)" in titles  # название из aria-label кнопки без текста
+    assert "Senior Backend Engineer (Python)" in titles  # the title from the aria-label of a button without text
     assert not any("Hire" in t for t in titles)
     assert "https://globex.example/hire-python-developers-in-48-hours/" not in http.calls
     assert all(j.location == "Remote" for j in jobs)

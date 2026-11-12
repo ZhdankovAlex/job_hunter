@@ -1,4 +1,4 @@
-"""Отбор вакансий: роль, занятость, локация (настройки — settings.example.toml)."""
+"""Vacancy selection: role, employment, location (settings — settings.example.toml)."""
 import pytest
 
 from jobhunter import filters
@@ -21,13 +21,13 @@ def test_backend_roles_pass(title):
 def test_excluded_roles(title):
     job = make(title)
     assert not filters.apply(job)
-    assert job.reject == ""  # не та роль — в «Отброшено» не показывается
+    assert job.reject == ""  # wrong role — not shown in "Rejected"
 
 
 def test_part_time_is_rejected_with_reason():
     job = make("Python Developer", employment="Part-time")
     assert not filters.apply(job)
-    assert job.reject.startswith("не full-time")
+    assert job.reject.startswith("not full-time")
 
 
 def test_no_url_is_skipped():

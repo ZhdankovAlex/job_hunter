@@ -4,14 +4,14 @@
 
 ## Report layout
 
-1. `📬 Отклики` — application counters and who to follow up with.
-2. `🆕 Новое за сутки` — vacancies seen for the first time today (`state/seen.json` keeps links between runs;
+1. `📬 Applications` — application counters and who to follow up with.
+2. `🆕 New in the last day` — vacancies seen for the first time today (`state/seen.json` keeps links between runs;
    a second run on the same day does not reset the section). Companies where an interview is in progress are
    not shown here or in the tops.
-3. `⭐ Топ для разбора` — up to 15 vacancies with a ✅ status, read full text and no blocking penalties, with
+3. `⭐ Top to review` — up to 15 vacancies with a ✅ status, read full text and no blocking penalties, with
    outreach links and message drafts.
 4. `📊` missing skills — which skills your CV lacks most often across matching vacancies.
-5. `🎯 Топ-N по релевантности` — the best by score (`top_limit`, `top_per_company`).
+5. `🎯 Top N by relevance` — the best by score (`top_limit`, `top_per_company`).
 6. Appendix: ✅, ❓, 🌍 by country, groups by company priority, Telegram, staffing, local language, rejected.
 
 The HTML report (`reports/latest.html`) is one table with the same data, filters (new, top, ✅, Fit ≥ 80%,
@@ -33,7 +33,7 @@ Categories: 1) Backend, 2) ML / AI, 3) DevOps / platform (including roles that a
 `profile.toml` has the skills from your CV (name, weight, pattern) and adjustments in `[scoring]`: Python /
 Backend / PostgreSQL in the title, product vs platform, company priority from `companies.txt`
 (`company_priority_per_point`), location, primary language, experience, Fit. Skills and weights can also be
-changed on the "Навыки" page of the web UI (saved to `profile_overrides.json` on top of `profile.toml`).
+changed on the "Skills" page of the web UI (saved to `profile_overrides.json` on top of `profile.toml`).
 
 ## CV matching
 
@@ -81,6 +81,6 @@ The second line in the salary column (HTML) and the "📊" mark (Markdown): "lev
 
 ## Applications in the report
 
-- `## 📬 Отклики` at the top: 🟢 / 🟡 / 🟠 / 🔴 counters and "follow up" — stages followed by 5+ days of
+- `## 📬 Applications` at the top: 🟢 / 🟡 / 🟠 / 🔴 counters and "follow up" — stages followed by 5+ days of
   silence. Vacancies of companies you applied to get a "📬 status, date" mark. The source is the local mail
   cache and `applications_manual.toml` (no Gmail requests); `run_daily.bat` runs `applications.py` first.

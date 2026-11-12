@@ -1,4 +1,4 @@
-// Плашка внизу левой панели на всех страницах: идёт ли прогон, этап и проценты; клик — на страницу пайплайна.
+// A badge at the bottom of the left panel on every page: whether a run is going on, the stage and percent; a click opens the pipeline page.
 (async function pill() {
   const el = document.getElementById('run-pill');
   async function tick() {
@@ -9,7 +9,7 @@
         const pct = stage && stage.total ? ` ${Math.floor(100 * stage.done / stage.total)}%` : '';
         const text = `${d.script}.py: ${stage ? stage.title : ''}${pct}`;
         document.getElementById('run-pill-text').textContent = text;
-        el.title = text + ' — открыть пайплайн';
+        el.title = text + ' — open the pipeline';
         el.hidden = false;
       } else {
         el.hidden = true;

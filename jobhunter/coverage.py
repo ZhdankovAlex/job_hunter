@@ -1,9 +1,9 @@
-"""Какие источники не дают вакансий в отчёт и почему — для страницы «Источники».
+"""Which sources give no vacancies to the report and why — for the "Sources" page.
 
-Причина у каждой компании одна, по старшинству (`REASONS`): ошибка запроса → проверить руками (VERIFY
-в companies.txt) → своя страница без ATS → борд не найден → борд пустой → вакансий нет → вакансии есть,
-но ни одна не прошла фильтры за последние `MATCH_DAYS` отчётов. Данные — итог последнего прогона
-(`state/sources_latest.json`), `ats_mapping.json`, `companies.txt` и архив отчётов `state/jobs/`.
+Each company has one reason, by precedence (`REASONS`): request error → check by hand (VERIFY
+in companies.txt) → own page without an ATS → board not found → empty board → no vacancies → there are vacancies,
+but none passed the filters in the last `MATCH_DAYS` reports. Data: the result of the last run
+(`state/sources_latest.json`), `ats_mapping.json`, `companies.txt` and the report archive `state/jobs/`.
 """
 from __future__ import annotations
 
@@ -17,21 +17,21 @@ from .keys import company_key
 
 SOURCES_FILE = config.ROOT / "state" / "sources_latest.json"
 JOBS_DIR = config.ROOT / "state" / "jobs"
-MATCH_DAYS = 14  # сколько последних отчётов смотреть для «подходящих нет»
+MATCH_DAYS = 14  # how many recent reports to look at for "none matching"
 
-# ключ → (название группы, пояснение для подсказки)
+# key → (group title, hint text)
 REASONS = {
-    "error": ("Ошибка запроса", "Источник ответил ошибкой в последнем прогоне"),
-    "verify": ("Проверить руками", "В companies.txt помечено VERIFY: сайт ищется вручную"),
-    "manual": ("Своя страница без ATS", "Помечено вручную в ats_mapping.json: читать руками или через [career_pages]"),
-    "no_board": ("Борд не найден", "Имя борда не подошло ни к одной ATS; повторная попытка — через "
-                                   f"{config.RECHECK_NOT_FOUND_DAYS} дней после проверки"),
-    "empty_board": ("Борд пустой", "Борд на ATS нашёлся, но открытых вакансий на нём нет"),
-    "zero": ("Вакансий нет", "Источник читается, но в последнем прогоне вакансий 0"),
-    "no_match": ("Подходящих нет", f"Вакансии есть, но ни одна не попала в отчёты за последние {MATCH_DAYS} дней"),
+    "error": ("Request error", "The source answered with an error in the last run"),
+    "verify": ("Check by hand", "Marked VERIFY in companies.txt: the site is looked up by hand"),
+    "manual": ("Own page without an ATS", "Marked by hand in ats_mapping.json: read it yourself or via [career_pages]"),
+    "no_board": ("Board not found", "The board name fit no ATS; the next attempt is "
+                                    f"{config.RECHECK_NOT_FOUND_DAYS} days after the check"),
+    "empty_board": ("Empty board", "The ATS board was found, but it has no open vacancies"),
+    "zero": ("No vacancies", "The source is read, but gave 0 vacancies in the last run"),
+    "no_match": ("None matching", f"There are vacancies, but none got into the reports of the last {MATCH_DAYS} days"),
 }
-COMPANY_KINDS = ("ats", "career_page")  # агрегаторы и доски — не компании
-_CHECKED = ("verify", "manual", "no_board", "empty_board")  # где дата проверки борда что-то значит
+COMPANY_KINDS = ("ats", "career_page")  # aggregators and boards are not companies
+_CHECKED = ("verify", "manual", "no_board", "empty_board")  # where the board check date means something
 
 
 def _read_json(path: Path, default):
@@ -42,7 +42,7 @@ def _read_json(path: Path, default):
 
 
 def matched_companies(jobs_dir: Path = JOBS_DIR, days: int = MATCH_DAYS) -> tuple[set[str], int]:
-    """Компании (company_key), у которых хоть одна вакансия попала в отчёт за `days` дней; и число отчётов."""
+    """Companies (company_key) with at least one vacancy in a report within `days` days; and the number of reports."""
     cutoff = (date.today() - timedelta(days=days)).isoformat()
     keys, reports = set(), 0
     for path in sorted(jobs_dir.glob("*.json")):
@@ -59,7 +59,7 @@ def _verify_notes() -> dict[str, str]:
 
 
 def _reason(entry: dict, verify_note: str | None, matched: bool) -> tuple[str, str] | None:
-    """(причина, подробности) или None, если компания читается и даёт подходящие вакансии."""
+    """(reason, details) or None if the company is read and gives matching vacancies."""
     if entry.get("error"):
         return "error", entry["error"]
     if verify_note is not None:
@@ -69,27 +69,27 @@ def _reason(entry: dict, verify_note: str | None, matched: bool) -> tuple[str, s
         if entry.get("manual"):
             return "manual", entry.get("note") or entry.get("from") or ""
         if entry.get("empty_board"):
-            return "empty_board", ""  # сам борд виден в колонке «ATS / борд»
+            return "empty_board", ""  # the board itself is shown in the "ATS / board" column
         checked = entry.get("checked_at") or ""
         try:
             retry = date.fromisoformat(checked) + timedelta(days=config.RECHECK_NOT_FOUND_DAYS)
-            return "no_board", f"следующая попытка — {retry.isoformat()}"
+            return "no_board", f"next attempt — {retry.isoformat()}"
         except ValueError:
             return "no_board", ""
     if entry["jobs"] == 0:
-        return "zero", ""  # борд и число вакансий видны в соседних колонках
-    if entry["kind"] in COMPANY_KINDS and not matched:  # агрегатор или доска — не компания, в отчёте их не ищем
+        return "zero", ""  # the board and the number of vacancies are shown in the neighbouring columns
+    if entry["kind"] in COMPANY_KINDS and not matched:  # an aggregator or board is not a company, not looked up in reports
         return "no_match", ""
     return None
 
 
 def gaps(sources: dict | None = None, mapping: dict | None = None, matched: set[str] | None = None,
          verify: dict[str, str] | None = None) -> dict:
-    """Источники без вакансий в отчёте: {groups: [{key, title, hint, count}], rows: [...], reports: N}.
+    """Sources without vacancies in the report: {groups: [{key, title, hint, count}], rows: [...], reports: N}.
 
-    Компании (ATS, карьерные страницы) проходят все проверки, агрегаторы и доски — только ошибку и ноль.
+    Companies (ATS, career pages) go through all checks, aggregators and boards — only error and zero.
 
-    Аргументы — для тестов; по умолчанию всё читается из файлов.
+    The arguments are for tests; by default everything is read from files.
     """
     sources = _read_json(SOURCES_FILE, {}) if sources is None else sources
     mapping = _read_json(config.MAPPING_FILE, {}) if mapping is None else mapping
@@ -102,7 +102,7 @@ def gaps(sources: dict | None = None, mapping: dict | None = None, matched: set[
     for name, entry in sources.items():
         company = entry.get("kind") in COMPANY_KINDS
         if company:
-            entry = {**(mapping.get(name) or {}), **entry}  # у career_page поля маппинга не дописаны
+            entry = {**(mapping.get(name) or {}), **entry}  # career_page entries lack the mapping fields
         key = company_key(name)
         found = _reason(entry, verify.get(key) if company else None, key in matched)
         if found:

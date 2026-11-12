@@ -1,10 +1,10 @@
-"""Категория вакансии — первый ключ ранжирования; внутри категории — свежесть, затем балл.
+"""Vacancy category — the first ranking key; within a category — freshness, then score.
 
-1. Backend      — backend / Python / Software Engineer продукта
-2. ML / AI      — ML, AI, LLM-инженерия, Data Scientist
-3. DevOps / платформа — DevOps, SRE, инфраструктура, платформенные роли, «эксплуатация» по тексту
-4. Прочее       — full-stack, frontend и вакансии, где ключевой навык — стек не из резюме
-                  (TypeScript, Node.js, JavaScript, React, Go, Java…), а также data/analytics-роли
+1. Backend      — product backend / Python / Software Engineer
+2. ML / AI      — ML, AI, LLM engineering, Data Scientist
+3. DevOps / platform — DevOps, SRE, infrastructure, platform roles, "operations" by the text
+4. Other        — full-stack, frontend and vacancies whose key skill is a stack not from the CV
+                  (TypeScript, Node.js, JavaScript, React, Go, Java…), and data/analytics roles
 """
 from __future__ import annotations
 
@@ -14,25 +14,25 @@ from datetime import datetime, timezone
 from . import config as c
 
 BACKEND, ML, OPS, OTHER = 1, 2, 3, 4
-NAMES = {BACKEND: "1 · Backend", ML: "2 · ML / AI", OPS: "3 · DevOps / платформа", OTHER: "4 · Прочее"}
+NAMES = {BACKEND: "1 · Backend", ML: "2 · ML / AI", OPS: "3 · DevOps / platform", OTHER: "4 · Other"}
 
 _FULLSTACK_RX = re.compile(r"full[\s-]?stack|front[\s-]?end|фулстек|фронтенд|\bweb developer\b", re.I)
 _ML_RX = re.compile(r"\bml\b|\bai\b|\bllms?\b|machine learning|genai|data scientist|deep learning|\bnlp\b|computer vision", re.I)
 _DATA_RX = re.compile(r"data engineer|analytics engineer|data analyst|\bbi\b|data platform", re.I)
 _BACKEND_TITLE_RX = re.compile(r"back[\s-]?end|б[эе]к[\s-]?енд|python|django|fastapi", re.I)
-# ключевой стек, которого нет в резюме: если он в «не хватает» — вакансия не по стеку
+# key stack missing from the CV: if it is among "missing", the vacancy is not on your stack
 FOREIGN_STACK = {"TypeScript", "JavaScript", "Node.js", "React", "Vue", "Angular", "Go", "Java", "Kotlin",
                  "Ruby", "PHP", ".NET / C#", "Scala", "Rust", "Elixir"}
 
 
 def tier(job) -> int:
-    """Категория вакансии по названию, тексту (штрафы verify) и сопоставлению с резюме."""
+    """Vacancy category by the title, the text (verify penalties) and matching against the CV."""
     title = job.title
     missing = set(getattr(job, "cv_missing", []))
     if _FULLSTACK_RX.search(title) or (missing & FOREIGN_STACK) or getattr(job, "mismatch_lang", ""):
         return OTHER
     if _BACKEND_TITLE_RX.search(title):
-        return BACKEND  # «Backend Platform Engineer», «Python Developer (AI)» — всё равно backend
+        return BACKEND  # "Backend Platform Engineer", "Python Developer (AI)" — still backend
     if c.OPS_ROLE_RX.search(title) or c.PLATFORM_TITLE_RX.search(title) or "ops_heavy" in getattr(job, "penalties", []):
         return OPS
     if _DATA_RX.search(title):
@@ -42,15 +42,15 @@ def tier(job) -> int:
     return BACKEND
 
 
-# границы групп свежести, в днях: вчерашняя вакансия с пробелами в навыках важнее июльской
-# с полным совпадением — на свежую выше шанс получить приглашение
+# freshness group borders, in days: yesterday's vacancy with skill gaps matters more than a July one
+# with a full match — a fresh one has a better chance of an invitation
 AGE_BUCKETS = (3, 7, 14, 30)
-AGE_NAMES = ("до 3 дней", "до недели", "до 2 недель", "до месяца", "старше месяца")
-UNKNOWN_AGE_BUCKET = 3  # дата публикации неизвестна — считаем, что вакансии до месяца
+AGE_NAMES = ("up to 3 days", "up to a week", "up to 2 weeks", "up to a month", "older than a month")
+UNKNOWN_AGE_BUCKET = 3  # publication date unknown — assume the vacancy is up to a month old
 
 
 def age_bucket(job) -> int:
-    """Номер группы свежести: 0 — опубликована за последние 3 дня, 4 — старше месяца."""
+    """Freshness group number: 0 — published in the last 3 days, 4 — older than a month."""
     if not job.posted:
         return UNKNOWN_AGE_BUCKET
     posted = job.posted if job.posted.tzinfo else job.posted.replace(tzinfo=timezone.utc)
@@ -59,7 +59,7 @@ def age_bucket(job) -> int:
 
 
 def sort_key(job) -> tuple:
-    """Категория, затем явно низкая вилка (вниз), затем группа свежести, затем балл, затем точная дата."""
+    """Category, then a clearly low salary range (down), then freshness group, then score, then the exact date."""
     from . import salary
 
     return (

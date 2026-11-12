@@ -1,88 +1,88 @@
-"""Контакт с живым человеком по вакансии: прямые контакты из текста, поиск людей в LinkedIn, черновики.
+"""Reaching a real person about a vacancy: direct contacts from the text, LinkedIn people search, drafts.
 
-Скрипт ничего не отправляет и в LinkedIn не ходит: он только находит контакты в тексте вакансии,
-собирает ссылки на поиск людей (их открывает пользователь сам) и черновики коротких сообщений —
-рекрутеру и инженеру компании с просьбой о реферале, — которые пользователь копирует и отправляет вручную.
+The script sends nothing and does not visit LinkedIn: it only finds contacts in the vacancy text,
+builds people-search links (the user opens them) and drafts of short messages —
+to a recruiter and to a company engineer asking for a referral — which the user copies and sends by hand.
 """
 from __future__ import annotations
 
 import re
 from urllib.parse import quote
 
-# лимит заметки к запросу на контакт в LinkedIn — 300 символов
+# limit of a note to a LinkedIn connection request — 300 characters
 NOTE_LIMIT = 300
 
 
 def _outreach_settings() -> tuple[str, str]:
-    """(кто вы, где вы) для черновиков: settings.toml [outreach], по умолчанию — из [home]."""
-    from . import config, geo  # geo читает settings.toml при загрузке
+    """(who you are, where you are) for drafts: settings.toml [outreach], by default from [home]."""
+    from . import config, geo  # geo reads settings.toml on import
 
     cfg = geo.S.get("outreach", {})
     pitch = cfg.get("pitch") or "Backend Engineer with Python and PostgreSQL experience"
     based = cfg.get("based_in") or (f"Based in {config.HOME_COUNTRY}." if config.HOME_COUNTRY else "")
     return pitch, based
 
-# навыки, которые и так есть в первой фразе сообщения
+# skills already named in the first sentence of the message
 _BASE_SKILLS = {"python", "postgresql", "sql"}
 
 _PEOPLE_SEARCH = "https://www.linkedin.com/search/results/people/?keywords="
 
 
 def real_company(company: str) -> str:
-    """Название компании или пустая строка для заглушек «—» и «Fintech (компания не названа)»."""
+    """Company name, or an empty string for the placeholders "—" and "Fintech (company not named)"."""
     company = (company or "").strip()
-    return "" if company in ("", "—") or "не назван" in company else company
+    return "" if company in ("", "—") or "not named" in company else company
 
 
 def search_links(company: str) -> list[tuple[str, str]]:
-    """Ссылки на поиск людей компании в LinkedIn: [(подпись, url)]; без компании — пусто.
+    """Links to search the company's people on LinkedIn: [(label, url)]; no company — empty.
 
     Args:
-        company: название компании, как в вакансии.
+        company: company name as in the vacancy.
 
     Returns:
-        Поиск рекрутеров и поиск руководителей разработки.
+        A search for recruiters and a search for engineering managers.
     """
     company = real_company(company)
     if not company:
         return []
     return [
-        ("рекрутер", _PEOPLE_SEARCH + quote(f"{company} recruiter")),
-        ("руководитель", _PEOPLE_SEARCH + quote(f"{company} engineering manager")),
-        ("инженер для реферала", _PEOPLE_SEARCH + quote(f"{company} backend engineer")),
+        ("recruiter", _PEOPLE_SEARCH + quote(f"{company} recruiter")),
+        ("manager", _PEOPLE_SEARCH + quote(f"{company} engineering manager")),
+        ("engineer for a referral", _PEOPLE_SEARCH + quote(f"{company} backend engineer")),
     ]
 
 
 _EMAIL_RX = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?![\w-])", re.I)
 _TG_LINK_RX = re.compile(r"(?:https?://)?t\.me/([A-Za-z][\w]{3,})(?![\w/])")
-_TG_HANDLE_RX = re.compile(r"(?<![\w@./])@([A-Za-z][A-Za-z0-9_]{3,})\b(?!\.\w)")  # не «@company.com»
+_TG_HANDLE_RX = re.compile(r"(?<![\w@./])@([A-Za-z][A-Za-z0-9_]{3,})\b(?!\.\w)")  # not "@company.com"
 _LINKEDIN_RX = re.compile(r"(?:https?://)?(?:[a-z]{2,3}\.)?linkedin\.com/in/[\w%-]+/?", re.I)
-# адреса, по которым не пишут о вакансии: рассылки, юристы, поддержка, приватность
+# addresses nobody writes to about a vacancy: mailing lists, lawyers, support, privacy
 _SKIP_EMAIL_RX = re.compile(
     r"^(?:no-?reply|do-?not-?reply|privacy|gdpr|dpo|legal|support|help|abuse|security|billing|accounts?|"
     r"unsubscribe|notifications?)@|accommodat|accessib|privacy|compliance|\beeo\b|ethics|whistle", re.I)
 _TELEGRAM_WORD_RX = re.compile(r"telegram|телеграм|\btg\b|тг\b", re.I)
-# @упоминания, которые не контакты: служебные имена, домены, наши каналы-источники
+# @mentions that are not contacts: service names, domains, our source channels
 _SKIP_HANDLE_RX = re.compile(r"^(?:gmail|outlook|yahoo|mail|example|channel|admin)$", re.I)
 
 
 def contacts(text: str, channel: str = "") -> list[tuple[str, str, str]]:
-    """Прямые контакты из текста вакансии: [(вид, что показать, ссылка)] без повторов.
+    """Direct contacts from the vacancy text: [(kind, what to show, link)] without repeats.
 
-    Виды: email, telegram, linkedin. Не считаются контактами служебные адреса (noreply, privacy,
-    support…) и упоминание самого канала-источника.
+    Kinds: email, telegram, linkedin. Service addresses (noreply, privacy, support…) and a mention
+    of the source channel itself do not count as contacts.
 
     Args:
-        text: текст вакансии или поста.
-        channel: Telegram-канал, откуда пост (его @упоминание — не контакт).
+        text: text of the vacancy or post.
+        channel: Telegram channel the post came from (its @mention is not a contact).
     """
     found: dict[str, tuple[str, str, str]] = {}
     for email in _EMAIL_RX.findall(text or ""):
         if not _SKIP_EMAIL_RX.search(email):
             found.setdefault(email.lower(), ("email", email, f"mailto:{email}"))
     emails_text = " ".join(found)
-    # @handle — Telegram только в посте из Telegram или рядом со словом «Telegram»: в текстах с ATS
-    # собачка обычно означает Instagram / X или домен почты
+    # @handle is Telegram only in a post from Telegram or next to the word "Telegram": in ATS texts
+    # the at sign usually means Instagram / X or a mail domain
     handles = list(_TG_LINK_RX.findall(text or ""))
     for m in _TG_HANDLE_RX.finditer(text or ""):
         near = (text or "")[max(0, m.start() - 60): m.end() + 60]
@@ -100,15 +100,15 @@ def contacts(text: str, channel: str = "") -> list[tuple[str, str, str]]:
 
 
 def telegram_contact(job) -> str:
-    """Ссылка на автора вакансии в Telegram, если пост дал @handle; иначе пустая строка."""
+    """Link to the vacancy author in Telegram if the post gave a @handle; otherwise an empty string."""
     handle = getattr(job, "contact", "").lstrip("@")
     return f"https://t.me/{handle}" if handle else ""
 
 
 def _hook(job) -> str:
-    """Две-три совпавшие ключевые технологии вакансии сверх Python и PostgreSQL.
+    """Two or three matched key technologies of the vacancy beyond Python and PostgreSQL.
 
-    Первыми идут навыки, по которым вакансия совпала с профилем (matched_skills), потом остальные.
+    Skills the vacancy matched the profile on (matched_skills) go first, then the rest.
     """
     have = [s for s in getattr(job, "cv_core_have", []) if s.lower() not in _BASE_SKILLS]
     matched = {s.lower() for s in getattr(job, "matched_skills", [])}
@@ -120,16 +120,16 @@ def _hook(job) -> str:
 
 
 def draft(job) -> str:
-    """Черновик сообщения на английском, не длиннее NOTE_LIMIT символов.
+    """A message draft in English, at most NOTE_LIMIT characters.
 
-    Если полный вариант не помещается, сначала убирается перечень технологий,
-    потом название вакансии заменяется общим «a backend engineer».
+    If the full version does not fit, the list of technologies is removed first,
+    then the vacancy title is replaced with a generic "a backend engineer".
 
     Args:
-        job: вакансия (Job или Telegram-вакансия) с company, title и cv_core_have.
+        job: vacancy (Job or Telegram vacancy) with company, title and cv_core_have.
 
     Returns:
-        Текст для ручной отправки.
+        Text to send by hand.
     """
     company = real_company(job.company) or "your company"
     title = " ".join((job.title or "").split())
@@ -146,9 +146,9 @@ def draft(job) -> str:
 
 
 def referral_draft(job) -> str:
-    """Черновик просьбы о реферале инженеру компании (не рекрутеру), не длиннее NOTE_LIMIT.
+    """A referral request draft to a company engineer (not a recruiter), at most NOTE_LIMIT.
 
-    Коротко, с готовым «пакетом»: кто вы, на какую роль, что пришлёте — чтобы ответить было легко.
+    Short, with a ready "package": who you are, which role, what you will send — so it is easy to answer.
     """
     company = real_company(job.company) or "your company"
     title = " ".join((job.title or "").split())

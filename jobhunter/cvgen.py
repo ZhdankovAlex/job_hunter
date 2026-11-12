@@ -1,8 +1,8 @@
-"""Резюме под вакансию: отбор фактов из cv/base.toml -> Markdown-прототип -> HTML / PDF (гарвардский шаблон).
+"""A CV for a vacancy: facts selected from cv/base.toml -> Markdown draft -> HTML / PDF (Harvard template).
 
-Ничего не придумывается: summary собирается по шаблону из достижений базы, навыки и пункты опыта
-отбираются и сортируются по совпадению с вакансией (технологии из словаря cv_match.TECH_RX и темы
-из TOPICS). Markdown — для проверки и правки руками, PDF собирается из него.
+Nothing is invented: the summary follows a template built from the base achievements, skills and experience bullets
+are selected and sorted by how well they match the vacancy (technologies from the cv_match.TECH_RX dictionary and topics
+from TOPICS). The Markdown is for checking and editing by hand, the PDF is built from it.
 """
 from __future__ import annotations
 
@@ -19,11 +19,11 @@ from .config import ROOT
 
 BASE_FILE = config.CV_BASE_FILE
 OUT_DIR = ROOT / "cv_out"
-# Chrome для PDF: JOBHUNTER_CHROME (контейнер: /usr/bin/chromium) > settings.toml [cv].chrome > путь в Windows
+# Chrome for PDF: JOBHUNTER_CHROME (container: /usr/bin/chromium) > settings.toml [cv].chrome > the Windows path
 CHROME = os.environ.get("JOBHUNTER_CHROME") or geo.S.get("cv", {}).get(
     "chrome", r"C:\Program Files\Google\Chrome\Application\chrome.exe")
 
-# Темы вакансии -> признаки в тексте; у пунктов базы темы заданы вручную (topics)
+# Vacancy topics -> signs in the text; base bullets have their topics set by hand (topics)
 TOPICS = {
     "llm": r"\bllms?\b|\brag\b|genai|generative|ai agents?|agentic|retrieval|embedding|vector",
     "ai_tools": r"copilot|cursor|claude|ai[\s-]assisted|ai coding|ai tools",
@@ -46,8 +46,8 @@ TOPICS = {
     "integrations": r"integrat|third[\s-]party|partners?",
 }
 _TOPIC_RX = {name: re.compile(rx, re.I) for name, rx in TOPICS.items()}
-# всегда в строке технологий под местом работы
-# технологии, которые всегда видны в строке стека места работы — cv/base.toml core_tech
+# always in the technology line under a workplace
+# technologies always shown in the stack line of a workplace — cv/base.toml core_tech
 DEFAULT_CORE_TECH = ["Python"]
 
 
@@ -56,9 +56,9 @@ def core_tech(base: dict) -> set[str]:
 
 
 def ai_only_tech(base: dict) -> set[str]:
-    """Технологии только для AI-версии резюме — cv/base.toml ai_only_tech."""
+    """Technologies only for the AI version of the CV — cv/base.toml ai_only_tech."""
     return set(base.get("ai_only_tech", []))
-SKILLS_MIN_PER_GROUP = 3  # меньше — группа навыков выглядит пустой
+SKILLS_MIN_PER_GROUP = 3  # fewer makes a skill group look empty
 
 
 def load_base() -> dict:
@@ -73,11 +73,11 @@ _WORD_RX = re.compile(r"[a-z][a-z+#.-]{2,}")
 _STOP = set("""the and for with from that this into over your our you are was were has have had will can
 all any not but per via its their them they who what when where which while also than then such only more most
 using used use work working team teams role experience years strong ability across within about""".split())
-SIMILARITY_WEIGHT = 4.0  # сколько очков даёт полное текстовое совпадение пункта с вакансией (косинус = 1)
+SIMILARITY_WEIGHT = 4.0  # how many points a full text match of a bullet with the vacancy gives (cosine = 1)
 
 
 def _stem(word: str) -> str:
-    """Грубая основа слова: scaling / scaled / scales -> scal."""
+    """A rough word stem: scaling / scaled / scales -> scal."""
     for suffix in ("ations", "ation", "ings", "ing", "ers", "ies", "ed", "es", "er", "s"):
         if word.endswith(suffix) and len(word) - len(suffix) >= 4:
             return word[: -len(suffix)]
@@ -89,10 +89,10 @@ def _tokens(text: str) -> list[str]:
 
 
 class _Similarity:
-    """TF-IDF-близость пунктов базы к тексту вакансии: ловит совпадения по смыслу без точного
-    ключевого слова («latency» в вакансии — пункт про «load time»), которых нет в TECH_RX и TOPICS.
+    """TF-IDF similarity of base bullets to the vacancy text: catches matches in meaning without an exact
+    keyword ("latency" in the vacancy — a bullet about "load time") that are missing from TECH_RX and TOPICS.
 
-    IDF считается по пунктам базы: частые для всего резюме слова («PostgreSQL», «built») весят меньше.
+    IDF is computed over the base bullets: words common to the whole CV ("PostgreSQL", "built") weigh less.
     """
 
     def __init__(self, items: list[str], vacancy_text: str):
@@ -118,7 +118,7 @@ class _Similarity:
 
 
 class Vacancy:
-    """Что важно в вакансии: технологии, темы, AI-ли это роль, текстовая близость пунктов базы."""
+    """What matters in the vacancy: technologies, topics, whether it is an AI role, text similarity of base bullets."""
 
     def __init__(self, title: str, text: str, base: dict | None = None):
         full = f"{title}\n{text}"
@@ -133,12 +133,12 @@ class Vacancy:
         self.similarity = _Similarity(items, full) if items and text.strip() else None
 
     def score(self, text: str, topics=()) -> float:
-        """Насколько пункт базы подходит вакансии: технология — 2 очка, тема — 1, текстовая близость — до 4."""
+        """How well a base bullet fits the vacancy: a technology — 2 points, a topic — 1, text similarity — up to 4."""
         sim = SIMILARITY_WEIGHT * self.similarity(text) if self.similarity else 0.0
         return 2 * len(_techs(text) & self.techs) + len(set(topics) & self.topics) + sim
 
     def explain(self, text: str, topics=()) -> dict:
-        """Из чего сложился балл пункта — для подсказки «почему выбран» в веб-интерфейсе."""
+        """What the bullet score is made of — for the "why picked" hint in the web UI."""
         return {
             "techs": sorted(_techs(text) & self.techs),
             "topics": sorted(set(topics) & self.topics),
@@ -148,21 +148,21 @@ class Vacancy:
 
 
 def _allowed(item: dict, vac: Vacancy) -> bool:
-    """requires = [темы]: пункт только для AI-ролей или вакансий, где эти темы есть (AI-инструменты в резюме
-    под Kafka-бэкенд — шум)."""
+    """requires = [topics]: the bullet is only for AI roles or vacancies that have these topics (AI tools in a CV
+    for a Kafka backend are noise)."""
     requires = item.get("requires")
     return not requires or vac.is_ai or bool(set(requires) & vac.topics)
 
 
 def _pick(items: list[dict], vac: Vacancy, low: int, high: int) -> list[dict]:
-    """pin — всегда; остальные по убыванию совпадения (при равенстве — порядок базы), от low до high штук."""
+    """pin — always; the rest by match, descending (on a tie — base order), from low to high items."""
     items = [i for i in items if _allowed(i, vac)]
     pinned = [i for i in items if i.get("pin")]
     rest = [i for i in items if not i.get("pin")]
     ranked = sorted(rest, key=lambda i: -vac.score(i["text"], i.get("topics", [])))
     scored = [i for i in ranked if vac.score(i["text"], i.get("topics", [])) > 0]
     chosen = pinned + scored
-    for i in rest:  # добираем до минимума в порядке базы
+    for i in rest:  # fill up to the minimum in base order
         if len(chosen) >= low:
             break
         if i not in chosen:
@@ -171,7 +171,7 @@ def _pick(items: list[dict], vac: Vacancy, low: int, high: int) -> list[dict]:
 
 
 def _skills(base: dict, vac: Vacancy, everything: bool = False) -> list[tuple[str, str]]:
-    """Группы навыков; everything — все пункты (базовое резюме)."""
+    """Skill groups; everything — all items (the base CV)."""
     lines = []
     for group in base["skills"]:
         if group.get("only_ai") and not vac.is_ai or not _allowed(group, vac):
@@ -180,7 +180,7 @@ def _skills(base: dict, vac: Vacancy, everything: bool = False) -> list[tuple[st
             group["group"].startswith("AI-assisted") and "ai_tools" in vac.topics)
         items = [i["text"] for i in group["items"]
                  if everything or i.get("always") or _techs(i["text"]) & vac.techs]
-        # вакансия называет мало технологий — добираем группу до минимума в порядке базы, чтобы не выглядеть пусто
+        # the vacancy names few technologies — fill the group up to the minimum in base order so it does not look empty
         for i in group["items"]:
             if len(items) >= SKILLS_MIN_PER_GROUP:
                 break
@@ -192,7 +192,7 @@ def _skills(base: dict, vac: Vacancy, everything: bool = False) -> list[tuple[st
 
 
 def _top_groups(groups: list[tuple[str, str]], vac: "Vacancy", limit: int | None) -> list[tuple[str, str]]:
-    """Не больше limit групп навыков: оставляем с наибольшим числом технологий вакансии, порядок базы сохраняем."""
+    """At most limit skill groups: keep those with the most vacancy technologies, keep the base order."""
     if not limit or len(groups) <= limit:
         return groups
     ranked = sorted(range(len(groups)), key=lambda i: (-len(_techs(groups[i][1]) & vac.techs), i))
@@ -200,10 +200,10 @@ def _top_groups(groups: list[tuple[str, str]], vac: "Vacancy", limit: int | None
     return [g for i, g in enumerate(groups) if i in keep]
 
 
-# Как назвать роль в заголовке CV, если так её называет вакансия. Только честные синонимы профиля
-# по умолчанию (backend на Python); всё остальное (Java, AI Engineer, Full Stack…) не подставляется никогда.
-# Уровень (Senior, Lead…) берётся из заголовка в cv/base.toml.
-# Должности в разделе Experience не меняются — там настоящие названия.
+# How to name the role in the CV headline if the vacancy calls it that. Only honest synonyms of the default
+# profile (Python backend); everything else (Java, AI Engineer, Full Stack…) is never substituted.
+# The level (Senior, Lead…) comes from the headline in cv/base.toml.
+# Job titles in the Experience section never change — they are the real ones.
 HEADLINE_ROLES = [
     (re.compile(r"python (?:back[\s-]?end )?developer", re.I), "Python Developer"),
     (re.compile(r"python (?:back[\s-]?end )?engineer", re.I), "Python Engineer"),
@@ -214,8 +214,8 @@ HEADLINE_ROLES = [
 
 
 def headline_for(title: str, headline: str) -> str:
-    """Заголовок CV под название вакансии: «Senior Backend Engineer | Python · …» -> «Senior Software Engineer
-    (Backend) | Python · …», если вакансия называется Software Engineer. Нет совпадения — заголовок как в базе."""
+    """CV headline for the vacancy title: "Senior Backend Engineer | Python · …" -> "Senior Software Engineer
+    (Backend) | Python · …" if the vacancy is called Software Engineer. No match — the headline as in the base."""
     role, sep, rest = headline.partition(" | ")
     level = re.match(r"(?:senior|sr\.?|lead|staff|principal|middle|mid-level|junior)\s", role, re.I)
     for rx, name in HEADLINE_ROLES:
@@ -226,10 +226,10 @@ def headline_for(title: str, headline: str) -> str:
 
 
 def _cap_items(items: str, limit: int | None) -> str:
-    """«a, b, c, d» -> первые limit навыков (они уже отсортированы: обязательные и совпавшие — первыми)."""
+    """"a, b, c, d" -> the first limit skills (already sorted: required and matched ones first)."""
     if not limit:
         return items
-    parts = [p.strip() for p in re.split(r",\s*(?![^()]*\))", items)]  # запятые внутри скобок не делят
+    parts = [p.strip() for p in re.split(r",\s*(?![^()]*\))", items)]  # commas inside brackets do not split
     return ", ".join(parts[:limit])
 
 
@@ -237,7 +237,7 @@ GENERIC_VARIANTS = ("backend", "ai")
 
 
 def _generic_vacancy(variant: str) -> Vacancy:
-    """«Вакансия» для базового резюме: AI-вариант открывает AI-пункты, backend — нет."""
+    """A "vacancy" for the base CV: the AI variant unlocks AI bullets, backend does not."""
     vac = Vacancy("", "")
     vac.is_ai = variant == "ai"
     vac.topics = {"ai_tools", "llm"} if vac.is_ai else set()
@@ -245,37 +245,37 @@ def _generic_vacancy(variant: str) -> Vacancy:
 
 
 def _for_variant(item: dict, variant: str | None) -> bool:
-    """generic = ["backend"] — пункт только для базового резюме этого варианта (например, короткая версия AI-пункта)."""
+    """generic = ["backend"] — the bullet is only for the base CV of this variant (for example, a short version of an AI bullet)."""
     only = item.get("generic")
     return not only if variant is None else (not only or variant in only)
 
 
 class Limits:
-    """Сколько чего класть в резюме. Для варианта на одну страницу лимиты ужимаются (см. build_cv).
+    """How much of each part goes into the CV. For the one-page variant the limits shrink (see build_cv).
 
     Attributes:
-        achievements: достижений в Summary.
-        bullets: пунктов опыта по позиции в [[experience]] (0 — последнее место работы);
-            нет позиции — bullets_max из базы.
-        intro_paragraphs: абзацев описания компании и роли.
-        skill_items: навыков в группе (None — без ограничения).
-        publications: раздел Publications.
+        achievements: achievements in the Summary.
+        bullets: experience bullets by position in [[experience]] (0 — the latest workplace);
+            no position — bullets_max from the base.
+        intro_paragraphs: paragraphs describing the company and the role.
+        skill_items: skills per group (None — no limit).
+        publications: the Publications section.
     """
 
     def __init__(self, compact: bool = False):
         self.achievements = 2 if compact else None
-        # на одну страницу: последнее место работы — до 6 пунктов, предыдущее — до 3, остальные — до 2
+        # for one page: the latest workplace — up to 6 bullets, the previous one — up to 3, the rest — up to 2
         self.bullets: dict[int, int] = {0: 6, 1: 3} if compact else {}
         self.bullets_rest = 2 if compact else None
         self.intro_paragraphs = 1 if compact else None
         self.skill_items = 7 if compact else None
-        self.skill_groups: int | None = None  # групп навыков (самые совпадающие с вакансией)
+        self.skill_groups: int | None = None  # skill groups (those matching the vacancy best)
         self.publications = not compact
 
     def shrink(self) -> bool:
-        """Убирает ещё один наименее важный кусок; False — ужимать больше нечего.
+        """Removes one more least important piece; False — nothing left to shrink.
 
-        Порядок: сначала группы навыков, меньше всего совпадающие с вакансией, потом пункты опыта.
+        Order: first the skill groups matching the vacancy least, then experience bullets.
         """
         if (self.skill_groups or 99) > 5:
             self.skill_groups = 6 if self.skill_groups is None else self.skill_groups - 1
@@ -301,14 +301,14 @@ class Limits:
 def build_markdown(base: dict, company: str, title: str, text: str, url: str = "", fit: int = -1,
                    missing: list | None = None, generic: str | None = None, limits: Limits | None = None,
                    picks: list | None = None) -> str:
-    """Markdown-прототип резюме под вакансию; generic = "backend" / "ai" — базовое резюме без вакансии.
+    """Markdown draft of a CV for a vacancy; generic = "backend" / "ai" — a base CV without a vacancy.
 
-    В базовом резюме — все пункты и навыки в порядке базы (AI-пункты только в "ai"), в summary —
-    достижения с generic, где указан вариант.
+    The base CV has all bullets and skills in base order (AI bullets only in "ai"), the summary has
+    achievements with generic where the variant is set.
 
     Args:
-        limits: лимиты разделов (вариант на одну страницу); None — обычное резюме.
-        picks: если передан список, в него складывается, какие пункты выбраны и почему (балл, совпадения).
+        limits: section limits (the one-page variant); None — a regular CV.
+        picks: if a list is passed, it collects which bullets were picked and why (score, matches).
     """
     limits = limits or Limits()
     vac = _generic_vacancy(generic) if generic else Vacancy(title, text, base)
@@ -324,13 +324,13 @@ def build_markdown(base: dict, company: str, title: str, text: str, url: str = "
             picks += [{"section": "Summary", "text": a["text"], "pin": bool(a.get("pin")),
                        **vac.explain(a["text"], a.get("topics", []))} for a in achievements]
     links = " · ".join(f"[{label}]({href})" for label, href in base["links"])
-    header = ([f"<!-- базовое резюме: {'Backend + AI' if generic == 'ai' else 'Backend'}",
-               "     Собрать PDF после правок: python cvgen.py --render <этот файл> -->"] if generic else [
-        f"<!-- вакансия: {company} — {title}" + (f" — {url}" if url else ""),
-        f"     Fit: {fit}%" if fit >= 0 else "     Fit: не посчитан",
-        f"     не хватает ключевых: {', '.join(missing)}" if missing else "     ключевые навыки из словаря закрыты",
-        f"     технологии вакансии: {', '.join(sorted(vac.techs)) or '—'}; темы: {', '.join(sorted(vac.topics)) or '—'}",
-        "     Проверь текст, поправь при необходимости и собери PDF: python cvgen.py --render <этот файл> -->",
+    header = ([f"<!-- base CV: {'Backend + AI' if generic == 'ai' else 'Backend'}",
+               "     Build the PDF after editing: python cvgen.py --render <this file> -->"] if generic else [
+        f"<!-- vacancy: {company} — {title}" + (f" — {url}" if url else ""),
+        f"     Fit: {fit}%" if fit >= 0 else "     Fit: not computed",
+        f"     missing key skills: {', '.join(missing)}" if missing else "     key skills from the dictionary are covered",
+        f"     vacancy technologies: {', '.join(sorted(vac.techs)) or '—'}; topics: {', '.join(sorted(vac.topics)) or '—'}",
+        "     Check the text, edit if needed and build the PDF: python cvgen.py --render <this file> -->",
     ])
     md = [
         *header,
@@ -373,21 +373,21 @@ def build_markdown(base: dict, company: str, title: str, text: str, url: str = "
         *(["", "## Publications", base["publications"]["text"]] if limits.publications else []),
         "", "## Education", f"**{edu['degree']}** · {edu['years']}  ",
         edu["school"] + ("  " if vac.is_ai and limits.publications else ""),
-        *([edu["thesis_ai"]] if vac.is_ai and limits.publications else []),  # в варианте на страницу — без темы диплома
+        *([edu["thesis_ai"]] if vac.is_ai and limits.publications else []),  # the one-page variant has no thesis topic
         "", "## Languages", base["languages"]["text"], "",
     ]
     return "\n".join(md)
 
 
-# --- Markdown -> HTML: classic (как резюме на рабочем столе) и harvard ---------------------------
+# --- Markdown -> HTML: classic (like the desktop CV) and harvard ------------------------------
 
 STYLE = geo.S.get("cv", {}).get("style", "classic")
 
-# Arial, тёмно-синие заголовки, линия под шапкой, курсивные даты под должностью
+# Arial, dark blue headings, a line under the header, italic dates under the job title
 CLASSIC_CSS = """
 @page { size: A4; margin: 14mm 15mm 14mm 15mm; }
 * { box-sizing: border-box; }
-/* один акцентный цвет (#1f3a5f) для имени, строки под ним, разделов и должностей; серый #666 — вторичное */
+/* one accent colour (#1f3a5f) for the name, the line under it, sections and job titles; grey #666 — secondary */
 body { font-family: Arial, Helvetica, sans-serif; font-size: 9.6pt; line-height: 1.32; color: #111; margin: 0; }
 a { color: inherit; text-decoration: none; }
 h1 { font-size: 22pt; font-weight: 700; color: #1f3a5f; letter-spacing: 0.3px; margin: 0; line-height: 1.1; }
@@ -427,7 +427,7 @@ ul { margin: 3px 0 3px 17px; padding: 0; } li { margin: 0 0 3px; text-align: jus
 """
 
 
-# вариант на одну страницу: плотнее строки и поля, мельче шрифт (поверх classic / harvard)
+# the one-page variant: tighter lines and margins, smaller font (on top of classic / harvard)
 COMPACT_CSS = """
 @page { margin: 10mm 12mm; }
 body { font-size: 9pt; line-height: 1.24; }
@@ -445,9 +445,9 @@ def _inline(text: str) -> str:
 
 
 def markdown_to_html(md: str, style: str = STYLE, compact: bool = False) -> str:
-    """Свой маленький разбор: только то, что пишет build_markdown (и правки в том же стиле).
+    """Own small parser: only what build_markdown writes (and edits in the same style).
 
-    style: "classic" — оформление базовых резюме (Arial, синие заголовки), "harvard" — шрифт с засечками.
+    style: "classic" — the look of base CVs (Arial, blue headings), "harvard" — a serif font.
     """
     classic = style != "harvard"
     md = re.sub(r"<!--.*?-->", "", md, flags=re.S)
@@ -460,7 +460,7 @@ def markdown_to_html(md: str, style: str = STYLE, compact: bool = False) -> str:
         i += 1
         if ul and not line.startswith("- "):
             if re.fullmatch(r"_.+_", line) or (not line and i < len(lines) and re.fullmatch(r"_.+_", lines[i].strip())):
-                # стек места работы — вместе с последним пунктом, чтобы не уехал один на новую страницу
+                # the workplace stack goes with the last bullet so it does not move to a new page alone
                 tech_line = line if line else lines[i].strip()
                 if not line:
                     i += 1
@@ -511,7 +511,7 @@ def markdown_to_html(md: str, style: str = STYLE, compact: bool = False) -> str:
         else:
             text = _inline(line) + ("<br>" if raw.endswith("  ") else "")
             if out and out[-1].endswith("<br>"):
-                out[-1] += text  # строки, разделённые «  », — один абзац
+                out[-1] += text  # lines separated by "  " are one paragraph
             else:
                 out.append(f"<p>{text}</p>")
     if ul:
@@ -525,9 +525,9 @@ def markdown_to_html(md: str, style: str = STYLE, compact: bool = False) -> str:
 
 
 def render(md_path: Path, pdf: bool = True, style: str = STYLE, compact: bool | None = None) -> tuple[Path, Path | None]:
-    """md -> html рядом; pdf — через Chrome без окна (как уже собирались резюме).
+    """md -> html next to it; pdf — through headless Chrome (the way CVs were built before).
 
-    compact — плотная вёрстка варианта на одну страницу; None — по имени файла (…_1p.md).
+    compact — the dense layout of the one-page variant; None — by the file name (…_1p.md).
     """
     if compact is None:
         compact = md_path.stem.endswith("_1p")
@@ -536,29 +536,29 @@ def render(md_path: Path, pdf: bool = True, style: str = STYLE, compact: bool | 
     if not pdf:
         return html_path, None
     pdf_path = md_path.with_suffix(".pdf")
-    # печать во временный файл и подмена: Chrome молча не перезаписывает PDF, открытый в просмотрщике,
-    # и тогда оставался старый файл — теперь это ошибка с понятным текстом
-    tmp_path = md_path.with_suffix(".tmp.pdf").resolve()  # Chrome считает относительный путь от своей папки
+    # print to a temp file and swap: Chrome silently does not overwrite a PDF open in a viewer,
+    # and the old file used to stay — now it is an error with a clear message
+    tmp_path = md_path.with_suffix(".tmp.pdf").resolve()  # Chrome resolves a relative path from its own folder
     tmp_path.unlink(missing_ok=True)
     subprocess.run(
-        # в контейнере Chrome работает от root — без песочницы он не запускается
+        # in a container Chrome runs as root — it does not start without --no-sandbox
         [CHROME, "--headless", "--disable-gpu", "--no-pdf-header-footer",
          *(["--no-sandbox"] if sys.platform != "win32" else []),
          f"--print-to-pdf={tmp_path}", html_path.resolve().as_uri()],
         check=True, capture_output=True, timeout=120,
     )
     if not tmp_path.exists():
-        raise RuntimeError(f"Chrome не создал PDF ({CHROME})")
+        raise RuntimeError(f"Chrome did not create the PDF ({CHROME})")
     try:
         os.replace(tmp_path, pdf_path)
     except PermissionError as e:
         tmp_path.unlink(missing_ok=True)
-        raise RuntimeError(f"{pdf_path.name} открыт в другой программе — закройте его и соберите заново") from e
+        raise RuntimeError(f"{pdf_path.name} is open in another program — close it and build again") from e
     return html_path, pdf_path
 
 
 def _rel(path: Path) -> str:
-    """Путь от корня проекта (так на файлы ссылается веб-интерфейс), а вне проекта — полный."""
+    """Path from the project root (the web UI refers to files this way), and a full path outside the project."""
     return path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else str(path)
 
 
@@ -567,20 +567,20 @@ def pdf_pages(pdf_path: Path) -> int:
     return len(PdfReader(str(pdf_path)).pages)
 
 
-ONE_PAGE_ATTEMPTS = 8  # сколько раз ужимать вариант на одну страницу
+ONE_PAGE_ATTEMPTS = 8  # how many times to shrink the one-page variant
 
 
 def build_cv(company: str, title: str, text: str, url: str = "", one_page: bool = False,
              out_dir: Path | None = None, style: str = STYLE) -> dict:
-    """Резюме под вакансию целиком: Fit, Markdown, PDF; one_page — ужимать, пока не влезет в одну страницу.
+    """A whole CV for a vacancy: Fit, Markdown, PDF; one_page — shrink until it fits on one page.
 
     Args:
-        company, title, text, url: вакансия (текст — как можно полнее: по нему идёт подбор).
-        one_page: вариант на одну страницу (короче Summary и описание компаний, меньше пунктов и навыков).
-        out_dir: куда класть файлы; по умолчанию cv_out/<дата>/.
+        company, title, text, url: the vacancy (the text as full as possible: the selection is based on it).
+        one_page: the one-page variant (shorter Summary and company descriptions, fewer bullets and skills).
+        out_dir: where to put the files; cv_out/<date>/ by default.
 
     Returns:
-        {md, pdf, html, pages, fit, missing, techs, topics, picks, one_page_fit} — пути относительно ROOT.
+        {md, pdf, html, pages, fit, missing, techs, topics, picks, one_page_fit} — paths relative to ROOT.
     """
     from datetime import date
 
@@ -616,10 +616,10 @@ AUTO_MAX = int(AUTO.get("auto_max", 40))
 
 
 def auto_build(jobs: list, day) -> int:
-    """Резюме под каждую новую вакансию с Fit ≥ AUTO_FIT_MIN (категории Backend и ML / AI).
+    """A CV for every new vacancy with Fit ≥ AUTO_FIT_MIN (Backend and ML / AI categories).
 
-    Кладёт .md и .pdf в cv_out/auto/<дата>/, путь — в job.cv_file. Не больше AUTO_MAX за прогон
-    (самые подходящие первыми). -> сколько собрано.
+    Puts .md and .pdf into cv_out/auto/<date>/, the path goes to job.cv_file. At most AUTO_MAX per run
+    (the best-fitting first). -> how many were built.
     """
     import logging
 
@@ -649,12 +649,12 @@ def auto_build(jobs: list, day) -> int:
             md_path.write_text(build_markdown(base, j.company, j.title, text, j.url or getattr(j, "post_url", ""),
                                               j.cv_fit, j.cv_core_missing), encoding="utf-8")
             _, pdf_path = render(md_path)
-        except Exception as e:  # одно резюме не должно ронять отчёт
-            log.warning("резюме под %s — %s: %s", j.company, j.title, e)
+        except Exception as e:  # one CV must not break the report
+            log.warning("CV for %s — %s: %s", j.company, j.title, e)
             continue
         j.cv_file = pdf_path.relative_to(ROOT).as_posix()
         built += 1
-    log.info("Резюме под вакансии: собрано %d (Fit ≥ %d%%, новые, Backend / ML) -> %s", built, AUTO_FIT_MIN, out_dir)
+    log.info("CVs for vacancies: built %d (Fit ≥ %d%%, new, Backend / ML) -> %s", built, AUTO_FIT_MIN, out_dir)
     return built
 
 
@@ -664,7 +664,7 @@ _TRANSLIT = dict(zip("абвгдеёжзийклмнопрстуфхцчшщъы
 
 
 def slug(text: str) -> str:
-    """Имя файла из названия: кириллица — транслитом («Запускай Технологии» -> Zapuskay_Tehnologii)."""
+    """File name from a title: Cyrillic is transliterated ("Запускай Технологии" -> Zapuskay_Tehnologii)."""
     text = "".join(_TRANSLIT.get(ch.lower(), ch).capitalize() if ch.isupper() and ch.lower() in _TRANSLIT
                    else _TRANSLIT.get(ch, ch) for ch in text)
     return re.sub(r"[^\w]+", "_", text, flags=re.ASCII).strip("_")[:40] or "cv"

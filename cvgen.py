@@ -1,12 +1,12 @@
-"""Резюме под вакансию из cv/base.toml.
+"""A CV for a vacancy from cv/base.toml.
 
-  python cvgen.py <ссылка или часть названия компании / вакансии>   — из последнего отчёта (state/jobs_latest.json)
-  python cvgen.py --text vacancy.txt --company X --title "Senior Backend Engineer"   — из текста вакансии
-  python cvgen.py --render cv_out/2026-10-23/X_Senior.md   — пересобрать PDF после правок в .md
-  --one-page — вариант на одну страницу (ужимается, пока не влезет)
+  python cvgen.py <link or part of a company / vacancy name>   — from the last report (state/jobs_latest.json)
+  python cvgen.py --text vacancy.txt --company X --title "Senior Backend Engineer"   — from the vacancy text
+  python cvgen.py --render cv_out/2026-10-23/X_Senior.md   — rebuild the PDF after editing the .md
+  --one-page — the one-page variant (shrinks until it fits)
 
-Результат — cv_out/<дата>/<компания>_<вакансия>.md (прототип для проверки) и .pdf рядом.
-То же из веб-интерфейса: кнопка «📄 CV» в отчёте или страница «Резюме».
+The result is cv_out/<date>/<company>_<vacancy>.md (a draft to check) and a .pdf next to it.
+The same from the web UI: the "📄 CV" button in the report or the CV page.
 """
 import argparse
 import json
@@ -28,9 +28,9 @@ def find_job(query: str) -> dict:
     if len(found) == 1:
         return found[0]
     if not found:
-        sys.exit(f"Вакансия «{query}» не найдена в {JOBS_FILE.name} (последний отчёт). "
-                 "Дайте текст вакансии: --text файл --company … --title …")
-    print("Нашлось несколько вакансий — уточните запрос или дайте ссылку:")
+        sys.exit(f"Vacancy \"{query}\" not found in {JOBS_FILE.name} (the last report). "
+                 "Give the vacancy text: --text file --company … --title …")
+    print("Several vacancies found — narrow the query or give a link:")
     for j in found[:20]:
         print(f"  {j['company']} — {j['title']} — {j['url']}")
     sys.exit(1)
@@ -39,30 +39,30 @@ def find_job(query: str) -> dict:
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("query", nargs="?", help="ссылка на вакансию или часть названия компании / роли")
-    p.add_argument("--text", type=Path, help="файл с текстом вакансии (если её нет в отчёте)")
-    p.add_argument("--company", default="", help="компания (с --text)")
-    p.add_argument("--title", default="", help="название вакансии (с --text)")
-    p.add_argument("--render", type=Path, help="пересобрать HTML / PDF из отредактированного .md")
-    p.add_argument("--no-pdf", action="store_true", help="только .md и .html (кроме сборки под вакансию)")
-    p.add_argument("--one-page", action="store_true", help="вариант на одну страницу")
-    p.add_argument("--base", choices=cvgen.GENERIC_VARIANTS, help="базовое резюме без вакансии: backend или ai")
+    p.add_argument("query", nargs="?", help="link to the vacancy or part of a company / role name")
+    p.add_argument("--text", type=Path, help="file with the vacancy text (if it is not in the report)")
+    p.add_argument("--company", default="", help="company (with --text)")
+    p.add_argument("--title", default="", help="vacancy title (with --text)")
+    p.add_argument("--render", type=Path, help="rebuild HTML / PDF from an edited .md")
+    p.add_argument("--no-pdf", action="store_true", help="only .md and .html (except when building for a vacancy)")
+    p.add_argument("--one-page", action="store_true", help="the one-page variant")
+    p.add_argument("--base", choices=cvgen.GENERIC_VARIANTS, help="a base CV without a vacancy: backend or ai")
     p.add_argument("--style", choices=("classic", "harvard"), default=cvgen.STYLE,
-                   help="оформление: classic (как базовые резюме) или harvard")
+                   help="look: classic (like the base CVs) or harvard")
     args = p.parse_args()
 
     if args.render:
         html_path, pdf_path = cvgen.render(args.render, pdf=not args.no_pdf, style=args.style)
-        print(f"Готово: {pdf_path or html_path}")
+        print(f"Done: {pdf_path or html_path}")
         return
     if args.base:
-        person = "_".join(w.capitalize() for w in cvgen.load_base()["name"].split())  # имя из cv/base.toml
+        person = "_".join(w.capitalize() for w in cvgen.load_base()["name"].split())  # the name from cv/base.toml
         name = f"{person}_Backend_AI_CV" if args.base == "ai" else f"{person}_Backend_CV"
         cvgen.OUT_DIR.mkdir(exist_ok=True)
         md_path = cvgen.OUT_DIR / f"{name}.md"
         md_path.write_text(cvgen.build_markdown(cvgen.load_base(), "", "", "", generic=args.base), encoding="utf-8")
         html_path, pdf_path = cvgen.render(md_path, pdf=not args.no_pdf, style=args.style)
-        print(f"Базовое резюме: {md_path}\nPDF: {pdf_path or html_path}")
+        print(f"Base CV: {md_path}\nPDF: {pdf_path or html_path}")
         return
     if args.text:
         job = {"company": args.company or "Company", "title": args.title or "Vacancy", "url": "",
@@ -70,12 +70,12 @@ def main() -> None:
     elif args.query:
         job = find_job(args.query)
     else:
-        p.error("нужна ссылка / запрос, --text или --render")
+        p.error("a link / query, --text or --render is required")
 
-    # Fit, подбор пунктов и (для --one-page) ужимание до одной страницы — как у кнопки в веб-интерфейсе
+    # Fit, bullet selection and (for --one-page) shrinking to one page — the same as the web UI button
     result = cvgen.build_cv(job["company"], job["title"], job["text"], job.get("url", ""),
                             one_page=args.one_page, style=args.style)
-    print(f"Fit {result['fit']}% · страниц {result['pages']} · прототип: {result['md']}\nPDF: {result['pdf']}")
+    print(f"Fit {result['fit']}% · pages {result['pages']} · draft: {result['md']}\nPDF: {result['pdf']}")
 
 
 if __name__ == "__main__":

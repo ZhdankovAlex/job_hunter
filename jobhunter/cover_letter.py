@@ -1,13 +1,13 @@
-"""Сопроводительное письмо под вакансию — из фактов cv/base.toml, ничего не придумывает.
+"""A cover letter for a vacancy — from the facts in cv/base.toml, invents nothing.
 
-Как и cvgen: достижения из [summary] и soft skills из [cover] ранжируются под текст вакансии
-(технологии, темы, текстовая близость), письмо собирается по шаблону:
-кто вы как инженер → чем полезны (hard) → как работаю (soft) → честно, чего нет → «давайте созвонимся».
+Like cvgen: achievements from [summary] and soft skills from [cover] are ranked against the vacancy text
+(technologies, topics, text similarity), and the letter follows a template:
+who you are as an engineer → how you can help (hard) → how you work (soft) → honestly, what you lack → "let's talk".
 
-Стили:
-- short — тезисно: вступление в одну строку, список «что принесу», призыв к созвону;
-- full — абзацами: вступление, достижения (списком — пункты резюме написаны без «I»), стек и soft skills
-  абзацем, чего в опыте нет.
+Styles:
+- short — bulleted: a one-line intro, a "what I bring" list, a call to talk;
+- full — in paragraphs: intro, achievements (as a list — CV bullets are written without "I"), stack and soft skills
+  as a paragraph, what your experience lacks.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from . import cv_match, cvgen, geo
 
 STYLES = ("short", "full")
 
-# если в base.toml нет [cover] — нейтральные формулировки (без фактов, которых нет в базе)
+# if base.toml has no [cover] — neutral wording (no facts that are not in the base)
 DEFAULT_COVER = {
     "greeting": "Hi {company} team,",
     "opening": "I'm interested in the {title} role at {company}: it matches what I've been doing.",
@@ -40,14 +40,14 @@ def _ranked(items: list[dict], vac: cvgen.Vacancy) -> list[dict]:
 
 
 def build(company: str, title: str, text: str, style: str = "short") -> dict:
-    """Письмо под вакансию: {text, style, fit, have, missing, picks}.
+    """A letter for a vacancy: {text, style, fit, have, missing, picks}.
 
     Args:
-        company, title, text: вакансия (текст — чем полнее, тем точнее подбор).
-        style: short — тезисно, full — абзацами.
+        company, title, text: the vacancy (the fuller the text, the better the selection).
+        style: short — bulleted, full — in paragraphs.
     """
     if style not in STYLES:
-        raise ValueError(f"style: {style!r}, ожидается {STYLES}")
+        raise ValueError(f"style: {style!r}, expected one of {STYLES}")
     base = cvgen.load_base()
     cover = {**DEFAULT_COVER, **base.get("cover", {})}
     vac = cvgen.Vacancy(title, text, base)
@@ -72,7 +72,7 @@ def build(company: str, title: str, text: str, style: str = "short") -> dict:
         lines += [f"- {s['text']}" for s in soft]
     else:
         lines += [f"{intro} {cover['opening'].format(**fmt)}", ""]
-        # пункты резюме написаны без «I» — в связном тексте читаются криво, поэтому и здесь списком
+        # CV bullets are written without "I" — they read awkwardly in running text, so a list here too
         lines += [cover["lead_full"].format(**fmt), *(f"- {a['text']}" for a in achievements), ""]
         stack = f"My experience covers {', '.join(have[:8])} from your stack." if have else ""
         paragraph = " ".join(p for p in [stack, *(s["text"] for s in soft)] if p)
@@ -87,7 +87,7 @@ def build(company: str, title: str, text: str, style: str = "short") -> dict:
             lines.pop()
     lines += ["", cover["closing"].format(**fmt), "", cover["sign"].format(**fmt), _name(base)]
 
-    picks = [{"section": "Достижение", "text": a["text"], **vac.explain(a["text"], a.get("topics", []))}
+    picks = [{"section": "Achievement", "text": a["text"], **vac.explain(a["text"], a.get("topics", []))}
              for a in achievements]
     picks += [{"section": "Soft skills", "text": s["text"], **vac.explain(s["text"], s.get("topics", []))}
               for s in soft]
@@ -96,7 +96,7 @@ def build(company: str, title: str, text: str, style: str = "short") -> dict:
 
 
 def save(result: dict, url: str = "", out_dir: Path | None = None) -> Path:
-    """Письмо в cv_out/<дата>/<компания>_<роль>_cover_<стиль>.txt — рядом с резюме под ту же вакансию."""
+    """The letter goes to cv_out/<date>/<company>_<role>_cover_<style>.txt — next to the CV for the same vacancy."""
     out_dir = out_dir or cvgen.OUT_DIR / date.today().isoformat()
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{cvgen.slug(result['company'])}_{cvgen.slug(result['title'])}_cover_{result['style']}.txt"

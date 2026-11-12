@@ -1,4 +1,4 @@
-"""ATS: разбор ответов площадок и поиск борда компании (AtsClient) — без сети, на FakeHttp."""
+"""ATS: parsing platform responses and finding a company board (AtsClient) — no network, on FakeHttp."""
 import json
 
 import pytest
@@ -7,7 +7,7 @@ from conftest import FakeHttp, fixture_text
 from jobhunter import ats, companies
 from jobhunter.models import Company
 
-# --- разбор ответов ---------------------------------------------------------------------------
+# --- parsing responses -------------------------------------------------------------------------
 
 
 def test_greenhouse():
@@ -38,11 +38,11 @@ def test_ashby_skips_unlisted_and_trusts_workplace_type():
     ]}
     (job,) = ats._ashby(data, "Acme")
     assert job.title == "Backend" and job.location == "Berlin; Remote"
-    assert job.remote is False  # isRemote=true у гибрида — верим workplaceType
+    assert job.remote is False  # isRemote=true for a hybrid — trust workplaceType
 
 
 def test_workable_merges_countries_of_one_job():
-    """Workable отдаёт вакансию на несколько стран отдельными записями — склеиваются по url."""
+    """Workable returns a vacancy for several countries as separate records — merged by url."""
     row = {"title": "Python Developer", "url": "https://apply.workable.com/acme/j/1", "telecommuting": True,
            "description": "Python"}
     data = {"jobs": [{**row, "country": "Kazakhstan"}, {**row, "country": "Poland"}]}
@@ -68,7 +68,7 @@ def test_rippling_merges_locations():
     assert job.title == "Backend" and job.location == "Remote (Europe); Warsaw" and job.remote is True
 
 
-# --- поиск и обновление борда ------------------------------------------------------------------
+# --- finding and updating the board ------------------------------------------------------------
 
 GREENHOUSE = "https://boards-api.greenhouse.io/v1/boards/{}/jobs"
 LEVER = "https://api.lever.co/v0/postings/{}"
@@ -91,9 +91,9 @@ def lever_json(title="Python Developer"):
 
 def test_discover_finds_board_and_remembers_it(client):
     c = client({LEVER.format("acme"): lever_json()})
-    jobs = c.jobs_for(Company("Acme", score=3, note="заметка"))
+    jobs = c.jobs_for(Company("Acme", score=3, note="a note"))
     assert [j.title for j in jobs] == ["Python Developer"]
-    assert (jobs[0].score, jobs[0].note) == (3, "заметка")
+    assert (jobs[0].score, jobs[0].note) == (3, "a note")
     assert c.mapping["Acme"]["platform"] == "lever" and c.mapping["Acme"]["slug"] == "acme"
 
 
@@ -119,7 +119,7 @@ def test_board_gone_and_not_found_again(client):
     c = client({}, {"Acme": {"platform": "greenhouse", "slug": "acme"}})
     assert c.jobs_for(Company("Acme")) == []
     assert c.mapping["Acme"]["gone"] == "greenhouse/acme"
-    assert "пропал" in c.failures["Acme"]
+    assert "is gone" in c.failures["Acme"]
 
 
 def test_board_moved_is_fixed_silently(client):
@@ -135,7 +135,7 @@ def test_custom_and_manual_entries_are_not_fetched(client):
 
 
 def test_save_keeps_concurrent_edits(client, tmp_path):
-    """Правка ats_mapping.json руками во время прогона не затирается сохранением."""
+    """Editing ats_mapping.json by hand during a run is not overwritten by saving."""
     c = client({LEVER.format("acme"): lever_json()}, {"Old": {"platform": None}})
     c.jobs_for(Company("Acme"))
     path = tmp_path / "ats_mapping.json"

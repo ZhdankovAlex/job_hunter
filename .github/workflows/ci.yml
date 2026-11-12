@@ -1,5 +1,5 @@
-# Проверки на каждый PR и пуш в main: линтер, потом тесты.
-# Тесты работают без сети и без личных файлов: настройки — settings.example.toml, резюме — cv/base.example.toml.
+# Checks on every PR and push to main: linter, then tests.
+# Tests run without network and without personal files: settings — settings.example.toml, CV — cv/base.example.toml.
 name: CI
 
 on:
@@ -25,9 +25,9 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: requirements*.txt
-      - name: Зависимости
+      - name: Dependencies
         run: pip install -r requirements-dev.txt
-      - name: Линтер (ruff)
+      - name: Linter (ruff)
         run: ruff check .
-      - name: Тесты (pytest)
+      - name: Tests (pytest)
         run: pytest -q

@@ -1,4 +1,4 @@
-"""HTML-страница со статусами откликов по переписке в почте (в стиле отчёта по вакансиям)."""
+"""HTML page with application statuses from mail correspondence (in the style of the vacancy report)."""
 from __future__ import annotations
 
 import re
@@ -8,30 +8,30 @@ from urllib.parse import quote
 from . import geo, mail
 from .html_report import _CSS, _JS, _e, _table
 
-# Итоговые статусы и цвета строк
+# Final statuses and row colours
 OFFER, ACTIVE, WAITING, DECLINED, REJECTED = "offer", "active", "waiting", "declined", "rejected"
-STATUS = {  # статус -> (метка, CSS-класс строки)
-    OFFER: ("🎉 Оффер", "c-green"),
-    ACTIVE: ("🟢 Идут этапы", "c-green"),
-    WAITING: ("🟡 Ждём ответа", "c-yellow"),
-    DECLINED: ("🟠 Отказался сам", "c-orange"),
-    REJECTED: ("🔴 Отказ", "c-red"),
+STATUS = {  # status -> (label, row CSS class)
+    OFFER: ("🎉 Offer", "c-green"),
+    ACTIVE: ("🟢 In stages", "c-green"),
+    WAITING: ("🟡 Waiting for an answer", "c-yellow"),
+    DECLINED: ("🟠 Declined by you", "c-orange"),
+    REJECTED: ("🔴 Rejected", "c-red"),
 }
-# Без ответа дольше этого срока — отказ: две недели молчания после отклика или этапа — это уже не ожидание
+# No answer for longer than this means a rejection: two weeks of silence after an application or a stage is no longer waiting
 TIMEOUT_DAYS = int(geo.S.get("mail", {}).get("timeout_days", 14))
 
-# статусы из applications_manual.toml (по компании может быть несколько строк: «Отклик, Отказ»)
-_SHEET_STAGE_RX = re.compile(r"собес|интервью|interview|тестов|оффер|этап", re.I)
-_SHEET_DECLINED_RX = re.compile(r"отказался|отказалась", re.I)
-_SHEET_REJECTED_RX = re.compile(r"^отказ\b", re.I)
-_SHEET_IGNORED_RX = re.compile(r"игнор", re.I)
+# statuses from applications_manual.toml (a company can have several rows: "Applied, Rejected"); Russian words are for older files
+_SHEET_STAGE_RX = re.compile(r"interview|offer|stage|собес|интервью|тестов|оффер|этап", re.I)
+_SHEET_DECLINED_RX = re.compile(r"declin|отказался|отказалась", re.I)
+_SHEET_REJECTED_RX = re.compile(r"^(?:reject|отказ\b)", re.I)
+_SHEET_IGNORED_RX = re.compile(r"ignor|игнор", re.I)
 KIND_NAMES = {
-    mail.OFFER: "оффер", mail.INTERVIEW: "этап", mail.APPLIED: "отклик", mail.REJECTED: "отказ", mail.DECLINED: "отказался сам", mail.OTHER: "письмо",
+    mail.OFFER: "offer", mail.INTERVIEW: "stage", mail.APPLIED: "applied", mail.REJECTED: "rejected", mail.DECLINED: "declined by you", mail.OTHER: "letter",
 }
-# Воронка: до какого этапа дошли с компанией. Этап письма/заметки — по словам в теме; на один этап приходит
-# пачка писем (приглашение, подтверждение, напоминание), поэтому считаем не письма, а самый дальний этап.
+# Funnel: how far you got with a company. The stage of a letter/note is taken from words in the subject; one stage brings
+# a batch of letters (invitation, confirmation, reminder), so we count the furthest stage, not the letters.
 SCREEN, TECH, FINAL = "screen", "tech", "final"
-FUNNEL = [("applied", "Отклики"), (SCREEN, "скрининг"), (TECH, "техничка"), (FINAL, "финал"), (OFFER, "оффер")]
+FUNNEL = [("applied", "Applied"), (SCREEN, "screening"), (TECH, "technical"), (FINAL, "final"), (OFFER, "offer")]
 _FUNNEL_RANK = {k: i for i, (k, _) in enumerate(FUNNEL)}
 _CANCELLED_RX = re.compile(r"cancel|отмен", re.I)
 _PLAN_RX = re.compile(r"дальше|далее|\bnext\b|потом|→", re.I)
@@ -45,15 +45,15 @@ _TECH_RX = re.compile(
 )
 
 
-SERIES_GAP_DAYS = 14  # письма об одном этапе (выбор слота, подтверждение, напоминание) приходят плотной серией
+SERIES_GAP_DAYS = 14  # letters about one stage (picking a slot, confirmation, reminder) come in a tight series
 
 
 def _cancelled_series(events) -> list:
-    """Письма-этапы, которые так и не состоялись: серия писем об этапе, последнее из которых — отмена.
+    """Stage letters that never happened: a series of letters about a stage whose last one is a cancellation.
 
-    Пример: «Select availability for Screen Call» → «Confirmation» → «Reminder» → «Interview cancelled».
-    Серии разделяет перерыв больше SERIES_GAP_DAYS дней. События, записанные руками (applications_manual.toml,
-    у них нет письма), не выбрасываются: это то, что владелец знает точно.
+    Example: "Select availability for Screen Call" → "Confirmation" → "Reminder" → "Interview cancelled".
+    Series are separated by a gap of more than SERIES_GAP_DAYS days. Events written by hand (applications_manual.toml,
+    they have no letter) are never dropped: this is what the owner knows for sure.
     """
     series, current, last = [], [], None
     for e in sorted((e for e in events if e.kind == mail.INTERVIEW), key=lambda e: e.when):
@@ -68,14 +68,14 @@ def _cancelled_series(events) -> list:
 
 
 def _base_status(app) -> str:
-    """Последнее значимое событие, без писем об отмене встречи: «Meeting cancelled» после отказа — не новый этап."""
+    """The last meaningful event, without meeting cancellation letters: "Meeting cancelled" after a rejection is not a new stage."""
     meaningful = [e for e in app.ordered if e.kind != mail.OTHER
                   and not (e.kind == mail.INTERVIEW and _CANCELLED_RX.search(e.subject))]
     return meaningful[-1].kind if meaningful else app.status
 
 
 def funnel_stage(app, in_sheet: str = "") -> str:
-    """Самый дальний этап с компанией: applied / screen / tech / final / offer."""
+    """The furthest stage with a company: applied / screen / tech / final / offer."""
     best = "applied"
     cancelled = _cancelled_series(app.events)
 
@@ -88,11 +88,11 @@ def funnel_stage(app, in_sheet: str = "") -> str:
         if e.kind == mail.OFFER:
             bump(OFFER)
         elif e.kind == mail.INTERVIEW and e not in cancelled:
-            done = _PLAN_RX.split(e.subject, 1)[0]  # «…; дальше тестовое» — план, а не пройденный этап
+            done = _PLAN_RX.split(e.subject, 1)[0]  # "…; next: take-home task" is a plan, not a stage passed
             bump(FINAL if _FINAL_RX.search(done) else TECH if _TECH_RX.search(done) else SCREEN)
     for s in (in_sheet or "").split(","):
         s = s.strip()
-        if re.search(r"оффер", s, re.I):
+        if re.search(r"offer|оффер", s, re.I):
             bump(OFFER)
         elif re.search(r"тестов|техни", s, re.I):
             bump(TECH)
@@ -102,7 +102,7 @@ def funnel_stage(app, in_sheet: str = "") -> str:
 
 
 def funnel_line(stages: list[str]) -> str:
-    """«Отклики 127 → скрининг 25 (20%) → …»: сколько компаний дошло хотя бы до этапа; % — от откликов."""
+    """"Applied 127 → screening 25 (20%) → …": how many companies got at least to a stage; % — of the applications."""
     total = len(stages)
     parts = []
     for key, label in FUNNEL:
@@ -126,65 +126,65 @@ def _thread_link(address: str, thread: str) -> str:
 
 
 def _last_cell(event, address: str) -> str:
-    """Последнее событие: ссылка на письмо или (для Telegram / LinkedIn) текст и источник."""
+    """The last event: a link to the letter or (for Telegram / LinkedIn) the text and the source."""
     if event.thread:
         return f'<a href="{_e(_thread_link(address, event.thread))}" target="_blank" rel="noopener">{_e(event.subject[:90])}</a>'
     return f"{_e(event.subject[:120])} <i>({_e(event.sender)})</i>"
 
 
 def effective_status(app, in_applied: str, now: datetime) -> tuple[str, str]:
-    """Итоговый статус компании -> (статус, пояснение).
+    """Final company status -> (status, explanation).
 
-    🟢 этапы: приглашение на этап по почте или собеседование / тестовое в applications_manual.toml;
-    🟡 ждём ответа: был отклик, ответа ещё нет, но прошло не больше TIMEOUT_DAYS;
-    🟠 отказался сам: последнее событие в applications_manual.toml — declined;
-    🔴 отказ: письмо с отказом, «Отказ» в applications_manual.toml или молчание дольше TIMEOUT_DAYS.
-    Отказ как самое последнее событие важнее этапа из файла. Новый отклик в почте после письма-отказа — повторная попытка: она снова ждёт ответа.
+    🟢 in stages: a stage invitation by mail, or an interview / take-home task in applications_manual.toml;
+    🟡 waiting for an answer: there was an application, no answer yet, but no more than TIMEOUT_DAYS have passed;
+    🟠 declined by you: the last event in applications_manual.toml is declined;
+    🔴 rejected: a rejection letter, "Rejected" in applications_manual.toml, or silence longer than TIMEOUT_DAYS.
+    A rejection as the very last event outweighs a stage from the file. A new application by mail after a rejection letter is a new attempt: it waits for an answer again.
     """
     sheet = [s.strip() for s in in_applied.split(",") if s.strip()] if in_applied else []
-    silent = max(0, (now - app.last.when).days)  # событие на будущее (назначенная встреча) — не тишина
+    silent = max(0, (now - app.last.when).days)  # an event in the future (a scheduled meeting) is not silence
     if app.status == mail.OFFER:
         return OFFER, ""
-    if app.status == mail.DECLINED:  # новый отклик или этап после отказа снова сделает процесс живым
+    if app.status == mail.DECLINED:  # a new application or stage after declining makes the process alive again
         return DECLINED, ""
     stage_rows = [s for s in sheet if _SHEET_STAGE_RX.search(s)]
-    # статусы по компании без дат, поэтому отказ как самое последнее событие важнее этапа
+    # company statuses have no dates, so a rejection as the very last event outweighs a stage
     if stage_rows and app.last.kind != mail.REJECTED:
-        return ACTIVE, f"по откликам: {stage_rows[0]}"
+        return ACTIVE, f"by applications: {stage_rows[0]}"
     rejects = [e.when for e in app.events if e.kind == mail.REJECTED]
     reapplied = bool(rejects) and any(e.kind == mail.APPLIED and e.when > max(rejects) for e in app.events)
     base, why = _base_status(app), ""
     if reapplied:
-        # новый процесс начинается с первого отклика после последнего отказа; этапы до него
-        # (например, отменённый звонок по другой вакансии) к нему не относятся
+        # a new process starts with the first application after the last rejection; stages before it
+        # (for example, a cancelled call about another vacancy) do not belong to it
         restart = min(e.when for e in app.events if e.kind == mail.APPLIED and e.when > max(rejects))
         dropped = _cancelled_series(app.events)
         later = [e for e in app.events if e.when > restart and e.kind == mail.INTERVIEW and e not in dropped]
-        base, why = (mail.INTERVIEW if later else mail.APPLIED), "повторный отклик после отказа"
+        base, why = (mail.INTERVIEW if later else mail.APPLIED), "applied again after a rejection"
     elif any(_SHEET_DECLINED_RX.search(s) for s in sheet):
         return DECLINED, ""
     elif any(_SHEET_REJECTED_RX.search(s) for s in sheet):
-        return REJECTED, "отметка в applications_manual.toml"
+        return REJECTED, "marked in applications_manual.toml"
     if base == mail.REJECTED:
-        return REJECTED, "отказ в переписке"
+        return REJECTED, "rejection in the correspondence"
     if silent > TIMEOUT_DAYS:
-        after = "этапа" if base == mail.INTERVIEW else "отклика"
-        return REJECTED, f"нет ответа {silent} дн. после {after}"
+        after = "a stage" if base == mail.INTERVIEW else "the application"
+        return REJECTED, f"no answer for {silent} days after {after}"
     if base == mail.INTERVIEW:
         return ACTIVE, why
     if not why and any(_SHEET_IGNORED_RX.search(s) for s in sheet):
-        why = "отмечено «Игнор»"
-    return WAITING, why or f"{silent} дн. без ответа"
+        why = "marked \"Ignored\""
+    return WAITING, why or f"{silent} days without an answer"
 
 
 class StatusIndex:
-    """Статусы откликов по компаниям — для пометок в отчёте по вакансиям и блока «📬 Отклики».
+    """Application statuses by company — for marks in the vacancy report and the "📬 Applications" block.
 
-    Строится из локального кэша писем и applications_manual.toml, без запросов в Gmail
-    (кэш обновляет applications.py).
+    Built from the local mail cache and applications_manual.toml, without requests to Gmail
+    (applications.py updates the cache).
     """
 
-    NUDGE_AFTER_DAYS = 5  # после этапа тишина дольше — стоит напомнить о себе
+    NUDGE_AFTER_DAYS = 5  # longer silence after a stage — time to follow up
 
     def __init__(self, sheet=None):
         import json
@@ -198,14 +198,14 @@ class StatusIndex:
             messages = list(json.loads(config.MAIL_CACHE_FILE.read_text(encoding="utf-8")).values())
         apps, _ = mail.summarize(messages)
         self.now = datetime.now(timezone.utc)
-        self.items = []  # (ключ компании, app, статус, пояснение)
+        self.items = []  # (company key, app, status, explanation)
         for app in apps:
             in_applied = sheet.company_statuses(app.company) if sheet else ""
             status, why = effective_status(app, in_applied, self.now)
             self.items.append((company_key(app.company), app, status, why))
 
     def lookup(self, company: str) -> str:
-        """«🔴 Отказ — отказ в переписке, 03.09» или '' — откликов в эту компанию не было."""
+        """"🔴 Rejected — rejection in the correspondence, 03.09", or '' — no applications to this company."""
         key = self._key(company)
         if len(key) < 3:
             return ""
@@ -215,7 +215,7 @@ class StatusIndex:
         return ""
 
     def digest(self) -> dict:
-        """Счётчики по статусам и кому пора напомнить о себе."""
+        """Counters by status and who it is time to follow up with."""
         nudge = []
         for _, app, status, _why in self.items:
             silent = max(0, (self.now - app.last.when).days)
@@ -236,19 +236,19 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
         in_applied = sheet.company_statuses(app.company) if sheet else ""
         status, why = effective_status(app, in_applied, now)
         items.append((app, in_applied, status, why))
-    # сверху живое: этапы, ожидание; ниже — отказы; внутри — свежие первыми
+    # live ones on top: stages, waiting; rejections below; freshest first within each
     items.sort(key=lambda x: (order.index(x[2]), -x[0].last.when.timestamp()))
     rows, counts, stages = [], {}, []
-    stage_names = dict(FUNNEL) | {"applied": "отклик"}
+    stage_names = dict(FUNNEL) | {"applied": "applied"}
     for app, in_applied, status, why in items:
         stage = funnel_stage(app, in_applied)
         stages.append(stage)
         label, css = STATUS[status]
         counts[status] = counts.get(status, 0) + 1
-        # дни тишины важны только живым процессам: ждём ответа (через TIMEOUT_DAYS — отказ) и этапы (напомнить о себе)
+        # days of silence matter only for live processes: waiting (after TIMEOUT_DAYS — a rejection) and stages (follow up)
         silent = max(0, (now - app.last.when).days) if status in (ACTIVE, WAITING) else None
-        def kind_name(e):  # «этап», но письмо об отмене встречи — «отмена»
-            return "отмена" if e.kind == mail.INTERVIEW and _CANCELLED_RX.search(e.subject) else KIND_NAMES[e.kind]
+        def kind_name(e):  # "stage", but a meeting cancellation letter is "cancelled"
+            return "cancelled" if e.kind == mail.INTERVIEW and _CANCELLED_RX.search(e.subject) else KIND_NAMES[e.kind]
         history = " → ".join(f"{kind_name(e)} {e.when:%d.%m}" for e in app.ordered if e.kind != mail.OTHER)
         rows.append(
             f'<tr class="{css}" data-{status}="1">'
@@ -269,41 +269,41 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
         f'<td><a href="{_e(_thread_link(address, m["thread"]))}" target="_blank" rel="noopener">{_e(m["subject"][:110])}</a></td></tr>'
         for m in sorted(unknown, key=lambda m: -m["date"])
     ]
-    buttons = [("all", f"Все ({len(rows)})")]
+    buttons = [("all", f"All ({len(rows)})")]
     buttons += [(s, f"{STATUS[s][0]} ({counts[s]})") for s in order if counts.get(s)]
     legend = (
         '<div class="sub legend">'
-        '<span class="c-green" style="background:rgba(34,197,94,.13)">зелёный — этапы, оффер</span>'
-        f'<span style="background:rgba(234,179,8,.15)">жёлтый — ждём ответа, до {TIMEOUT_DAYS} дней</span>'
-        '<span style="background:rgba(249,115,22,.17)">оранжевый — отказался сам</span>'
-        f'<span style="background:rgba(239,68,68,.11)">красный — отказ: письмо, отметка или {TIMEOUT_DAYS}+ дней тишины</span>'
+        '<span class="c-green" style="background:rgba(34,197,94,.13)">green — stages, offer</span>'
+        f'<span style="background:rgba(234,179,8,.15)">yellow — waiting for an answer, up to {TIMEOUT_DAYS} days</span>'
+        '<span style="background:rgba(249,115,22,.17)">orange — declined by you</span>'
+        f'<span style="background:rgba(239,68,68,.11)">red — rejected: a letter, a mark or {TIMEOUT_DAYS}+ days of silence</span>'
         "</div>"
     )
     parts = [
-        "<!doctype html><html lang='ru'><head><meta charset='utf-8'>",
+        "<!doctype html><html lang='en'><head><meta charset='utf-8'>",
         "<meta name='viewport' content='width=device-width, initial-scale=1'>",
-        f"<title>Отклики — {day.isoformat()}</title><style>{_CSS}{_CSS_COLORS}</style></head><body>",
-        f"<h1>Отклики по переписке — {day.isoformat()}</h1>",
+        f"<title>Applications — {day.isoformat()}</title><style>{_CSS}{_CSS_COLORS}</style></head><body>",
+        f"<h1>Applications from correspondence — {day.isoformat()}</h1>",
         f'<div class="warning">⚠️ {_e(warning)}</div>' if warning else "",
-        f'<div class="sub">Почта {_e(address)} и applications_manual.toml (Telegram, LinkedIn) · компаний {len(rows)} · '
-        f"статус — по переписке и ручным событиям · только чтение почты, "
-        f"ничего не отправлялось</div>",
-        f'<div class="funnel" title="Сколько компаний дошло хотя бы до этапа. Этап — по словам в теме письма или заметке: '
-        f'tech / техническое / лайвкодинг / ТЗ / с командой — техничка; final / CTO / основатель — финал; остальное — скрининг">'
+        f'<div class="sub">Mail {_e(address)} and applications_manual.toml (Telegram, LinkedIn) · companies {len(rows)} · '
+        f"status — from correspondence and manual events · mail is only read, "
+        f"nothing was sent</div>",
+        f'<div class="funnel" title="How many companies got at least to a stage. The stage comes from words in the letter subject or note: '
+        f'tech / technical / live coding / take-home / with the team — technical; final / CTO / founder — final; the rest — screening">'
         f"📊 {funnel_line(stages)}</div>",
         legend,
         '<div class="bar">',
         *(f'<button data-mode="{m}"{" class=on" if m == "all" else ""}>{_e(t)}</button>' for m, t in buttons),
-        '<input id="q" type="search" placeholder="Поиск по компании, теме письма…"><span id="count" class="count"></span></div>',
-        _table(["Компания", "Статус", "Дошли до", "Первое событие", "Последнее событие", "Дней тишины", "История",
-                "Последнее событие"], rows, "main"),
+        '<input id="q" type="search" placeholder="Search by company, letter subject…"><span id="count" class="count"></span></div>',
+        _table(["Company", "Status", "Got to", "First event", "Last event", "Days of silence", "History",
+                "Last event"], rows, "main"),
     ]
     if unknown_rows:
         parts += [
-            f"<details><summary><h2>Компания не определена — {len(unknown_rows)}</h2></summary>",
-            '<p class="small">Письма похожи на отклик / этап / отказ, но компанию не видно ни в отправителе, ни в теме. '
-            "Название можно задать в settings.toml → [mail.company_aliases] или посмотреть письмо по ссылке.</p>",
-            _table(["Дата", "Тип", "Отправитель", "Тема"], unknown_rows), "</details>",
+            f"<details><summary><h2>Company not identified — {len(unknown_rows)}</h2></summary>",
+            '<p class="small">The letters look like an application / stage / rejection, but the company is visible neither in the sender nor in the subject. '
+            "Set the name in settings.toml → [mail.company_aliases], or open the letter with the link.</p>",
+            _table(["Date", "Kind", "Sender", "Subject"], unknown_rows), "</details>",
         ]
     parts += [f"<script>{_JS}</script></body></html>"]
     return "\n".join(parts)

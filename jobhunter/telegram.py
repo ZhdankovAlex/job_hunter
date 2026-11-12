@@ -1,4 +1,4 @@
-"""Публичные Telegram-каналы через веб-превью t.me/s/{канал} (без Telethon и API)."""
+"""Public Telegram channels through the web preview t.me/s/{channel} (no Telethon, no API)."""
 import html
 import logging
 import re
@@ -14,9 +14,9 @@ from .keys import company_key
 
 log = logging.getLogger(__name__)
 
-# сайты-агрегаторы, на которые ведут ссылки в постах: живость такой ссылки проверяется отдельно
+# aggregator sites that post links lead to: whether such a link is alive is checked separately
 AGGREGATOR_HOSTS = tuple(c._TELEGRAM.get("aggregator_hosts", []))
-B_OPEN, B_CLOSE = "\x01", "\x02"  # границы <b> в тексте поста
+B_OPEN, B_CLOSE = "\x01", "\x02"  # <b> borders in the post text
 
 _MESSAGE_SPLIT = '<div class="tgme_widget_message_wrap'
 _TEXT_RX = re.compile(r'<div class="tgme_widget_message_text js-message_text[^>]*>(.*?)</div>', re.S)
@@ -60,10 +60,10 @@ def _labels(table, *texts):
 
 
 def _short_place(text, limit=45):
-    """Страна/город без свободного текста: обрезаем по скобке/тире, длинное выбрасываем."""
+    """Country/city without free text: cut at a bracket/dash, drop long ones."""
     text = re.split(r"[(—–·|]|\s-\s", text)[0].strip(" ,.)")
     if " " not in text and _labels(_FORMAT_LABELS, text):
-        return ""  # "удаленно" / "Remote" — это формат, а не место
+        return ""  # "удаленно" / "Remote" is a format, not a place
     return text if len(text) <= limit else ""
 
 
@@ -82,15 +82,15 @@ class TgJob:
     posted: datetime | None
     title: str
     company: str
-    location: str  # локация / формат одной строкой
+    location: str  # location / format in one line
     salary: str
-    url: str  # внешняя ссылка на вакансию, если есть
-    contact: str  # @handle, если ссылки нет
+    url: str  # external link to the vacancy, if any
+    contact: str  # @handle if there is no link
     post_url: str
-    text: str = ""  # где искать ключевые слова
+    text: str = ""  # where to look for keywords
     label: str = ""
     marks: list = field(default_factory=list)
-    # заполняется при сверке с таблицами (те же поля, что у Job)
+    # filled in by the same checks as Job (same fields)
     applied_status: str = ""
     staffing: str = ""
     lang_required: bool = False
@@ -100,24 +100,24 @@ class TgJob:
     reject_quote: str = ""
     manual_check: str = ""
     penalties: list = field(default_factory=list)
-    full_text: bool = True  # в посте полный текст вакансии (а не название или пересказ)
+    full_text: bool = True  # the post has the full vacancy text (not just a title or a summary)
     cv_have: list = field(default_factory=list)
     cv_missing: list = field(default_factory=list)
     cv_mismatch: list = field(default_factory=list)
     cv_partial: list = field(default_factory=list)
     cv_full: bool = False
     cv_pick: str = ""
-    cv_fit: int = -1  # Fit % вакансии и резюме (cv_match.fit_percent); -1 — не посчитан
-    grade: str = ""  # junior / middle / senior / lead — из названия или требуемого опыта (salary.grade)
-    cv_file: str = ""  # PDF резюме под вакансию, собранный автоматически (cvgen.auto_build), путь от корня проекта
+    cv_fit: int = -1  # Fit % of the vacancy and the CV (cv_match.fit_percent); -1 — not computed
+    grade: str = ""  # junior / middle / senior / lead — from the title or required experience (salary.grade)
+    cv_file: str = ""  # PDF CV for the vacancy built automatically (cvgen.auto_build), path from the project root
     cv_core_have: list = field(default_factory=list)
     cv_core_missing: list = field(default_factory=list)
     cv_nice_have: list = field(default_factory=list)
     cv_nice_missing: list = field(default_factory=list)
     tier: int = 4
     mismatch_lang: str = ""
-    salary_note: str = ""  # вилка: указанная или оценка по базе (salary.py)
-    levels_note: str = ""  # медиана по стране вакансии с levels.fyi (levels.py)
+    salary_note: str = ""  # salary range: stated or estimated from the base (salary.py)
+    levels_note: str = ""  # median for the vacancy country from levels.fyi (levels.py)
     levels_url: str = ""
     matched_skills: list = field(default_factory=list)
     history_marks: list = field(default_factory=list)
@@ -125,7 +125,7 @@ class TgJob:
 
 
 def _to_text(raw):
-    """HTML поста -> текст; <b> помечен B_OPEN/B_CLOSE, ссылки стоят как ⟦url⟧."""
+    """Post HTML -> text; <b> is marked with B_OPEN/B_CLOSE, links stand as ⟦url⟧."""
     raw = re.sub(r"</?tg-emoji[^>]*>", "", raw)
     raw = _EMOJI_RX.sub(lambda m: m.group(1), raw)
     raw = _LINK_RX.sub(lambda m: f"{m.group(2)} ⟦{m.group(1)}⟧", raw)
@@ -146,7 +146,7 @@ def _external_links(text):
 
 
 def fetch_posts(http, channel, cutoff):
-    """Посты канала не старше cutoff: [(post_id, datetime, html, forwarded)]."""
+    """Channel posts not older than cutoff: [(post_id, datetime, html, forwarded)]."""
     posts, before = [], None
     for _ in range(c.TELEGRAM_MAX_PAGES):
         r = http.get(f"https://t.me/s/{channel}", params={"before": before} if before else None)
@@ -164,7 +164,7 @@ def fetch_posts(http, channel, cutoff):
                 ))
         if not page:
             if not posts:
-                raise FetchError(f"t.me/s/{channel}: постов не найдено (канал закрыт или изменилась вёрстка)")
+                raise FetchError(f"t.me/s/{channel}: no posts found (the channel is closed or the page layout changed)")
             break
         posts += [p for p in page if p[1] and p[1] >= cutoff]
         older = re.search(r'data-before="(\d+)"', r.text)
@@ -175,7 +175,7 @@ def fetch_posts(http, channel, cutoff):
 
 
 def _vacancy_link(links):
-    """Ссылка на саму вакансию, если она есть среди ссылок поста; иначе первая."""
+    """Link to the vacancy itself if it is among the post links; otherwise the first one."""
     for link in links:
         if re.search(r"vacanc|job|career|apply|position|hirify", link, re.I):
             return link
@@ -183,7 +183,7 @@ def _vacancy_link(links):
 
 
 def parse_youritjob(channel, post_id, when, raw):
-    """Один пост = одна вакансия; первая bold-строка — 'Должность, Компания/формат'."""
+    """One post = one vacancy; the first bold line is 'Title, Company/format'."""
     text = _to_text(raw)
     head = re.match(rf"\s*{B_OPEN}(.*?){B_CLOSE}", text, re.S)
     if not head:
@@ -195,36 +195,36 @@ def parse_youritjob(channel, post_id, when, raw):
     if not rest and "," in title:
         title, rest = (p.strip() for p in title.split(",", 1))
     company, _, fmt = rest.rpartition(",") if "," in rest else (rest, "", "")
-    if not fmt and _FORMAT_ONLY_RX.search(company):  # "QA Engineer, Remote" — компании нет
+    if not fmt and _FORMAT_ONLY_RX.search(company):  # "QA Engineer, Remote" — no company
         company, fmt = "", company
     plain = _plain(text)
-    if re.search(r"уборк", plain, re.I):  # не IT: клининг и т.п.
+    if re.search(r"уборк", plain, re.I):  # not IT: cleaning jobs and the like
         return []
     tags = [t.lower() for t in _HASHTAG_RX.findall(plain)]
     if not tags and not c.TG_KEYWORD_RX.search(plain):
         return []
-    # только короткие метки: место из заголовка, формат, релокация/виза
+    # only short labels: place from the header, format, relocation/visa
     location = _join_location([
         _short_place(fmt, 30),
         *_labels(_FORMAT_LABELS + _EXTRA_LABELS, fmt),
         *(_TAG_LABELS[t] for t in tags if t in _TAG_LABELS),
-        *(t.title() for t in tags if c.HOME_RX.fullmatch(t)),  # хэштег домашней страны / города
+        *(t.title() for t in tags if c.HOME_RX.fullmatch(t)),  # hashtag of the home country / city
     ])
     first_lines = [l.strip() for l in plain.split("\n") if l.strip()][:6]
     if not c.TG_ROLE_RX.search(title):
-        # первая жирная строка бывает баннером ("This stack needs a Senior") — ищем должность ниже
+        # the first bold line is sometimes a banner ("This stack needs a Senior") — look for the title below
         for line in first_lines[1:]:
             if len(line) <= 90 and c.TG_ROLE_RX.search(line):
                 title, _, employer = line.partition(" / В ")
                 company = company or employer
                 break
     if not location:
-        # формат отдельной строкой под заголовком: "Lisbon | Office-based", "Remote"
+        # format on its own line under the header: "Lisbon | Office-based", "Remote"
         for line in first_lines[1:]:
             if len(line) <= 40 and _FORMAT_ONLY_RX.search(line):
                 location = _join_location([_short_place(line, 30), *_labels(_FORMAT_LABELS + _EXTRA_LABELS, line)])
                 break
-    # вилка: сначала строка с явным словом про оплату где угодно в посте, затем сумма в шапке
+    # salary range: first a line with an explicit pay word anywhere in the post, then an amount in the header
     from . import salary as salary_rules
 
     all_lines = plain.split("\n")
@@ -242,7 +242,7 @@ def parse_youritjob(channel, post_id, when, raw):
 
 
 def parse_af_job_board(channel, post_id, when, raw):
-    """Один пост = подборка; блоки заканчиваются строкой '👉 Apply'."""
+    """One post = a list of vacancies; blocks end with the line '👉 Apply'."""
     lines = [l.strip() for l in _to_text(raw).split("\n")]
     jobs, block, intro = [], [], None
     for line in lines:
@@ -263,10 +263,10 @@ def parse_af_job_board(channel, post_id, when, raw):
             jobs.append((_plain(block[title_idx]), fields, _external_links(line)[0]))
         block = []
     if not jobs:
-        return []  # история компании, вебинар и т.п.
+        return []  # a company story, a webinar and the like
     intro = intro or ""
     intro_plain = _plain(intro)
-    # компания на весь пост ("AUTODOC сейчас активно нанимает") — первый bold во вступлении
+    # a company for the whole post ("AUTODOC сейчас активно нанимает") — the first bold text in the intro
     post_company = next(
         (b.strip() for b in re.findall(rf"{B_OPEN}(.*?){B_CLOSE}", intro)
          if _COMPANY_NAME_RX.fullmatch(b.strip())),
@@ -294,7 +294,7 @@ def parse_af_job_board(channel, post_id, when, raw):
 
 
 def _ru_format(line):
-    """'удалённо (можно за пределами РФ)', 'Москва (офис)' -> короткие метки локации."""
+    """'удалённо (можно за пределами РФ)', 'Москва (офис)' -> short location labels."""
     labels = _labels(_FORMAT_LABELS + _EXTRA_LABELS, line)
     if ABROAD_OK_RX.search(line):
         labels.append("worldwide")
@@ -310,7 +310,7 @@ def _ru_format(line):
 
 
 def parse_habr_digest(channel, post_id, when, raw):
-    """@habr_career: пост-подборка, строка = 'Должность в Компания ⟦u.habr.com/…⟧. Город. Формат.'"""
+    """@habr_career: a list post, one line = '<Title> в <Company> ⟦u.habr.com/…⟧. City. Format.'"""
     text = _to_text(raw)
     tags = " ".join(f"#{t}" for t in _HASHTAG_RX.findall(_plain(text)))
     jobs = []
@@ -332,9 +332,9 @@ _ABROAD_REMOTE_RX = re.compile(r"\s*\(?\s*вне\s+(?:РФ|России)(?:\s+и
 
 
 def parse_zarubezhom(channel, post_id, when, raw):
-    """@zarubezhom_jobs: «**Должность в Компания**», «📍 место», «💎 требования», ссылка «Узнать подробнее … тут».
+    """@zarubezhom_jobs: "**<Title> в <Company>**", "📍 place", "💎 requirements", link "Узнать подробнее … тут".
 
-    Дайджесты («Дайджест вакансий…») пропускаются: в них только ссылки на отдельные посты.
+    Digests ("Дайджест вакансий…") are skipped: they only link to separate posts.
     """
     text = _to_text(raw)
     head = re.match(rf"\s*{B_OPEN}(.*?){B_CLOSE}", text, re.S)
@@ -346,7 +346,7 @@ def parse_zarubezhom(channel, post_id, when, raw):
     title, _, company = first.rpartition(" в ")
     plain = _plain(text)
     place = next((l.lstrip("📍 ").strip() for l in plain.split("\n") if l.strip().startswith("📍")), "")
-    # «Remote (вне РФ и РБ)» — удалёнка откуда угодно, кроме России и Беларуси
+    # "Remote (вне РФ и РБ)" — remote from anywhere except Russia and Belarus
     place = _ABROAD_REMOTE_RX.sub(", worldwide", place).strip(" ,")
     place = re.sub(r"(?i)удал[её]нн?о|удал[её]нка", "Remote", place)
     links = _external_links(text.split("Узнать подробнее", 1)[-1]) or _external_links(text)
@@ -358,11 +358,11 @@ def parse_zarubezhom(channel, post_id, when, raw):
 
 
 def parse_relocatesme(channel, post_id, when, raw):
-    """@relocatesme: посты трёх видов, реклама без этих признаков пропускается.
+    """@relocatesme: posts of three kinds, ads without these signs are skipped.
 
-    «**Должность в Компания**», «📍 место» — как в @zarubezhom_jobs;
-    «**Должность**», строка формата, «Компания: X — описание», «ЗП:», «Откликнуться: ссылка»;
-    «**Должность** ⟦ссылка⟧», «Senior · #hybrid · Warsaw» — компания не названа.
+    "**<Title> в <Company>**", "📍 place" — as in @zarubezhom_jobs;
+    "**<Title>**", a format line, "Компания: X — description", "ЗП:" (salary), "Откликнуться: <link>";
+    "**<Title>** ⟦link⟧", "Senior · #hybrid · Warsaw" — the company is not named.
     """
     text = _to_text(raw)
     if "📍" in text:
@@ -376,7 +376,7 @@ def parse_relocatesme(channel, post_id, when, raw):
     short = next((l for l in lines if " · " in l and "#" in l), "")
     if not company and not short:
         return []
-    if company.lower() == "компания мечты":  # заглушка канала, когда компания не раскрыта
+    if company.lower() == "компания мечты":  # the channel's placeholder ("dream company") when the company is hidden
         company = ""
     if short:
         place = ", ".join(p.strip(" #") for p in short.split(" · ")[1:])
@@ -392,9 +392,9 @@ def parse_relocatesme(channel, post_id, when, raw):
 
 
 def parse_jtbl(channel, post_id, when, raw):
-    """@jtbl_vacancy: «**Должность в Отрасль**», хештеги, «Требования:», «Локация: 📍…», «Контакт для отклика: @…».
+    """@jtbl_vacancy: "**<Title> в <Industry>**", hashtags, "Требования:", "Локация: 📍…", "Контакт для отклика: @…".
 
-    Компания в постах не называется — вместо неё отрасль из заголовка («Fintech», «Travel Tech»).
+    Posts do not name the company — the industry from the header is used instead ("Fintech", "Travel Tech").
     """
     text = _to_text(raw)
     head = re.match(rf"\s*{B_OPEN}(.*?){B_CLOSE}", text, re.S)
@@ -409,14 +409,14 @@ def parse_jtbl(channel, post_id, when, raw):
     place = re.sub(r"(?i)удал[её]нн?о", "Remote", place).replace("из любой точки мира", "worldwide").strip(" .")
     handles = [h for h in _HANDLE_RX.findall(plain) if h.lower() != "@" + channel.lower()]
     return [TgJob(
-        channel=channel, posted=when, title=title.strip(), company=f"{domain} (компания не названа)" if domain else "—",
+        channel=channel, posted=when, title=title.strip(), company=f"{domain} (company not named)" if domain else "—",
         location=place, salary="", url="", contact=handles[0] if handles else "",
         post_url=f"https://t.me/{channel}/{post_id}", text=plain,
     )]
 
 
 def parse_career_sports(channel, post_id, when, raw):
-    """@career_sports (канал Sports.ru): '**Должность** ⟦ссылка⟧', ниже '📍 формат' и '🔵 уровень'."""
+    """@career_sports (the Sports.ru channel): '**<Title>** ⟦link⟧', then '📍 format' and '🔵 level'."""
     jobs = parse_youritjob(channel, post_id, when, raw)
     for job in jobs:
         job.company = "Sports.ru"
@@ -427,7 +427,7 @@ def parse_career_sports(channel, post_id, when, raw):
 
 
 def parse_job_python(channel, post_id, when, raw):
-    """@job_python: строка хештегов, затем жирные 'Компания' и 'Должность', 'Формат работы: …'."""
+    """@job_python: a hashtag line, then bold 'Company' and 'Title', 'Формат работы: …' (work format)."""
     text = _to_text(raw)
     plain = _plain(text)
     bolds = [_plain(b) for b in re.findall(rf"{B_OPEN}(.*?){B_CLOSE}", text, re.S)]
@@ -449,9 +449,9 @@ def parse_job_python(channel, post_id, when, raw):
 
 
 def parse_pythonrabota(channel, post_id, when, raw):
-    """@pythonrabota: '**Должность** | Смотреть вакансию ⟦telegra.ph⟧', ниже 'Формат:', 'Компания:', 'ЗП:'.
+    """@pythonrabota: '**<Title>** | Смотреть вакансию ⟦telegra.ph⟧', then 'Формат:', 'Компания:', 'ЗП:'.
 
-    Полный текст лежит на telegra.ph — его подтягивает collect() (fill_telegraph).
+    The full text is on telegra.ph — collect() fetches it (fill_telegraph).
     """
     text = _to_text(raw)
     head = re.match(rf"\s*{B_OPEN}(.*?){B_CLOSE}", text, re.S)
@@ -481,7 +481,7 @@ def _telegraph_text(node):
 
 
 def fill_telegraph(http, job):
-    """Полный текст вакансии со страницы telegra.ph (публичный API getPage); уточняет локацию."""
+    """Full vacancy text from a telegra.ph page (public getPage API); refines the location."""
     path = job.url.split("telegra.ph/", 1)[1].split("?")[0]
     try:
         r = http.get(f"https://api.telegra.ph/getPage/{path}", params={"return_content": "true"})
@@ -500,7 +500,7 @@ def fill_telegraph(http, job):
 
 
 def parse_offer_inside(channel, post_id, when, raw):
-    """@JobOfferInside: 'Должность ⟦ссылка на ATS⟧ в Компания', ниже строка с локацией и пересказ."""
+    """@JobOfferInside: '<Title> ⟦link to the ATS⟧ в <Company>', then a location line and a summary."""
     text = _to_text(raw)
     plain = _plain(text)
     lines = [l.strip() for l in plain.split("\n") if l.strip()]
@@ -520,7 +520,7 @@ def parse_offer_inside(channel, post_id, when, raw):
 
 
 def _field(plain, *names):
-    """Значение строки «🏢 Компания: …» / «Формат: …»: первое из names, без эмодзи в начале."""
+    """Value of a line "🏢 Компания: …" / "Формат: …": the first of names, without a leading emoji."""
     for line in plain.split("\n"):
         key, sep, value = line.partition(":")
         if sep and re.sub(r"^\W+", "", key).strip().lower() in names:
@@ -529,9 +529,9 @@ def _field(plain, *names):
 
 
 def parse_hiddengurus(channel, post_id, when, raw):
-    """@hiddengurus: «**Должность**», «🏢 Компания:», «💰 ЗП:», «🌍 Формат:», «📩 Отклик: @…».
+    """@hiddengurus: "**<Title>**", "🏢 Компания:", "💰 ЗП:", "🌍 Формат:", "📩 Отклик: @…".
 
-    Посты без строки «Компания:» (статьи про финансы и т. п.) пропускаются.
+    Posts without a "Компания:" (company) line (articles about finance etc.) are skipped.
     """
     text = _to_text(raw)
     head = re.match(rf"\s*{B_OPEN}(.*?){B_CLOSE}", text, re.S)
@@ -544,8 +544,8 @@ def parse_hiddengurus(channel, post_id, when, raw):
     links = _external_links(text)
     return [TgJob(
         channel=channel, posted=when, title=" ".join(_plain(head.group(1)).split()), company=company,
-        # «Удалённо (РФ)»: _ru_format выбрасывает скобки, страну сохраняем словом
-        location=_ru_format(re.sub(r"\((?:РФ|RU)\)", "Россия", _field(plain, "формат"))),
+        # "Удалённо (РФ)": _ru_format drops brackets, so the country is kept as a word
+        location=_ru_format(re.sub(r"\((?:РФ|RU)\)", "Russia", _field(plain, "формат"))),
         salary=pay if _SALARY_RX.search(pay) else "",
         url=_vacancy_link(links), contact=handles[0] if handles else "",
         post_url=f"https://t.me/{channel}/{post_id}", text=plain,
@@ -553,15 +553,15 @@ def parse_hiddengurus(channel, post_id, when, raw):
 
 
 def parse_opento(channel, post_id, when, raw):
-    """@opento_dev: «**Должность / Компания**», следующая строка — локация (и зарплата).
+    """@opento_dev: "**<Title> / <Company>**", the next line is the location (and salary).
 
-    Дайджест — несколько таких пар в одном посте, у каждой ссылка на wantapply.com.
+    A digest is several such pairs in one post, each with a link to wantapply.com.
     """
     text = _to_text(raw)
     lines = text.split("\n")
     jobs = []
     for i, line in enumerate(lines):
-        # компания — после последнего « / »: в должности бывает «Middle+ / Senior»
+        # the company is after the last " / ": a title can contain "Middle+ / Senior"
         m = re.match(rf"\s*{B_OPEN}(.+) / (.+?){B_CLOSE}\s*(?:⟦([^⟧]+)⟧)?", line)
         if not m:
             continue
@@ -570,7 +570,7 @@ def parse_opento(channel, post_id, when, raw):
         pay_rx = r"(?:salary:\s*)?(?:от\s*)?(?:[$€]\s?\d[\d.,]*|\d[\d\s.,]*\s*(?:\$|€|usd|eur))"
         pay = re.search(rf"{pay_rx}(?:\s*-\s*{pay_rx})?", place, re.I)
         place = re.sub(rf"(?i)salary:.*|{pay_rx}.*", "", place).strip(" .,")
-        # ссылки дайджеста приходят дважды экранированными («&amp;utm_…»)
+        # digest links come escaped twice ("&amp;utm_…")
         link = html.unescape(m.group(3) or _vacancy_link(_external_links(text)))
         digest = sum(bool(re.match(rf"\s*{B_OPEN}.+ / ", l)) for l in lines) > 1
         jobs.append(TgJob(
@@ -594,20 +594,20 @@ PARSERS = {
     "dev_connectablejobs": parse_zarubezhom,
     "opento_dev": parse_opento,
 }
-SHORT_POST_CHANNELS = {"af_job_board", "choicy_work", "JobOfferInside", "habr_career"}  # в посте нет полного текста
-# каналы, где вакансии — пересылки из каналов компаний: пересланные посты не пропускаем
+SHORT_POST_CHANNELS = {"af_job_board", "choicy_work", "JobOfferInside", "habr_career"}  # posts lack the full text
+# channels where vacancies are reposts from company channels: forwarded posts are not skipped
 FORWARDS_OK_CHANNELS = {"zarubezhom_jobs"}
-SALARY_POSTS: list = []  # все разобранные посты с указанной зарплатой — база для оценки вилок
+SALARY_POSTS: list = []  # all parsed posts with a stated salary — the base for range estimates
 
 
 def classify(job):
-    """Проставляет label; False — вакансию не показываем."""
+    """Sets the label; False — the vacancy is not shown."""
     if not filters.role_ok(job.title, job.text) or c.TG_EXCLUDE_RX.search(job.title):
         return False
     if not filters.full_time(job.title, "", job.text) or filters.residency_blocked(job.text, job.location):
         return False
     if HIDE_RUSSIA_ONLY and ru_only(f"{job.location}\n{job.text}"):
-        return False  # удалёнка только из России
+        return False  # remote from Russia only
     if not c.PYTHON_RX.search(job.title):
         other = next((name for name, rx in c.TITLE_LANGS.items() if rx.search(job.title)), "")
         if other:
@@ -615,51 +615,51 @@ def classify(job):
     lang_marks, job.lang_required = language.analyze(job.title, job.text)
     job.marks += lang_marks
     if company_key(job.company) in geo.REFERRAL_COMPANIES:
-        job.marks.append("🤝 возможна рефка")
+        job.marks.append("🤝 referral possible")
     loc = job.location
     home = bool(c.HOME_RX.search(loc))
     remote = bool(c.REMOTE_RX.search(loc))
     if not remote and not home:
-        # офис в другой стране подходит, только если переезд оплачивает работодатель
+        # an office in another country fits only if the employer pays for the move
         if geo.RELOCATION_ENABLED and (geo.relocation_quote(job.text) or "relocation support" in loc):
-            job.label = "🌍 офис в другой стране, работодатель помогает с релокацией"
-            job.reloc_type = geo.RELOCATION  # verify.check не считает офис причиной отказа
+            job.label = "🌍 office in another country, the employer helps with relocation"
+            job.reloc_type = geo.RELOCATION  # verify.check does not treat the office as a reason to reject
             return True
         if geo.RELOCATION_ENABLED and re.search(r"hybrid|гибрид", loc, re.I):
-            job.label = "❓ hybrid в другой стране — нужна релокация"
+            job.label = "❓ hybrid in another country — relocation needed"
             return True
-        return False  # onsite / hybrid в другой стране без помощи с переездом
+        return False  # onsite / hybrid in another country without help with the move
     if home or c.BROAD_RX.search(loc):
         if not remote:
-            job.label = f"✅ {c.HOME_COUNTRY} (не remote)"
+            job.label = f"✅ {c.HOME_COUNTRY} (not remote)"
         else:
-            job.label = f"✅ remote + {c.HOME_COUNTRY} или worldwide/EU" if c.HOME_COUNTRY else "✅ remote worldwide/EU"
+            job.label = f"✅ remote + {c.HOME_COUNTRY} or worldwide/EU" if c.HOME_COUNTRY else "✅ remote worldwide/EU"
     elif c.LOCATION_NOISE_RX.sub("", c.REMOTE_RX.sub("", re.sub(r"#\w+|удал[её]нн?[а-яё]*", "", loc, flags=re.I))):
         if not geo.COUNTRY_BOUND_REMOTE:
             return False
-        job.label = "❓ remote, привязан к другой стране"
+        job.label = "❓ remote, tied to another country"
     else:
-        job.label = "❓ remote, регион не указан"
+        job.label = "❓ remote, region not stated"
     return True
 
 
 def _check_aggregator_link(http, job):
-    job.marks.append("⚠️ через агрегатор — проверить, что вакансия жива")
+    job.marks.append("⚠️ via an aggregator — check that the vacancy is still open")
     try:
         status = http.get(job.url).status_code
     except FetchError as e:
-        log.warning("telegram: не удалось проверить ссылку %s: %s", job.url, e)
-        job.marks.append("ссылка не проверена")
+        log.warning("telegram: could not check the link %s: %s", job.url, e)
+        job.marks.append("link not checked")
         return
-    job.marks.append("ссылка открывается" if status == 200 else f"❌ ссылка не открывается (HTTP {status})")
+    job.marks.append("link opens" if status == 200 else f"❌ link does not open (HTTP {status})")
 
 
 def collect(http):
-    """-> (вакансии, список каналов, которые не удалось прочитать)."""
+    """-> (vacancies, list of channels that could not be read)."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=c.TELEGRAM_MAX_AGE_DAYS)
     jobs, failed = {}, []
     for channel in c.TELEGRAM_CHANNELS:
-        if progress.skip_requested():  # кнопка «Пропустить»: дальше идут уже прочитанные каналы
+        if progress.skip_requested():  # the "Skip" button: the channels already read go on
             break
         progress.item_started(f"@{channel}")
         parser = PARSERS.get(channel, parse_youritjob)
@@ -677,7 +677,7 @@ def collect(http):
             try:
                 parsed = parser(channel, post_id, when, raw)
             except Exception:
-                log.exception("telegram @%s/%s: не удалось разобрать пост", channel, post_id)
+                log.exception("telegram @%s/%s: could not parse the post", channel, post_id)
                 continue
             for job in parsed:
                 if channel in SHORT_POST_CHANNELS:
@@ -692,13 +692,13 @@ def collect(http):
                     if not classify(job):
                         continue
                 found += 1
-                # одна и та же вакансия в разных постах/каналах — оставляем самую свежую
+                # the same vacancy in different posts/channels — keep the freshest
                 key = (company_key(job.company), re.sub(r"[^a-zа-яё0-9]", "", job.title.lower()))
                 if key not in jobs or job.posted > jobs[key].posted:
                     jobs[key] = job
-        log.info("telegram @%s: постов за %d дней — %d, подходящих вакансий — %d",
+        log.info("telegram @%s: posts in %d days — %d, matching vacancies — %d",
                  channel, c.TELEGRAM_MAX_AGE_DAYS, len(posts), found)
-        progress.event("source", f"@{channel}: постов {len(posts)}, подходящих вакансий {found}")
+        progress.event("source", f"@{channel}: posts {len(posts)}, matching vacancies {found}")
         progress.item_finished(f"@{channel}")
     result = list(jobs.values())
     for job in result:

@@ -1,28 +1,28 @@
 {% extends "base.html" %}
-{% block title %}Письмо · job-hunter{% endblock %}
+{% block title %}Cover letter · job-hunter{% endblock %}
 {% block content %}
-<h1>Сопроводительное письмо</h1>
-<p class="muted">Достижения и soft skills подбираются из <code>cv/base.toml</code> под текст вакансии
-  (шаблон и формулировки — раздел <code>[cover]</code>) — ничего не придумывается. Та же сборка — у кнопки «✉️» в отчёте.</p>
+<h1>Cover letter</h1>
+<p class="muted">Achievements and soft skills are picked from <code>cv/base.toml</code> for the vacancy text
+  (template and wording — the <code>[cover]</code> section) — nothing is invented. The "✉️" button in the report builds the same.</p>
 
 <section class="grid two cv-grid">
   <form class="card cv-form" id="cover-form">
-    <label>Ссылка на вакансию
-      <input name="url" type="url" placeholder="https://… — из отчёта или любая другая">
+    <label>Link to the vacancy
+      <input name="url" type="url" placeholder="https://… — from a report or any other">
     </label>
     <div class="row2">
-      <label>Компания <input name="company" placeholder="если не определится сама"></label>
-      <label>Вакансия <input name="title" placeholder="название роли"></label>
+      <label>Company <input name="company" placeholder="if it is not detected"></label>
+      <label>Vacancy <input name="title" placeholder="role title"></label>
     </div>
-    <label>Или текст вакансии
-      <textarea name="text" rows="9" placeholder="Вставьте текст, если страница не читается (LinkedIn, закрытые сайты)"></textarea>
+    <label>Or the vacancy text
+      <textarea name="text" rows="9" placeholder="Paste the text if the page cannot be read (LinkedIn, closed sites)"></textarea>
     </label>
     <div class="form-foot">
       <span class="style-pick">
-        <label class="inline"><input type="radio" name="style" value="short" checked> коротко, тезисами</label>
-        <label class="inline"><input type="radio" name="style" value="full"> полное, абзацами</label>
+        <label class="inline"><input type="radio" name="style" value="short" checked> short, bulleted</label>
+        <label class="inline"><input type="radio" name="style" value="full"> full, in paragraphs</label>
       </span>
-      <button class="primary" type="submit">✉️ Собрать письмо</button>
+      <button class="primary" type="submit">✉️ Build letter</button>
     </div>
     <div class="muted small" id="cover-status"></div>
   </form>
@@ -30,12 +30,12 @@
   <div class="card" id="cover-result" hidden>
     <div class="result-head">
       <div><h2 id="r-title"></h2><div class="muted small" id="r-meta"></div></div>
-      <div class="actions"><button class="primary" id="r-copy" type="button">Копировать</button><a class="btn" id="r-file" target="_blank">.txt</a></div>
+      <div class="actions"><button class="primary" id="r-copy" type="button">Copy</button><a class="btn" id="r-file" target="_blank">.txt</a></div>
     </div>
     <textarea class="cover-text" id="r-text" rows="18" spellcheck="true"></textarea>
-    <div class="muted small">Текст можно поправить прямо здесь перед копированием.</div>
+    <div class="muted small">You can edit the text right here before copying.</div>
     <div id="r-missing"></div>
-    <h2 class="sub-h">Почему выбраны эти пункты</h2>
+    <h2 class="sub-h">Why these points were picked</h2>
     <ul class="picks" id="r-picks"></ul>
   </div>
 </section>

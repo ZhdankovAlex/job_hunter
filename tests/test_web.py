@@ -1,4 +1,4 @@
-"""Смоук-тест веб-интерфейса на пустых данных — как на чистой машине: страницы открываются, кэш работает."""
+"""Smoke test of the web UI on empty data — as on a clean machine: pages open, the cache works."""
 import json
 
 import pytest
@@ -39,5 +39,5 @@ def test_skills_counts_are_cached_per_pattern(client):
     assert python["matches"] == 2 and python["share"] == 100
     cached = web._memory_cache["skills"]["value"]["matches"]
     assert python["pattern"] in cached
-    assert http.get("/api/skills").json() == first  # второй раз — из кэша, тот же ответ
+    assert http.get("/api/skills").json() == first  # the second time — from the cache, the same answer
     assert json.loads(web.WEB_CACHE_FILE.read_text(encoding="utf-8"))["skills"]["value"]["relevant"] == 2

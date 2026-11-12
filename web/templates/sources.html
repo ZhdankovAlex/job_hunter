@@ -1,38 +1,38 @@
 {% extends "base.html" %}
-{% block title %}Источники · job-hunter{% endblock %}
-{% set kind_names = {"ats": "ATS-борды компаний", "aggregator": "Агрегаторы", "site": "Сайты без ATS", "career_page": "Карьерные страницы"} %}
+{% block title %}Sources · job-hunter{% endblock %}
+{% set kind_names = {"ats": "Company ATS boards", "aggregator": "Aggregators", "site": "Sites without an ATS", "career_page": "Career pages"} %}
 {% block content %}
-<h1>Источники</h1>
-<p class="muted">{% if built %}По последнему прогону ({{ built }}).{% else %}Данные появятся после первого прогона с новой версией скрипта.{% endif %}
-  Сколько вакансий дал каждый источник до фильтров.</p>
+<h1>Sources</h1>
+<p class="muted">{% if built %}From the last run ({{ built }}).{% else %}The data appears after the first run with the new script version.{% endif %}
+  How many vacancies each source gave before the filters.</p>
 
 <section class="tiles wide" style="--n: {{ kinds|length + 3 }}">
   {% for kind, k in kinds.items() %}
-  <div class="tile"><b>{{ k.jobs }}</b><span>{{ kind_names.get(kind, kind) }}: {{ k.sources }} источников
-    · пустых {{ k.empty }}{% if k.errors %} · <em class="bad">ошибок {{ k.errors }}</em>{% endif %}</span></div>
+  <div class="tile"><b>{{ k.jobs }}</b><span>{{ kind_names.get(kind, kind) }}: {{ k.sources }} sources
+    · empty {{ k.empty }}{% if k.errors %} · <em class="bad">errors {{ k.errors }}</em>{% endif %}</span></div>
   {% endfor %}
-  <div class="tile"><b>{{ telegram|length }}</b><span>Telegram-каналов</span></div>
-  <div class="tile"><b>{{ freehire|length }}</b><span>запросов freehire.me</span></div>
-  <a class="tile tile-link" href="#all-sources" id="gaps-tile"><b>{{ gaps.rows|length }}</b><span>компаний без вакансий в отчёте ↓</span></a>
+  <div class="tile"><b>{{ telegram|length }}</b><span>Telegram channels</span></div>
+  <div class="tile"><b>{{ freehire|length }}</b><span>freehire.me queries</span></div>
+  <a class="tile tile-link" href="#all-sources" id="gaps-tile"><b>{{ gaps.rows|length }}</b><span>companies without vacancies in the report ↓</span></a>
 </section>
 
 <section class="grid two">
   <div class="card">
-    <h2>Telegram-каналы</h2>
+    <h2>Telegram channels</h2>
     {% if telegram %}
     <div class="chips">{% for ch in telegram %}<a class="chip" href="https://t.me/s/{{ ch }}" target="_blank">@{{ ch }}</a>{% endfor %}</div>
     {% else %}
-    <p class="small">Выключено: settings.toml → [telegram] enabled = true и список channels.</p>
+    <p class="small">Turned off: settings.toml → [telegram] enabled = true and a list of channels.</p>
     {% endif %}
   </div>
   <div class="card">
-    <h2>Запросы freehire.me</h2>
+    <h2>freehire.me queries</h2>
     <ul class="queries">
       {% for q in freehire %}
       <li class="{{ 'muted' if q.skipped }}">
         <div class="q-head"><b>{{ q.title }}</b>
-          {% if q.skipped %}<span class="small">не выполнялся</span>
-          {% elif q.fetched is not none %}<span class="small">получено <b>{{ q.fetched }}</b>{% if q.total %} из {{ q.total }} на сайте{% endif %}</span>{% endif %}
+          {% if q.skipped %}<span class="small">not run</span>
+          {% elif q.fetched is not none %}<span class="small">received <b>{{ q.fetched }}</b>{% if q.total %} of {{ q.total }} on the site{% endif %}</span>{% endif %}
         </div>
         <div class="chips">{% for k, v in q.params.items() if k not in ("limit", "sort", "order", "description_format", "offset") and v != "" %}<span class="chip small">{{ k }}: {{ v }}</span>{% endfor %}</div>
       </li>
@@ -45,48 +45,48 @@
 {% set titles = {} %}{% for g in gaps.groups %}{% set _ = titles.update({g.key: g.title}) %}{% endfor %}
 <details class="card fold" id="all-sources">
   <summary>
-    <h2>Все источники <span class="muted small">{{ rows|length }} · без вакансий в отчёте {{ gaps.rows|length }}</span></h2>
-    <span class="muted small">Сколько вакансий дал каждый источник и почему пусто, если пусто.
-      {% if gaps.reports is not none %}«Подходящих нет» — по {{ gaps.reports }} последним отчётам.{% endif %}</span>
+    <h2>All sources <span class="muted small">{{ rows|length }} · without vacancies in the report {{ gaps.rows|length }}</span></h2>
+    <span class="muted small">How many vacancies each source gave and why it is empty, if it is.
+      {% if gaps.reports is not none %}"None matching" is based on the last {{ gaps.reports }} reports.{% endif %}</span>
   </summary>
   <div class="filter-block">
     <div class="filters">
       <div class="feed-filter" id="kind-filter">
-        <span class="filter-sep">вид:</span>
-        <button class="on" data-kind="">все</button>
+        <span class="filter-sep">kind:</span>
+        <button class="on" data-kind="">all</button>
         {% for kind in kinds %}<button data-kind="{{ kind }}">{{ kind_names.get(kind, kind) }}</button>{% endfor %}
       </div>
-      <div class="filters" id="reason-filter">  <!-- одна группа кнопок на три строки -->
+      <div class="filters" id="reason-filter">  <!-- one button group on three lines -->
         <div class="feed-filter">
-          <span class="filter-sep">результат:</span>
-          <button class="on" data-reason="">все</button>
-          <button data-reason="ok" title="У компании есть вакансии в отчётах; агрегаторы и доски — дали вакансии в последнем прогоне">есть в отчёте {{ rows|length - gaps.rows|length }}</button>
-          <button data-reason="gap" title="Источник ничего не дал в отчёт: не читаем совсем или читаем, но пусто">без вакансий {{ gaps.rows|length }}</button>
+          <span class="filter-sep">result:</span>
+          <button class="on" data-reason="">all</button>
+          <button data-reason="ok" title="The company has vacancies in the reports; aggregators and boards gave vacancies in the last run">in the report {{ rows|length - gaps.rows|length }}</button>
+          <button data-reason="gap" title="The source gave nothing to the report: not read at all, or read but empty">no vacancies {{ gaps.rows|length }}</button>
         </div>
         <div class="feed-filter">
-          <span class="filter-sep">не читаем:</span>
+          <span class="filter-sep">not read:</span>
           {% for g in gaps.groups if g.key in not_read %}<button data-reason="{{ g.key }}" title="{{ g.hint }}">{{ g.title }} {{ g.count }}</button>{% endfor %}
         </div>
         <div class="feed-filter">
-          <span class="filter-sep">читаем, но пусто:</span>
+          <span class="filter-sep">read, but empty:</span>
           {% for g in gaps.groups if g.key not in not_read %}<button data-reason="{{ g.key }}" title="{{ g.hint }}">{{ g.title }} {{ g.count }}</button>{% endfor %}
         </div>
       </div>
       <div class="feed-filter">
-        <span class="filter-sep">поиск:</span>
-        <input id="q" class="filter-search" type="search" placeholder="Название источника…">
+        <span class="filter-sep">search:</span>
+        <input id="q" class="filter-search" type="search" placeholder="Source name…">
       </div>
     </div>
   </div>
   <p class="muted small" id="reason-hint"></p>
   <table class="data" id="sources">
-    <thead><tr><th>Источник</th><th>Вид</th><th>ATS / борд</th><th class="num">Вакансий</th><th>Почему пусто</th><th>Проверено</th></tr></thead>
+    <thead><tr><th>Source</th><th>Kind</th><th>ATS / board</th><th class="num">Vacancies</th><th>Why empty</th><th>Checked</th></tr></thead>
     <tbody>
     {% for r in rows %}
     <tr data-kind="{{ r.kind }}" data-reason="{{ r.reason or 'ok' }}">
       <td>{{ r.name }}</td>
       <td class="muted small">{{ kind_names.get(r.kind, r.kind) }}</td>
-      <td class="small">{% if r.platform %}{{ r.platform }} / {{ r.slug }}{% elif r.empty_board %}{{ r.empty_board|replace("/", " / ") }}{% elif r.kind == "ats" %}<span class="muted">не найден</span>{% endif %}</td>
+      <td class="small">{% if r.platform %}{{ r.platform }} / {{ r.slug }}{% elif r.empty_board %}{{ r.empty_board|replace("/", " / ") }}{% elif r.kind == "ats" %}<span class="muted">not found</span>{% endif %}</td>
       <td class="num">{% if r.jobs %}<b>{{ r.jobs }}</b>{% else %}<span class="muted">0</span>{% endif %}</td>
       <td class="small">{% if r.reason %}<span class="{{ 'bad' if r.reason == 'error' }}">{{ titles[r.reason] }}</span>{% if r.detail %}<span class="muted"> · {{ r.detail }}</span>{% endif %}{% endif %}</td>
       <td class="small muted">{{ r.checked }}</td>
@@ -94,13 +94,13 @@
     {% endfor %}
     </tbody>
   </table>
-  <p class="muted small">Сайты и Telegram-каналы, которые не подключены вовсе (закрыты в robots.txt, вакансии собирает скрипт…),
-    перечислены с причинами в <code>docs/sources.md</code>.</p>
+  <p class="muted small">Sites and Telegram channels that are not connected at all (closed in robots.txt, vacancies are collected by a script…)
+    are listed with the reasons in <code>docs/sources.md</code>.</p>
 </details>
 {% endblock %}
 {% block scripts %}
 <script>
-// «Все источники»: свёрнут по умолчанию, состояние помнится; фильтры по виду и результату + поиск
+// "All sources": collapsed by default, the state is remembered; filters by kind and result + search
 const box = document.getElementById('all-sources'), q = document.getElementById('q'), hint = document.getElementById('reason-hint');
 const rows = [...document.querySelectorAll('#sources tbody tr')];
 let kind = '', reason = '';

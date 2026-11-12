@@ -1,4 +1,4 @@
-# Только настройки инструментов: проект не ставится как пакет, зависимости — в requirements*.txt
+# Tool settings only: the project is not installed as a package, dependencies are in requirements*.txt
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -11,7 +11,7 @@ line-length = 120
 extend-exclude = ["cv_out", "reports", "state"]
 
 [tool.ruff.lint]
-# только то, что ловит настоящие ошибки: синтаксис, pyflakes, bugbear
+# only what catches real bugs: syntax, pyflakes, bugbear
 select = ["E9", "F", "B"]
-# raise без from и zip без strict — не ошибки в этом коде
+# raise without from and zip without strict are not bugs in this code
 ignore = ["B904", "B905"]

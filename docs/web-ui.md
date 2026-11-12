@@ -12,25 +12,25 @@ The interface is in Russian.
 
 | Page | What is there |
 |---|---|
-| **Пайплайн** (Pipeline) | A live run: stages with bars, "processing now", sources in progress with seconds, ETA of the stage and the whole run, counters, "what we reject" and "where vacancies come from" charts, an event feed of the whole run with counters on its filters (found / rejected with a reason / source totals), warnings grouped as "🛠 needs action" (a board is gone, a company has no board, a list was cut by a limit), "🐞 code problems" (a response format changed, exceptions) and "🌐 site failures" (HTTP errors, SSL, timeouts — usually pass by themselves). Buttons: run everything (like `run_daily.bat`), vacancies only, mail only, "⏹ Остановить прогон" |
-| **Отчёты** (Reports) | All `reports/jobs_*.html` by date; any opens inside the page, with a link to the Markdown |
-| **Отклики** (Applications) | `reports/applications.html`, an "update mail" button and a "＋ Событие" form (applied / stage / rejected / offer / note) — appends a block to `applications_manual.toml` and rebuilds the page from the mail cache at once. The "✅ откликнулся" button in the report opens the form pre-filled; the vacancy link is remembered and later reports mark it "🔁" |
-| **Резюме** (CV) | A CV for any vacancy: by link (from a report or any) or by text, full or one page; "why these bullets"; the list of built CVs (see [cv.md](cv.md)). Until there is a result, the form takes the whole width |
-| **Письмо** (Cover letter) | A cover letter for a vacancy ("✉️" in the report, a link or pasted text): "short, bulleted" or "full, in paragraphs"; an editable text with a copy button, "why these points", which key skills you lack (see [cv.md](cv.md#cover-letters)) |
-| **Подготовка** (Prep) | For a vacancy ("🎤" in the report, a link, or pasted text for a vacancy without a link): tell-me-about-yourself in English, requirements with proving bullets, gaps, stories for behavioural questions, an HR checklist with the levels.fyi median, questions to the company |
-| **Резюме vs рынок** (CV vs market) | A local ATS checker over the day's vacancies: market technologies and where they are in your CV, vacancy titles vs your headline, bullet hygiene, conclusions |
-| **Навыки** (Skills) | Profile skills with weights and the share of vacancies: on / off, weight (negative is a penalty), your own skills; edits go to `profile_overrides.json` on top of `profile.toml` and apply from the next run |
-| **Источники** (Sources) | Every source of the last run: kind, ATS and slug, how many vacancies, error; **why a source gave no vacancies to the report** (`jobhunter/coverage.py`): request error, marked VERIFY in `companies.txt`, own page without an ATS, board not found (with the date of the next attempt), empty board, no vacancies, none matching in the reports of the last 14 days. The table of all sources is collapsed by default (the state is remembered); filters by kind and by reason, search; the "… without vacancies in the report" badge opens the table with that filter. Telegram channels; freehire queries with name, parameters and counts |
+| **Pipeline** | A live run: stages with bars, "processing now", sources in progress with seconds, ETA of the stage and the whole run, counters, "what we reject" and "where vacancies come from" charts, an event feed of the whole run with counters on its filters (found / rejected with a reason / source totals), warnings grouped as "🛠 needs action" (a board is gone, a company has no board, a list was cut by a limit), "🐞 code problems" (a response format changed, exceptions) and "🌐 site failures" (HTTP errors, SSL, timeouts — usually pass by themselves). Buttons: run everything (like `run_daily.bat`), vacancies only, mail only, "⏹ Stop run" |
+| **Reports** | All `reports/jobs_*.html` by date; any opens inside the page, with a link to the Markdown |
+| **Applications** | `reports/applications.html`, an "update mail" button and a "＋ Event" form (applied / stage / rejected / offer / note) — appends a block to `applications_manual.toml` and rebuilds the page from the mail cache at once. The "✅ applied" button in the report opens the form pre-filled; the vacancy link is remembered and later reports mark it "🔁" |
+| **CV** | A CV for any vacancy: by link (from a report or any) or by text, full or one page; "why these bullets"; the list of built CVs (see [cv.md](cv.md)). Until there is a result, the form takes the whole width |
+| **Cover letter** | A cover letter for a vacancy ("✉️" in the report, a link or pasted text): "short, bulleted" or "full, in paragraphs"; an editable text with a copy button, "why these points", which key skills you lack (see [cv.md](cv.md#cover-letters)) |
+| **Interview prep** | For a vacancy ("🎤" in the report, a link, or pasted text for a vacancy without a link): tell-me-about-yourself in English, requirements with proving bullets, gaps, stories for behavioural questions, an HR checklist with the levels.fyi median, questions to the company |
+| **CV vs market** | A local ATS checker over the day's vacancies: market technologies and where they are in your CV, vacancy titles vs your headline, bullet hygiene, conclusions |
+| **Skills** | Profile skills with weights and the share of vacancies: on / off, weight (negative is a penalty), your own skills; edits go to `profile_overrides.json` on top of `profile.toml` and apply from the next run |
+| **Sources** | Every source of the last run: kind, ATS and slug, how many vacancies, error; **why a source gave no vacancies to the report** (`jobhunter/coverage.py`): request error, marked VERIFY in `companies.txt`, own page without an ATS, board not found (with the date of the next attempt), empty board, no vacancies, none matching in the reports of the last 14 days. The table of all sources is collapsed by default (the state is remembered); filters by kind and by reason, search; the "… without vacancies in the report" badge opens the table with that filter. Telegram channels; freehire queries with name, parameters and counts |
 
-**Skipping stages.** In advance — "без: почты / Telegram / freehire / агрегаторов" checkboxes next to the run
+**Skipping stages.** In advance — "no: mail / Telegram / freehire / aggregators" checkboxes next to the run
 buttons (mail — do not run `applications.py`, the rest are `--no-…` flags for `main.py`; the checkboxes are
-remembered in the browser). On the fly — the "⏭ Пропустить этап" button for the freehire, sources, Telegram, CV and
+remembered in the browser). On the fly — the "⏭ Skip stage" button for the freehire, sources, Telegram, CV and
 mail stages: the UI writes a request to `state/progress_control.json`, the stage loop checks it between steps
 (`progress.skip_requested()`) and stops within a second or two; what was collected goes on, the stage is marked
 "skipped by hand at N of M". On the sources stage the button also aborts requests that are already running
 (`http.cancel`), so a long career page does not hold the run.
 
-**Stopping a run.** "⏹ Остановить прогон" (`POST /api/runs/current/stop`) ends the running script together with its
+**Stopping a run.** "⏹ Stop run" (`POST /api/runs/current/stop`) ends the running script together with its
 child processes and does not start the next script in the queue (in "run everything" — mail, then vacancies).
 What this run collected is lost; the reports of the previous run stay.
 
@@ -39,7 +39,7 @@ does not stop it, but **restarting or closing the server interrupts a running ru
 nothing is running. Only one run at a time — the UI knows it even if the run was started from a terminal or a
 scheduler (checked via `state/progress.json` and whether the process is alive). Output goes to `last_run.log`.
 
-**Speed.** "Резюме vs рынок" and "Навыки" are computed in the background when the server starts and after each
+**Speed.** "CV vs market" and "Skills" are computed in the background when the server starts and after each
 run and kept in `state/web_cache.json` (keyed by the modification time of vacancies, CVs and letters): after a
 restart every tab opens in a fraction of a second. In "Skills" the cache is per pattern: changing a weight does not
 recompute, a new skill is counted alone. `JOBHUNTER_NO_WARM=1` turns the background computation off.

@@ -33,7 +33,7 @@ summary — until it fits. The file is `…_1p.pdf`.
 
 ## How to build
 
-- **"📄 CV" / "1 стр." buttons in the HTML report** next to every vacancy: open the CV page of the web UI
+- **"📄 CV" / "1 page" buttons in the HTML report** next to every vacancy: open the CV page of the web UI
   (needs `python -m web`) and build at once. The vacancy is looked up by link in `state/jobs/<report date>.json`,
   so it works for old reports too.
 - **The CV page** (`/cv`): a link to any vacancy or pasted text. A link not in the reports is read from the page
@@ -64,7 +64,7 @@ Automatic CVs during a run (`cvgen.auto_build`: new vacancies with Fit ≥ `auto
 
 ## Cover letters
 
-`jobhunter/cover_letter.py`, the "Письмо" page of the web UI (`/cover`, API `POST /api/cover`) and the "✉️" button next
+`jobhunter/cover_letter.py`, the "Cover letter" page of the web UI (`/cover`, API `POST /api/cover`) and the "✉️" button next
 to a vacancy in the report. Like the CV, the letter invents nothing: achievements from `[summary]` and soft skills from
 `[cover]` in `cv/base.toml` are ranked against the vacancy (technologies, topics, text similarity) and put into a
 template: who you are → what you bring (hard) → how you work (soft) → honestly, what you have not used → a call to talk.

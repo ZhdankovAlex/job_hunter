@@ -17,7 +17,7 @@ def load_companies(path=config.COMPANIES_FILE):
         score = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
         note = parts[2] if len(parts) > 2 else ""
         key = norm_name(name)
-        # дубликаты (компания в двух группах списка) — оставляем больший приоритет
+        # duplicates (a company in two groups of the list) — keep the higher priority
         if key not in companies or score > companies[key].score:
             companies[key] = Company(name, score, note)
     return list(companies.values())
@@ -27,10 +27,10 @@ _CYRILLIC_LOOKALIKES = str.maketrans("аеорсухкмтвнАЕОРСУХКМ
 
 
 def slug_candidates(name):
-    """Эвристические slug'и: 'Grafana Labs' -> grafanalabs, grafana-labs, grafana."""
+    """Heuristic slugs: 'Grafana Labs' -> grafanalabs, grafana-labs, grafana."""
     out = []
     base = re.sub(r"\(.*?\)", "", name)
-    if re.search(r"[A-Za-z]", base):  # «Acme.аi» с кириллической «а»: кириллические двойники латинских букв
+    if re.search(r"[A-Za-z]", base):  # "Acme.аi" with a Cyrillic "а": Cyrillic look-alikes of Latin letters
         base = base.translate(_CYRILLIC_LOOKALIKES)
     for variant in base.split("/"):
         tokens = re.findall(r"[a-z0-9]+", variant.lower())

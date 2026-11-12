@@ -1,1 +1,1 @@
-"""Локальный веб-интерфейс job-hunter (FastAPI): python -m web."""
+"""Local job-hunter web UI (FastAPI): python -m web."""

@@ -2,7 +2,7 @@
 
 [← README](../README.md)
 
-The "Резюме vs рынок" page of the web UI (`/market`, API `GET /api/market`), code — `jobhunter/market_check.py`.
+The "CV vs market" page of the web UI (`/market`, API `GET /api/market`), code — `jobhunter/market_check.py`.
 A local ATS checker: the CV is compared not with an abstract list of skills but with the matching vacancies of a
 specific day (`state/jobs/<date>.json`, the archive of every report with texts).
 

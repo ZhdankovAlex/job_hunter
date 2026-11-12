@@ -1,4 +1,5 @@
-"""Telegram-каналы: разбор постов каждого формата и метка вакансии. Посты выдуманные, но в вёрстке каналов."""
+"""Telegram channels: parsing posts of each format and the vacancy label. The posts are made up, but follow the
+channels' layout; most channels are Russian-language, so the post samples are in Russian."""
 from datetime import datetime, timezone
 
 import pytest
@@ -42,7 +43,7 @@ def test_af_job_board_collection():
 
 
 def test_habr_digest():
-    # как в канале: ссылка оборачивает «Должность в Компания»
+    # as in the channel: a link wraps "<Title> в <Company>"
     raw = ('Вакансии в бэкенде.<br/><br/><a href="https://u.habr.com/abc" target="_blank">Python-разработчик в Acme</a>.'
            ' Москва. Можно удаленно.<br/><br/><a href="https://u.habr.com/def">Go-разработчик в Beta</a>. Варшава.'
            "<br/>#remote")
@@ -82,7 +83,7 @@ def test_jtbl_domain_instead_of_company():
     raw = ("<b>Python Developer в Fintech</b><br/>#python #remote<br/>Требования: Python, Kafka<br/>"
            "Локация: 📍удалённо из любой точки мира<br/>Контакт для отклика: @fintech_hr")
     (job,) = parse("jtbl_vacancy", raw)
-    assert job.company == "Fintech (компания не названа)"
+    assert job.company == "Fintech (company not named)"
     assert job.location == "Remote worldwide" and job.contact == "@fintech_hr"
 
 
@@ -111,7 +112,7 @@ def test_pythonrabota_and_telegraph():
 
 
 def test_offer_inside():
-    # как в канале: ссылка оборачивает жирную должность, « в Компания» — отдельным <b>
+    # as in the channel: a link wraps the bold title, " в <Company>" is a separate <b>
     raw = ('<a href="https://jobs.lever.co/acme/1" target="_blank"><b>Python Engineer</b></a><b> в Acme</b><br/><br/>'
            '<tg-emoji emoji-id="1"><i class="emoji" style="x"><b>🤩</b></i></tg-emoji> Где угодно<br/><br/>Делают платежи')
     (job,) = parse("JobOfferInside", raw)
@@ -124,7 +125,7 @@ def test_hiddengurus_needs_company():
            "🌍 Формат: Удалённо (РФ)<br/>📩 Отклик: @acme_hr")
     (job,) = parse("hiddengurus", raw)
     assert job.company == "Acme" and job.salary == "4000–5000 $" and job.contact == "@acme_hr"
-    assert "Россия" in job.location
+    assert "Russia" in job.location
     assert parse("hiddengurus", "<b>Как копить на пенсию</b><br/>Статья") == []
 
 
@@ -135,8 +136,8 @@ def test_opento_digest():
     a, b = parse("opento_dev", raw)
     assert (a.title, a.company, a.location) == ("Senior Python Developer", "Acme", "Remote, Europe")
     assert a.salary.startswith("Salary: €5000") and a.url == "https://wantapply.com/a?x=1&utm=tg"
-    assert (b.title, b.company) == ("Middle+ / Senior Backend Engineer", "Beta")  # «/» в должности
-    assert not a.full_text  # дайджест: в посте только строка о вакансии
+    assert (b.title, b.company) == ("Middle+ / Senior Backend Engineer", "Beta")  # "/" inside the title
+    assert not a.full_text  # a digest: the post has only a line about the vacancy
 
 
 def test_fetch_posts_reads_page_and_cutoff():
@@ -150,7 +151,7 @@ def test_fetch_posts_reads_page_and_cutoff():
 
 
 @pytest.mark.parametrize("location,label", [
-    ("Remote, Poland", "✅"), ("Warsaw, office", "✅ Poland"), ("remote", "❓ remote, регион не указан"),
+    ("Remote, Poland", "✅"), ("Warsaw, office", "✅ Poland"), ("remote", "❓ remote, region not stated"),
 ])
 def test_classify_labels(location, label):
     job = tg.TgJob(channel="c", posted=WHEN, title="Senior Python Developer", company="Acme", location=location,

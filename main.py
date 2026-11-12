@@ -1,4 +1,4 @@
-"""Ежедневный сбор вакансий -> reports/jobs_YYYY-MM-DD.md. Ничего никуда не отправляет."""
+"""Daily vacancy collection -> reports/jobs_YYYY-MM-DD.md. Sends nothing anywhere."""
 import argparse
 import json
 import logging
@@ -25,21 +25,21 @@ from jobhunter.staffing import Blacklist
 from jobhunter import levels, progress
 
 STAGES = [
-    ("companies", "Список компаний"),
-    ("freehire", "freehire.me: поиск"),
-    ("sources", "ATS-борды, агрегаторы, карьерные страницы"),
-    ("filter", "Фильтры и свежесть"),
-    ("freehire_texts", "freehire.me: полные тексты и проверка"),
-    ("sheets", "Отклики: applications_manual.toml и статусы из почты"),
-    ("telegram", "Telegram-каналы"),
-    ("telegram_check", "Проверка Telegram-вакансий"),
-    ("scoring", "Сопоставление с резюме, баллы, зарплаты"),
-    ("cv", "Резюме под вакансии"),
-    ("reports", "Отчёты"),
+    ("companies", "Company list"),
+    ("freehire", "freehire.me: search"),
+    ("sources", "ATS boards, aggregators, career pages"),
+    ("filter", "Filters and freshness"),
+    ("freehire_texts", "freehire.me: full texts and checks"),
+    ("sheets", "Applications: applications_manual.toml and statuses from mail"),
+    ("telegram", "Telegram channels"),
+    ("telegram_check", "Checking Telegram vacancies"),
+    ("scoring", "Matching against the CV, scores, salaries"),
+    ("cv", "CVs for vacancies"),
+    ("reports", "Reports"),
 ]
-SKIPPABLE = {"freehire", "sources", "telegram", "cv"}  # этапы с кнопкой «Пропустить» в веб-интерфейсе
-SOURCES_FILE = config.ROOT / "state" / "sources_latest.json"  # сколько вакансий дал каждый источник
-FREEHIRE_FILE = config.ROOT / "state" / "freehire_latest.json"  # запросы freehire: название, параметры, итог
+SKIPPABLE = {"freehire", "sources", "telegram", "cv"}  # stages with a "Skip" button in the web UI
+SOURCES_FILE = config.ROOT / "state" / "sources_latest.json"  # how many vacancies each source gave
+FREEHIRE_FILE = config.ROOT / "state" / "freehire_latest.json"  # freehire queries: name, parameters, result
 
 log = logging.getLogger("jobhunter")
 
@@ -48,7 +48,7 @@ def setup_logging():
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="replace")
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%Y-%m-%d %H:%M:%S")
-    console = progress.ConsoleHandler(sys.stdout)  # печатает лог над строкой прогресса
+    console = progress.ConsoleHandler(sys.stdout)  # prints the log above the progress line
     console.setFormatter(fmt)
     progress.rotate_errors_log()
     errors = logging.FileHandler(config.ERRORS_LOG, encoding="utf-8")
@@ -60,22 +60,22 @@ def setup_logging():
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--only", help="только эти компании (через запятую)")
-    p.add_argument("--limit", type=int, help="только первые N компаний из списка")
-    p.add_argument("--rediscover", action="store_true", help="заново искать ATS slug для всех компаний")
-    p.add_argument("--no-aggregators", action="store_true", help="пропустить Arbeitnow/RemoteOK/Himalayas")
-    p.add_argument("--no-freehire", action="store_true", help="пропустить freehire.me")
-    p.add_argument("--no-telegram", action="store_true", help="пропустить Telegram-каналы")
-    p.add_argument("--no-applied", action="store_true", help="не сверяться с откликами (applications_manual.toml)")
+    p.add_argument("--only", help="only these companies (comma-separated)")
+    p.add_argument("--limit", type=int, help="only the first N companies of the list")
+    p.add_argument("--rediscover", action="store_true", help="search the ATS slug again for all companies")
+    p.add_argument("--no-aggregators", action="store_true", help="skip Arbeitnow/RemoteOK/Himalayas")
+    p.add_argument("--no-freehire", action="store_true", help="skip freehire.me")
+    p.add_argument("--no-telegram", action="store_true", help="skip Telegram channels")
+    p.add_argument("--no-applied", action="store_true", help="do not check applications (applications_manual.toml)")
     return p.parse_args()
 
 
 def collect(args, companies, http, ats, career_pages=()):
-    """Все источники параллельно; лимит 1 req/s держится по каждому хосту отдельно."""
+    """All sources in parallel; the 1 req/s limit is kept for each host separately."""
     jobs = []
-    track = progress.tracked  # отмечает источник «в работе» на время запроса
-    kinds: dict[str, str] = {}  # источник -> вид: ats / aggregator / site / career_page
-    results: dict[str, dict] = {}  # итог по источнику -> state/sources_latest.json
+    track = progress.tracked  # marks the source as "in work" for the time of the request
+    kinds: dict[str, str] = {}  # source -> kind: ats / aggregator / site / career_page
+    results: dict[str, dict] = {}  # result per source -> state/sources_latest.json
     with ThreadPoolExecutor(max_workers=config.WORKERS) as pool:
         futures = {}
         for c in companies:
@@ -88,15 +88,15 @@ def collect(args, companies, http, ats, career_pages=()):
             for name in sites.enabled_sources():
                 futures[pool.submit(track, name, sites.fetch, name, http)] = name
                 kinds[name] = "site"
-        for company, url, *location in career_pages:  # карьерные страницы без ATS
+        for company, url, *location in career_pages:  # career pages without an ATS
             futures[pool.submit(track, company.name, sites.career_page, http, company, url, *location)] = company.name
             kinds[company.name] = "career_page"
         progress.set_total(len(futures))
         try:
             for done, future in enumerate(as_completed(futures), 1):
-                if progress.skip_requested():  # кнопка «Пропустить»: недоделанные источники отменяются
-                    log.warning("Источники: пропуск по кнопке, обработано %d из %d", done - 1, len(futures))
-                    http_cancel.set()  # идущие запросы обрываются, пул не ждёт долгие карьерные страницы
+                if progress.skip_requested():  # the "Skip" button: unfinished sources are cancelled
+                    log.warning("Sources: skipped with the button, processed %d of %d", done - 1, len(futures))
+                    http_cancel.set()  # running requests are cut, the pool does not wait for slow career pages
                     break
                 name = futures[future]
                 try:
@@ -105,12 +105,12 @@ def collect(args, companies, http, ats, career_pages=()):
                     results[name] = {"kind": kinds[name], "jobs": len(found), "error": ats.failures.get(name, "")}
                     progress.tally("source_kinds", kinds[name], len(found))
                     if found:
-                        progress.event("source", f"{name}: {len(found)} вакансий")
+                        progress.event("source", f"{name}: {len(found)} vacancies")
                 except Exception as e:
-                    log.exception("%s: непредвиденная ошибка — пропущено", name)
+                    log.exception("%s: unexpected error — skipped", name)
                     results[name] = {"kind": kinds[name], "jobs": 0, "error": f"{type(e).__name__}: {e}"[:200]}
                 if done % 50 == 0:
-                    log.info("Обработано источников: %d/%d", done, len(futures))
+                    log.info("Sources processed: %d/%d", done, len(futures))
         finally:
             pool.shutdown(cancel_futures=True)
             http_cancel.clear()
@@ -121,17 +121,17 @@ def collect(args, companies, http, ats, career_pages=()):
     return jobs
 
 
-_REASON_GROUPS = [  # причина отказа -> короткая группа для диаграммы на странице пайплайна
-    (("локация", "on-site", "привязка к стране", "только из России"), "локация"),
-    (("язык", "JVM"), "другой язык"),
-    (("full-time", "AI trainer"), "не full-time"),
-    (("опыт от",), "опыт"),
-    (("старше",), "старая"),
+_REASON_GROUPS = [  # reject reason -> short group for the chart on the pipeline page
+    (("location", "on-site", "tied to country", "Russia only"), "location"),
+    (("language", "JVM"), "other language"),
+    (("full-time", "AI trainer"), "not full-time"),
+    (("experience from",), "experience"),
+    (("older than",), "old"),
 ]
 
 
 def _reason_group(reason: str) -> str:
-    """«основной язык — Go» -> «другой язык»; неизвестная причина — как есть, до двоеточия."""
+    """"primary language — Go" -> "other language"; an unknown reason is kept as is, up to the colon."""
     for needles, group in _REASON_GROUPS:
         if any(n in reason for n in needles):
             return group
@@ -139,30 +139,30 @@ def _reason_group(reason: str) -> str:
 
 
 def save_freehire_queries(fh, settings: dict, jobs: list) -> None:
-    """Запросы freehire последнего прогона -> state/freehire_latest.json (страница «Источники»).
+    """freehire queries of the last run -> state/freehire_latest.json (the "Sources" page).
 
-    По каждому запросу: название из settings.toml, параметры, сколько вакансий на сайте всего
-    и сколько получено (вакансия, найденная несколькими запросами, считается в каждом).
+    For each query: the name from settings.toml, parameters, how many vacancies the site has in total
+    and how many were received (a vacancy found by several queries counts in each).
     """
     got = Counter(q for j in jobs for q in j.extra.get("queries", []))
     rows = [{
         "name": q["name"], "title": q.get("title", q["name"]),
         "params": fh.query_params.get(q["name"], {}),
         "total": fh.totals.get(q["name"]), "fetched": got.get(q["name"], 0),
-        "skipped": q["name"] not in fh.query_params,  # например, релокация выключена
+        "skipped": q["name"] not in fh.query_params,  # for example, relocation is turned off
     } for q in settings.get("queries", [])]
     FREEHIRE_FILE.write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 def load_seen() -> dict[str, str]:
-    """Ключ вакансии -> дата (ISO), когда скрипт увидел её впервые."""
+    """Vacancy key -> date (ISO) when the script first saw it."""
     if config.SEEN_FILE.exists():
         return json.loads(config.SEEN_FILE.read_text(encoding="utf-8"))
     return {}
 
 
 def is_fresh(job, seen: dict[str, str], today: date, max_age_days: int) -> bool:
-    """Опубликована не раньше max_age_days назад; без даты — считаем от первого появления."""
+    """Published no earlier than max_age_days ago; without a date — counted from the first sighting."""
     cutoff = today - timedelta(days=max_age_days)
     if job.posted:
         return job.posted.astimezone(timezone.utc).date() >= cutoff
@@ -171,7 +171,7 @@ def is_fresh(job, seen: dict[str, str], today: date, max_age_days: int) -> bool:
 
 
 def mark_first_seen(jobs, tg_jobs, today, seen):
-    """Виденные вакансии хранятся между запусками; новая = впервые увидена сегодня."""
+    """Seen vacancies are kept between runs; new = first seen today."""
     keyed = [(job, keys.norm_url(job.url)) for job in jobs]
     keyed += [
         (job, f"tg:{keys.company_key(job.company)}|{norm_name(job.title)}") for job in tg_jobs
@@ -189,7 +189,7 @@ def _section_rank(job):
 
 
 def must_report(ats, fetched, matched):
-    """Строки сводки по обязательным компаниям: найдено / прошло фильтры / причина."""
+    """Summary lines for must-report companies: found / passed filters / reason."""
     found = Counter(j.company for j in fetched if j.source in PLATFORMS)
     passed = Counter(j.company for j in matched if j.source in PLATFORMS)
     rows = []
@@ -201,19 +201,19 @@ def must_report(ats, fetched, matched):
         elif override or (entry and entry.get("platform")):
             reason = ""
         elif entry is None:
-            reason = "проверка не завершена: сбой сети или 429 при подборе slug"
+            reason = "check not finished: network failure or 429 while guessing the slug"
         else:
-            reason = "slug не подошёл ни на Greenhouse, ни на Lever, ни на Ashby, ни на Workable"
+            reason = "the slug fits none of Greenhouse, Lever, Ashby, Workable"
             if entry.get("empty_board"):
-                reason += f"; есть только пустой борд {entry['empty_board']}"
-        if reason:  # кэшированное "не найдено" иначе не попадало бы в errors.log каждый день
-            log.warning("%s: ATS-борд недоступен — %s", name, reason)
+                reason += f"; there is only an empty board {entry['empty_board']}"
+        if reason:  # a cached "not found" would otherwise not reach errors.log every day
+            log.warning("%s: ATS board unavailable — %s", name, reason)
         rows.append((name, found[name], passed[name], reason))
     return rows
 
 
 def enrich_from_ats(tg_jobs, ats):
-    """Для постов со ссылкой на Greenhouse/Lever/Ashby/… подтягивает полный текст вакансии с борда."""
+    """For posts with a link to Greenhouse/Lever/Ashby/… fetches the full vacancy text from the board."""
     from jobhunter.models import Company
 
     boards: dict[tuple[str, str], list] = {}
@@ -227,8 +227,8 @@ def enrich_from_ats(tg_jobs, ats):
     for (platform, slug), posts in boards.items():
         try:
             board_jobs = ats._fetch(platform, slug, Company(posts[0].company)) or []
-        except Exception as e:  # сеть, формат — пост останется со статусом ❓
-            log.warning("telegram: не удалось прочитать борд %s/%s (%s)", platform, slug, e)
+        except Exception as e:  # network, format — the post keeps the ❓ status
+            log.warning("telegram: could not read the board %s/%s (%s)", platform, slug, e)
             continue
         by_url = {keys.norm_url(j.url): j for j in board_jobs}
         by_id = {i: j for j in board_jobs for i in keys.url_ids(j.url)}
@@ -244,9 +244,9 @@ def enrich_from_ats(tg_jobs, ats):
     return filled
 
 
-# Сколько НОВЫХ компаний из Telegram-постов без полного текста искать на ATS-бордах за прогон: поиск борда — до
-# десятка запросов на компанию (Workable — раз в 6 с); результат, и «не найдено» тоже, кэшируется в
-# ats_mapping.json, поэтому известные компании в лимит не входят и следующие прогоны идут быстро
+# How many NEW companies from Telegram posts without full text to look up on ATS boards per run: finding a board
+# takes up to ten requests per company (Workable — one per 6 s); the result, "not found" included, is cached in
+# ats_mapping.json, so known companies do not count against the limit and later runs are fast
 TG_BOARD_LOOKUPS = 25
 
 
@@ -254,13 +254,13 @@ def _title_key(title: str) -> str:
     return re.sub(r"[^a-z0-9а-яё]+", " ", title.lower()).strip()
 
 
-_TG_BOARD_CACHE: dict[str, list] = {}  # компания -> вакансии её борда (в пределах прогона)
+_TG_BOARD_CACHE: dict[str, list] = {}  # company -> vacancies of its board (within one run)
 
 
 def _enrich_from_company_boards(tg_jobs, ats, lookups: dict | None = None) -> int:
-    """Пост без полного текста (дайджест со ссылкой на агрегатор, например wantapply.com, — у него защита от
-    ботов) -> ищем борд компании (Greenhouse/Lever/Ashby/Workable) и берём текст вакансии с тем же названием.
-    Так видны требования, которых нет в посте: офис, язык, опыт."""
+    """A post without full text (a digest with a link to an aggregator such as wantapply.com, which blocks
+    bots) -> find the company board (Greenhouse/Lever/Ashby/Workable) and take the vacancy text with the same title.
+    This shows requirements missing from the post: office, language, experience."""
     from jobhunter.models import Company
 
     filled, looked = 0, _TG_BOARD_CACHE
@@ -275,10 +275,10 @@ def _enrich_from_company_boards(tg_jobs, ats, lookups: dict | None = None) -> in
                     continue
                 lookups["new"] += 1
             try:
-                # quiet: «борд не найден» для компании из поста — норма, а не повод что-то делать
+                # quiet: "board not found" for a company from a post is normal, nothing to act on
                 looked[name] = ats.jobs_for(Company(name), quiet=True) or []
-            except Exception as e:  # сеть, формат — пост останется с текстом из Telegram
-                log.warning("telegram: борд %s не прочитан (%s)", name, e)
+            except Exception as e:  # network, format — the post keeps the text from Telegram
+                log.warning("telegram: board %s not read (%s)", name, e)
                 looked[name] = []
         key = _title_key(job.title)
         twin = next((b for b in looked[name] if b.description and _title_key(b.title) == key), None)
@@ -292,7 +292,7 @@ def _enrich_from_company_boards(tg_jobs, ats, lookups: dict | None = None) -> in
 
 
 def merge_duplicates(jobs):
-    """Одна вакансия (компания + название) в нескольких локациях -> одна строка."""
+    """One vacancy (company + title) in several locations -> one row."""
     merged = {}
     for job in jobs:
         key = (keys.company_key(job.company), norm_name(job.title))
@@ -303,7 +303,7 @@ def merge_duplicates(jobs):
         locations = list(dict.fromkeys(
             part.strip() for j in (base, job) for part in j.location.split(";") if part.strip()
         ))
-        # раздел берём от лучшей из локаций: ✅ > 🌍 (подтверждённая раньше) > ❓
+        # the section is taken from the best location: ✅ > 🌍 (confirmed earlier) > ❓
         best = min(base, job, key=_section_rank)
         sources = list(dict.fromkeys([*(base.sources or [base.source]), *(job.sources or [job.source])]))
         extra = base.extra or job.extra
@@ -322,15 +322,15 @@ def main():
     pipeline = progress.Pipeline("main", STAGES, skippable=SKIPPABLE)
     try:
         run(args)
-    except BaseException:  # в том числе Ctrl+C и sys.exit: этап и прогон отмечаются как упавшие
-        log.exception("Прогон прерван")
+    except BaseException:  # Ctrl+C and sys.exit included: the stage and the run are marked as failed
+        log.exception("Run interrupted")
         pipeline.finish(ok=False)
         raise
     pipeline.finish()
 
 
 def run(args):
-    """Весь прогон: сбор, фильтры, Telegram, сопоставление с резюме, отчёты."""
+    """The whole run: collection, filters, Telegram, matching against the CV, reports."""
     today = date.today()
 
     progress.start("companies")
@@ -348,20 +348,20 @@ def run(args):
     fh_jobs = []
     if fh_settings.get("enabled", True) and not args.no_freehire:
         progress.start("freehire")
-        try:  # основной источник идёт первым; отброшенный API параметр останавливает прогон
+        try:  # the main source goes first; a parameter dropped by the API stops the run
             fh_jobs = fh.collect()
         except freehire.IgnoredParamsError as e:
             log.error("%s", e)
             sys.exit(2)
         save_freehire_queries(fh, fh_settings, fh_jobs)
     else:
-        progress.skip("freehire", "отключено")
+        progress.skip("freehire", "turned off")
     ats = AtsClient(http)
-    log.info("Компаний к проверке: %d", len(companies))
+    log.info("Companies to check: %d", len(companies))
     by_name = {c.name: c for c in companies}
     career_pages = []
-    # страницы из settings.toml [career_pages]: компания = ссылка или { url, location, links }. Их выбрали руками,
-    # поэтому читаются и у аутсорса — вакансии такой компании уйдут в приложение «Staffing/outsourcing»
+    # pages from settings.toml [career_pages]: company = link or { url, location, links }. They were picked by hand,
+    # so they are read even for outsourcing companies — such vacancies go to the "Staffing/outsourcing" appendix
     for name, page in geo.S.get("career_pages", {}).items():
         if name in by_name:
             page = page if isinstance(page, dict) else {"url": page}
@@ -376,36 +376,36 @@ def run(args):
     matched, rejected, seen_urls, stale = [], [], set(), 0
     for job in fetched:
         known = scores.get(norm_name(job.company))
-        if known and not job.score:  # вакансия из агрегатора, компания из нашего списка
+        if known and not job.score:  # a vacancy from an aggregator, the company is in our list
             job.score, job.note = known.score, known.note
         key = keys.norm_url(job.url) if job.url else ""
         progress.step(f"{job.company} — {job.title}")
         if key in seen_urls:
-            progress.tally("rejects", "дубль")
+            progress.tally("rejects", "duplicate")
             continue
         if not filters.apply(job):
-            if job.reject:  # роль подходит, но сработало другое правило — покажем в «Отброшено»
+            if job.reject:  # the role fits, but another rule fired — show it in "Rejected"
                 seen_urls.add(key)
                 rejected.append(job)
                 progress.tally("rejects", _reason_group(job.reject))
                 progress.event("reject", f"{job.company} — {job.title}: {job.reject}")
             else:
-                progress.tally("rejects", "не та роль")
+                progress.tally("rejects", "wrong role")
             continue
         seen_urls.add(key)
         priority = keys.company_key(job.company) in geo.PRIORITY_COMPANIES
         if not priority and not is_fresh(job, seen, today, max_age_days):
             stale += 1
-            job.reject = f"старше {max_age_days} дней"
+            job.reject = f"older than {max_age_days} days"
             rejected.append(job)
-            progress.tally("rejects", "старая")
+            progress.tally("rejects", "old")
             continue
         matched.append(job)
-        progress.tally("rejects", "прошла")
+        progress.tally("rejects", "passed")
         progress.event("found", f"{job.company} — {job.title} ({job.location or 'remote'})")
 
-    # freehire: совпавшие с уже найденными (по URL или компании+названию) только помечаем;
-    # для остальных запрашиваем полный текст и проверяем по нему
+    # freehire: those matching already found ones (by URL or company+title) are only marked;
+    # for the rest the full text is requested and checked
     progress.count(matched=len(matched))
     progress.start("freehire_texts")
     by_url = {keys.norm_url(j.url): j for j in matched}
@@ -432,18 +432,18 @@ def run(args):
             progress.tally("rejects", _reason_group(job.reject))
     fh_candidates = fh_candidates[: int(fh_settings.get("descriptions_top", 200))]
     missing_text = [j for j in fh_candidates if not j.extra.get("full_description")]
-    if missing_text:  # поиск уже отдаёт полный текст; дозапрос — только для редких исключений
+    if missing_text:  # the search already gives the full text; an extra request is only for rare exceptions
         fh.fill_descriptions(missing_text)
     fh_described = sum(bool(j.extra.get("full_description")) for j in fh_candidates)
     for job in fh_candidates:
         if freehire.prepare(job):
             fh_added += 1
             matched.append(job)
-            progress.tally("rejects", "прошла")
+            progress.tally("rejects", "passed")
             progress.event("found", f"{job.company} — {job.title} (freehire)")
         else:
             rejected.append(job)
-            progress.tally("rejects", _reason_group(job.reject or "не та роль"))
+            progress.tally("rejects", _reason_group(job.reject or "wrong role"))
     fh_dropped = len(fh_candidates) - fh_added
     fh.diagnose_empty()
 
@@ -452,10 +452,10 @@ def run(args):
 
     progress.start("sheets")
     apps = None if args.no_applied else applied.load_applications()
-    try:  # статусы откликов из почты (локальный кэш) и applications_manual.toml
+    try:  # application statuses from mail (local cache) and applications_manual.toml
         app_index = StatusIndex(apps)
     except Exception:
-        log.exception("Статусы откликов прочитать не удалось — пометок «📬» не будет")
+        log.exception("Could not read application statuses — there will be no \"📬\" marks")
         app_index = None
     fresh = []
     for job in matched:
@@ -465,7 +465,7 @@ def run(args):
             job.applied_status = apps.company_statuses(job.company)
             status = apps.job_status(job)
             if status is not None:
-                job.history_marks.append(f"🔁 на эту вакансию уже был отклик: {status or 'без статуса'}")
+                job.history_marks.append(f"🔁 already applied to this vacancy: {status or 'no status'}")
         fresh.append(job)
     unmerged = len(fresh)
     fresh = merge_duplicates(fresh)
@@ -477,7 +477,7 @@ def run(args):
 
     use_telegram = config.TELEGRAM_ENABLED and config.TELEGRAM_CHANNELS and not args.no_telegram
     if not use_telegram:
-        why = "--no-telegram" if args.no_telegram else "выключено в settings.toml [telegram]"
+        why = "--no-telegram" if args.no_telegram else "turned off in settings.toml [telegram]"
         progress.skip("telegram", why)
         progress.skip("telegram_check", why)
     else:
@@ -487,12 +487,12 @@ def run(args):
     if tg_all is not None:
         progress.start("telegram_check", total=len(tg_all))
     tg_enriched = enrich_from_ats(tg_all or [], ats)
-    lookups = {"new": 0}  # сколько новых компаний уже искали на ATS в этом прогоне (лимит TG_BOARD_LOOKUPS)
-    for job in tg_all or []:  # Telegram: те же проверки по тексту; с таблицами — только пометки
+    lookups = {"new": 0}  # how many new companies were already looked up on ATS in this run (limit TG_BOARD_LOOKUPS)
+    for job in tg_all or []:  # Telegram: the same text checks
         progress.step(f"@{job.channel}: {job.title}")
         verify.check(job, job.text, job.full_text)
-        # пост прошёл по короткому тексту (дайджест со ссылкой на wantapply и т.п.) — берём полный текст с
-        # борда компании и проверяем ещё раз: требования вроде офиса или языка есть только там
+        # the post passed on a short text (a digest with a link to wantapply etc.) — take the full text from
+        # the company board and check again: requirements like office or language are only there
         if not job.reject and not job.full_text and _enrich_from_company_boards([job], ats, lookups):
             tg_enriched += 1
             verify.check(job, job.text, job.full_text)
@@ -501,7 +501,7 @@ def run(args):
             progress.tally("rejects", _reason_group(job.reject))
             progress.event("reject", f"@{job.channel}: {job.company} — {job.title}: {job.reject}")
             continue
-        progress.tally("rejects", "прошла")
+        progress.tally("rejects", "passed")
         progress.event("found", f"@{job.channel}: {job.company} — {job.title}")
         if apps:
             job.applied_status = apps.company_statuses(job.company)
@@ -531,7 +531,7 @@ def run(args):
         job.relevance, job.matched_skills = profile.score(
             job, job.text, job.marks, profile.tg_location_points(job)
         )
-    # зарплаты: пополняем базу вилок и подписываем каждую вакансию (указанная вилка или оценка)
+    # salaries: add to the base of salary ranges and label every vacancy (stated range or estimate)
     salaries = SalaryBase()
     for job in telegram.SALARY_POSTS:
         market = "cis" if job.channel in config.TELEGRAM_CIS_CHANNELS else "global"
@@ -545,13 +545,13 @@ def run(args):
     for job in [*fresh, *(tg_jobs or [])]:
         job.grade = salary_rules.grade(job.title, getattr(job, "description", "") or getattr(job, "text", ""))
         job.salary_note = salaries.describe(job.title, job.salary, job.grade)
-    # медиана по стране вакансии с levels.fyi (кэш на неделю — за прогон единицы запросов)
+    # median for the vacancy country from levels.fyi (cached for a week — a few requests per run)
     market = levels.Levels(http)
     for job in [*fresh, *(tg_jobs or [])]:
         job.levels_note, job.levels_url = market.describe(job.location, getattr(job, "reloc_country", ""))
     market.save()
 
-    # «исходный балл» отброшенных — только навыки и название, без поправок за локацию
+    # the "raw score" of rejected ones — only skills and title, without location adjustments
     unique_rejected = {}
     for job in rejected:
         text = getattr(job, "description", None) or getattr(job, "text", "")
@@ -598,21 +598,21 @@ def run(args):
         "must_report": must_report(ats, fetched, matched),
     }
     config.REPORTS_DIR.mkdir(exist_ok=True)
-    # резюме под новые вакансии с высоким Fit — ссылка «📄 резюме» в HTML-отчёте
+    # CVs for new vacancies with a high Fit — the "📄 CV" link in the HTML report
     if cvgen.AUTO_MAX > 0:
         progress.start("cv")
         cvgen.auto_build([*fresh, *(tg_jobs or [])], today)
     else:
-        progress.skip("cv", "автосборка выключена: резюме — по кнопке в отчёте")
+        progress.skip("cv", "auto-build turned off: CVs are built with the button in the report")
     progress.start("reports")
     out = config.REPORTS_DIR / f"jobs_{today.isoformat()}.md"
     out.write_text(report.render(today, fresh, stats, tg_jobs), encoding="utf-8")
     page = html_report.render(today, fresh, stats, tg_jobs)
     html_out = config.REPORTS_DIR / f"jobs_{today.isoformat()}.html"
     html_out.write_text(page, encoding="utf-8")
-    (config.REPORTS_DIR / "latest.html").write_text(page, encoding="utf-8")  # всегда свежий отчёт по одному адресу
-    # вакансии отчёта с текстом — для резюме под вакансию (cvgen.py, кнопка «📄 CV» в отчёте);
-    # копия по дате — чтобы резюме собиралось и из старых отчётов
+    (config.REPORTS_DIR / "latest.html").write_text(page, encoding="utf-8")  # always the fresh report at one address
+    # report vacancies with their text — for a CV per vacancy (cvgen.py, the "📄 CV" button in the report);
+    # a copy by date — so CVs can be built from older reports too
     jobs_json = json.dumps([
         {"url": j.url or getattr(j, "post_url", ""), "company": j.company, "title": j.title,
          "location": j.location, "text": getattr(j, "description", "") or getattr(j, "text", ""), "fit": j.cv_fit}
@@ -622,7 +622,7 @@ def run(args):
     config.JOBS_ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
     (config.JOBS_ARCHIVE_DIR / f"{today.isoformat()}.json").write_text(jobs_json, encoding="utf-8")
     progress.count(rejected=len(rejected), new_today=sum(j.is_new_today for j in [*fresh, *(tg_jobs or [])]))
-    log.info("Готово: %d новых из %d подходящих -> %s и %s", len(fresh), len(matched), out, html_out)
+    log.info("Done: %d new of %d matching -> %s and %s", len(fresh), len(matched), out, html_out)
 
 
 if __name__ == "__main__":

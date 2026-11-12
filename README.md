@@ -39,7 +39,6 @@ countries, sources — is configured in plain TOML files.
 ## Screenshots
 
 Screenshots are taken on demo data: vacancies are public, applications and the CV are fictional.
-The UI is in Russian.
 
 | | |
 |---|---|
@@ -87,7 +86,7 @@ copy cv\base.example.toml cv\base.toml
 ```
 
 Start the web UI (`http://127.0.0.1:8765/`) and press "run" on the Pipeline page (a running run can be
-skipped stage by stage or stopped entirely with "⏹ Остановить прогон"):
+skipped stage by stage or stopped entirely with "⏹ Stop run"):
 
 ```bash
 .venv\Scripts\python.exe -m web

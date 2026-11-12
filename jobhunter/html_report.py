@@ -1,4 +1,4 @@
-"""HTML-версия отчёта: одна самодостаточная страница с таблицей, фильтрами и сортировкой."""
+"""HTML version of the report: one self-contained page with a table, filters and sorting."""
 from __future__ import annotations
 
 import re
@@ -29,15 +29,15 @@ h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 0; displa
              background: var(--bg); color: var(--fg); font: inherit; }
 .count { color: var(--muted); white-space: nowrap; }
 .wrap { overflow-x: auto; }
-/* основная таблица — своя прокрутка высотой в экран: горизонтальная полоса всегда у нижнего края окна,
-   шапка колонок прилипает; длинные ячейки переносятся, чтобы таблица была уже */
+/* the main table has its own scroll, one screen high: the horizontal bar is always at the bottom of the window,
+   the column header sticks; long cells wrap so the table is narrower */
 .wrap.main-wrap { overflow: auto; max-height: calc(100vh - 64px); border-bottom: 1px solid var(--line); }
 .main-wrap table { margin-top: 0; }
-/* плавающая горизонтальная полоса у нижнего края окна — двигает таблицу, пока таблица на экране */
+/* a floating horizontal bar at the bottom of the window — moves the table while the table is on screen */
 .hscroll { position: fixed; bottom: 0; height: 16px; overflow-x: auto; overflow-y: hidden; z-index: 5;
            background: var(--bg); border-top: 1px solid var(--line); }
 .hscroll div { height: 1px; }
-/* своя горизонтальная полоса таблицы скрыта — её заменяет плавающая .hscroll; вертикальная остаётся */
+/* the table's own horizontal bar is hidden — the floating .hscroll replaces it; the vertical one stays */
 .main-wrap::-webkit-scrollbar { height: 0; width: 10px; } .main-wrap::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; }
 .main-wrap thead th { position: sticky; top: 0; z-index: 1; background: var(--bg); }
 .main-wrap td.small { min-width: 140px; max-width: 280px; }
@@ -73,7 +73,7 @@ function apply() {
     const ok = okMode && (!q || r.textContent.toLowerCase().includes(q));
     r.hidden = !ok; if (ok) shown++;
   }
-  count.textContent = shown + ' из ' + rows.length;
+  count.textContent = shown + ' of ' + rows.length;
 }
 document.querySelectorAll('.bar button').forEach(b => b.addEventListener('click', () => {
   mode = b.dataset.mode;
@@ -88,7 +88,7 @@ document.querySelectorAll('table').forEach(table => {
     const key = tr => tr.children[i].dataset.sort ?? tr.children[i].textContent.trim().toLowerCase();
     [...body.rows].sort((a, b) => {
       const x = key(a), y = key(b), nx = parseFloat(x), ny = parseFloat(y);
-      const cmp = (!isNaN(nx) && !isNaN(ny)) ? nx - ny : String(x).localeCompare(String(y), 'ru');
+      const cmp = (!isNaN(nx) && !isNaN(ny)) ? nx - ny : String(x).localeCompare(String(y), 'en');
       return dir === 'asc' ? cmp : -cmp;
     }).forEach(tr => body.appendChild(tr));
   }));
@@ -100,9 +100,9 @@ document.querySelectorAll('button.copy').forEach(b => b.addEventListener('click'
     const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t);
     t.select(); document.execCommand('copy'); t.remove();
   }
-  const label = b.textContent; b.textContent = '✔ скопировано'; setTimeout(() => b.textContent = label, 1500);
+  const label = b.textContent; b.textContent = '✔ copied'; setTimeout(() => b.textContent = label, 1500);
 }));
-// плавающая горизонтальная полоса: родная полоса таблицы часто за краем экрана
+// floating horizontal bar: the table's native bar is often below the edge of the screen
 (function () {
   const wrap = document.querySelector('.main-wrap');
   if (!wrap) return;
@@ -138,58 +138,58 @@ def _date(job) -> str:
 
 
 def _linkify(text: str) -> str:
-    """Ссылки в уже экранированном тексте пометок делает кликабельными."""
+    """Makes links in the already escaped text of the marks clickable."""
     return re.sub(r"https://t\.me/[\w/]+", lambda m: f'<a href="{m.group(0)}" target="_blank" rel="noopener">{m.group(0)}</a>', text)
 
 
-WEB_URL = "http://127.0.0.1:8765"  # веб-интерфейс (python -m web): сборка резюме по кнопке
+WEB_URL = "http://127.0.0.1:8765"  # web UI (python -m web): builds a CV on a button click
 
 
 def _cv_link(job, day: date) -> str:
-    """Кнопки «📄 CV» и «1 стр.»: страница «Резюме» веб-интерфейса собирает резюме под эту вакансию.
+    """The "📄 CV" and "1 page" buttons: the "CV" page of the web UI builds a CV for this vacancy.
 
-    Ссылка абсолютная — работает и из отчёта, открытого файлом, если запущен python -m web.
-    Если резюме уже собрано автосборкой (cvgen.auto_build), рядом ссылка на него.
+    The link is absolute — it works from a report opened as a file too, if python -m web is running.
+    If a CV was already built automatically (cvgen.auto_build), a link to it is next to them.
     """
     link = _link(job)
     if not link:
         return ""
     query = f"url={quote(link, safe='')}&date={day.isoformat()}&auto=1"
     out = (f' <a class="tag cv" href="{WEB_URL}/cv?{_e(query)}" target="_blank" '
-           f'title="Собрать резюме под эту вакансию (нужен запущенный python -m web)">📄 CV</a>'
+           f'title="Build a CV for this vacancy (needs python -m web running)">📄 CV</a>'
            f'<a class="tag cv" href="{WEB_URL}/cv?{_e(query)}&amp;one_page=1" target="_blank" '
-           f'title="Резюме на одну страницу">1 стр.</a>')
+           f'title="One-page CV">1 page</a>')
     if getattr(job, "cv_file", ""):
-        out += f'<a class="tag" href="../{_e(job.cv_file)}" target="_blank" title="собрано автоматически">📄 готовое</a>'
+        out += f'<a class="tag" href="../{_e(job.cv_file)}" target="_blank" title="built automatically">📄 ready</a>'
     out += (f'<a class="tag cv" href="{WEB_URL}/cover?{_e(query)}" target="_blank" '
-            f'title="Сопроводительное письмо под эту вакансию (стиль — на странице)">✉️</a>')
+            f'title="Cover letter for this vacancy (style — on the page)">✉️</a>')
     out += (f'<a class="tag cv" href="{WEB_URL}/prep?url={quote(link, safe="")}&amp;date={day.isoformat()}" '
-            f'target="_blank" title="Подготовка к интервью: что сказать, истории, вопросы">🎤</a>')
+            f'target="_blank" title="Interview prep: what to say, stories, questions">🎤</a>')
     applied = f"company={quote(job.company or '', safe='')}&title={quote(job.title or '', safe='')}&url={quote(link, safe='')}"
     out += (f'<a class="tag cv" href="{WEB_URL}/applications?{_e(applied)}" target="_blank" '
-            f'title="Записать отклик в applications_manual.toml (форма на странице «Отклики»)">✅ откликнулся</a>')
+            f'title="Record the application in applications_manual.toml (form on the Applications page)">✅ applied</a>')
     return out
 
 
 def _outreach_html(job) -> str:
-    """Строка под вакансией топа: поиск людей в LinkedIn и кнопка «скопировать черновик».
+    """A line under a top vacancy: LinkedIn people search and a "copy draft" button.
 
-    В LinkedIn скрипт не ходит — ссылки открывает и сообщение отправляет пользователь.
+    The script does not visit LinkedIn — the user opens the links and sends the message.
     """
     links = [(label, url) for label, url in outreach.search_links(job.company)]
     if outreach.telegram_contact(job):
-        links.insert(0, ("автор в Telegram", outreach.telegram_contact(job)))
+        links.insert(0, ("author in Telegram", outreach.telegram_contact(job)))
     parts = [f'<a href="{_e(url)}" target="_blank" rel="noopener">🔎 {_e(label)}</a>' for label, url in links]
     msg = outreach.draft(job)
-    parts.append(f'<button class="tag copy" data-msg="{_e(msg)}" title="{_e(msg)}">✉️ рекрутеру</button>')
+    parts.append(f'<button class="tag copy" data-msg="{_e(msg)}" title="{_e(msg)}">✉️ to a recruiter</button>')
     ref = outreach.referral_draft(job)
-    parts.append(f'<button class="tag copy" data-msg="{_e(ref)}" title="Просьба о реферале инженеру компании: '
-                 f'{_e(ref)}">🤝 реферал</button>')
+    parts.append(f'<button class="tag copy" data-msg="{_e(ref)}" title="Referral request to a company engineer: '
+                 f'{_e(ref)}">🤝 referral</button>')
     return f'<div class="reach">{" · ".join(parts)}</div>'
 
 
 def _contacts_html(job) -> str:
-    """Прямые контакты из текста вакансии (почта, Telegram, LinkedIn) — у любой вакансии, где они есть."""
+    """Direct contacts from the vacancy text (email, Telegram, LinkedIn) — for any vacancy that has them."""
     text = getattr(job, "description", "") or getattr(job, "text", "")
     found = outreach.contacts(text, getattr(job, "channel", ""))
     if not found:
@@ -197,27 +197,27 @@ def _contacts_html(job) -> str:
     icons = {"email": "✉", "telegram": "✈", "linkedin": "in"}
     links = [f'<a href="{_e(href)}" target="_blank" rel="noopener">{icons[kind]} {_e(label)}</a>'
              for kind, label, href in found[:4]]
-    return f'<div class="reach" title="контакты из текста вакансии">📇 {" · ".join(links)}</div>'
+    return f'<div class="reach" title="contacts from the vacancy text">📇 {" · ".join(links)}</div>'
 
 
 def _levels(job) -> str:
-    """Вторая строка в колонке зарплаты: медиана по стране с levels.fyi, со ссылкой на источник."""
+    """Second line in the salary column: the country median from levels.fyi, linked to the source."""
     note = getattr(job, "levels_note", "")
     if not note:
         return ""
     return (f'<div class="small"><a href="{_e(job.levels_url)}" target="_blank" rel="noopener" '
-            f'title="Software Engineer, все грейды, total compensation (оклад + бонусы + акции)">📊 {_e(note)}</a></div>')
+            f'title="Software Engineer, all grades, total compensation (base + bonuses + stock)">📊 {_e(note)}</a></div>')
 
 
 def _missing(job) -> str:
-    """Чего не хватает: ключевые навыки, потом nice-to-have."""
+    """What is missing: key skills, then nice-to-have."""
     core = ", ".join(getattr(job, "cv_core_missing", []))
     nice = ", ".join(getattr(job, "cv_nice_missing", []))
     return "; ".join(filter(None, [core, f"nice-to-have: {nice}" if nice else ""])) or "—"
 
 
 def _fit_cell(job) -> str:
-    """Fit % полоской: зелёная от 85, светло-зелёная от 70, жёлтая от 50, красная ниже."""
+    """Fit % as a bar: green from 85, light green from 70, yellow from 50, red below."""
     fit = getattr(job, "cv_fit", -1)
     if fit < 0:
         return '<td data-sort="-1" class="small">—</td>'
@@ -236,27 +236,27 @@ def _table(headers: list[str], rows: list[str], table_id: str = "") -> str:
 
 
 def _applications_html(stats: dict) -> str:
-    """Блок «📬 Отклики» над таблицей: счётчики и кому напомнить о себе (вся история — на странице «Отклики»)."""
+    """The "📬 Applications" block above the table: counters and who to follow up with (full history — on the Applications page)."""
     digest = stats.get("applications")
     if not digest:
         return ""
     c = digest["counts"]
     parts = [f'<div class="warning">⚠️ {_e(digest["warning"])}</div>'] if digest.get("warning") else []
     parts += [
-        '<div class="sub"><b>📬 Отклики:</b> '
-        f"🟢 этапы {c.get('active', 0) + c.get('offer', 0)} · 🟡 ждём ответа {c.get('waiting', 0)} · "
-        f"🟠 отказался сам {c.get('declined', 0)} · 🔴 отказ {c.get('rejected', 0)} — "
-        '<a href="applications.html">все отклики</a></div>'
+        '<div class="sub"><b>📬 Applications:</b> '
+        f"🟢 in stages {c.get('active', 0) + c.get('offer', 0)} · 🟡 waiting for an answer {c.get('waiting', 0)} · "
+        f"🟠 declined by you {c.get('declined', 0)} · 🔴 rejected {c.get('rejected', 0)} — "
+        '<a href="applications.html">all applications</a></div>'
     ]
     if digest["nudge"]:
-        items = "".join(f"<li><b>{_e(company)}</b> — {days} дн. без ответа после этапа; последнее: {_e(subject)}</li>"
+        items = "".join(f"<li><b>{_e(company)}</b> — {days} days without an answer after a stage; last: {_e(subject)}</li>"
                         for company, days, subject in digest["nudge"])
-        parts.append(f'<div class="small"><b>Напомнить о себе:</b><ul>{items}</ul></div>')
+        parts.append(f'<div class="small"><b>Follow up:</b><ul>{items}</ul></div>')
     return "".join(parts)
 
 
 def render(day: date, jobs: list, stats: dict, tg_jobs: list | None = None) -> str:
-    """HTML-страница отчёта. Состав разделов тот же, что в Markdown-отчёте."""
+    """HTML report page. The sections are the same as in the Markdown report."""
     tg = [j for j in (tg_jobs or []) if not j.lang_required and not j.staffing]
     main = [j for j in jobs if not j.lang_required and not j.staffing]
     staffing = [j for j in [*jobs, *(tg_jobs or [])] if j.staffing and not j.lang_required]
@@ -276,10 +276,10 @@ def render(day: date, jobs: list, stats: dict, tg_jobs: list | None = None) -> s
         fit = cv_match.summary(j)
         fit_class = "ok" if j.cv_full else ""
         low_pay = salary.below_min(j)
-        pay_attr = ' class="warn" title="вилка из вакансии ниже порога [salary] min_monthly_eur"' if low_pay else ""
-        tags = ('<span class="tag new">новое</span>' if is_new else "") + ('<span class="tag top">топ</span>' if is_top else "")
-        score = getattr(j, "score", 0)  # приоритет компании из companies.txt
-        roots = f' <span class="tag" title="приоритет компании (companies.txt)">{"★" * score}</span>' if score else ""
+        pay_attr = ' class="warn" title="the range in the vacancy is below the [salary] min_monthly_eur threshold"' if low_pay else ""
+        tags = ('<span class="tag new">new</span>' if is_new else "") + ('<span class="tag top">top</span>' if is_top else "")
+        score = getattr(j, "score", 0)  # company priority from companies.txt
+        roots = f' <span class="tag" title="company priority (companies.txt)">{"★" * score}</span>' if score else ""
         status_class = "ok" if status.startswith("✅") else "warn"
         contact = f' <span class="small">{_e(j.contact)}</span>' if getattr(j, "contact", "") and not j.url else ""
         rows.append(
@@ -337,39 +337,39 @@ def render(day: date, jobs: list, stats: dict, tg_jobs: list | None = None) -> s
     ]
 
     parts = [
-        "<!doctype html>", '<html lang="ru"><head><meta charset="utf-8">',
+        "<!doctype html>", '<html lang="en"><head><meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        f"<title>Вакансии {day.isoformat()}</title><style>{_CSS}</style></head><body>",
-        f"<h1>Вакансии за {day.isoformat()}</h1>",
-        f'<div class="sub">Всего {len(rows)} · новых {new_count} · в топе {len(top_ids)} · '
-        f"✅ {ok_count} · 🌍 {reloc_count} · ❓ {check_count} · ранее отказ {len(refused)} · отброшено фильтрами {len(rejected)}</div>",
+        f"<title>Vacancies {day.isoformat()}</title><style>{_CSS}</style></head><body>",
+        f"<h1>Vacancies for {day.isoformat()}</h1>",
+        f'<div class="sub">Total {len(rows)} · new {new_count} · in the top {len(top_ids)} · '
+        f"✅ {ok_count} · 🌍 {reloc_count} · ❓ {check_count} · rejected before {len(refused)} · rejected by filters {len(rejected)}</div>",
         _applications_html(stats),
         '<div class="bar">',
-        f'<button data-mode="all" class="on">Все ({len(rows)})</button>',
-        f'<button data-mode="new">🆕 Новое ({new_count})</button>',
-        f'<button data-mode="top">⭐ Топ ({len(top_ids)})</button>',
-        (f'<button data-mode="prio" title="компании с приоритетом 1–3 в companies.txt">★ Приоритетные ({prio_count})</button>'
+        f'<button data-mode="all" class="on">All ({len(rows)})</button>',
+        f'<button data-mode="new">🆕 New ({new_count})</button>',
+        f'<button data-mode="top">⭐ Top ({len(top_ids)})</button>',
+        (f'<button data-mode="prio" title="companies with priority 1–3 in companies.txt">★ Priority ({prio_count})</button>'
          if prio_count else ""),
-        f'<button data-mode="ok">✅ Подтверждено ({ok_count})</button>',
+        f'<button data-mode="ok">✅ Confirmed ({ok_count})</button>',
         f'<button data-mode="fit80">Fit ≥ 80% ({fit80_count})</button>',
-        f'<button data-mode="fit">✔ Полное соответствие ({fit_count})</button>',
-        (f'<button data-mode="pay" title="Только вакансии, где в тексте указана вилка с верхней границей от {pay_min} '
-         f'EUR/мес; оценка по базе и levels.fyi не считаются">💶 Вилка ≥ {pay_min / 1000:g}k ({pay_count})</button>' if pay_min else ""),
-        f'<button data-mode="reloc">🌍 Релокация ({reloc_count})</button>',
-        f'<button data-mode="check">❓ Проверить ({check_count})</button>',
-        '<input id="q" type="search" placeholder="Поиск: компания, роль, навык, локация…">',
+        f'<button data-mode="fit">✔ Full match ({fit_count})</button>',
+        (f'<button data-mode="pay" title="Only vacancies whose text states a range with an upper bound of at least {pay_min} '
+         f'EUR/month; the base estimate and levels.fyi do not count">💶 Range ≥ {pay_min / 1000:g}k ({pay_count})</button>' if pay_min else ""),
+        f'<button data-mode="reloc">🌍 Relocation ({reloc_count})</button>',
+        f'<button data-mode="check">❓ Check ({check_count})</button>',
+        '<input id="q" type="search" placeholder="Search: company, role, skill, location…">',
         '<span class="count" id="count"></span></div>',
-        _table(["Категория", "Балл", "Fit %", "Грейд", "Компания", "Вакансия", "Локация", "Статус", "Зарплата, EUR/мес", "Дата", "Источник",
-                "Соответствие резюме", "Не хватает", "Пометки"],
+        _table(["Category", "Score", "Fit %", "Grade", "Company", "Vacancy", "Location", "Status", "Salary, EUR/month", "Date", "Source",
+                "Match with the CV", "Missing", "Marks"],
                rows, "main"),
     ]
     if refused_rows:
-        parts += [f"<details><summary><h2>Ранее отказ — {len(refused_rows)}</h2></summary>",
-                  _table(["Компания", "Вакансия", "Локация", "Дата", "Отклики"], refused_rows), "</details>"]
+        parts += [f"<details><summary><h2>Rejected before — {len(refused_rows)}</h2></summary>",
+                  _table(["Company", "Vacancy", "Location", "Date", "Applications"], refused_rows), "</details>"]
     if rejected_rows:
-        parts += [f"<details><summary><h2>Отброшено фильтрами — {len(rejected)} (показано {len(rejected_rows)})</h2></summary>",
-                  '<div class="small">Полный список — state/rejected_latest.tsv</div>',
-                  _table(["Исх. балл", "Компания", "Вакансия", "Причина", "Цитата", "Источник"], rejected_rows), "</details>"]
+        parts += [f"<details><summary><h2>Rejected by filters — {len(rejected)} (shown {len(rejected_rows)})</h2></summary>",
+                  '<div class="small">Full list — state/rejected_latest.tsv</div>',
+                  _table(["Raw score", "Company", "Vacancy", "Reason", "Quote", "Source"], rejected_rows), "</details>"]
     gaps = report.skill_gaps(main, tg)
     if gaps["total"]:
         nice, total = dict(gaps["nice"]), gaps["total"]
@@ -379,11 +379,11 @@ def render(day: date, jobs: list, stats: dict, tg_jobs: list | None = None) -> s
             extra_cell = f"{extra} ({round(100 * extra / total)}%)" if extra else "—"
             gap_rows.append(f'<tr><td>{_e(name)}</td><td class="n">{n} ({round(100 * n / total)}%)</td>'
                             f'<td class="n">{extra_cell}</td></tr>')
-        parts += [f"<details><summary><h2>📊 Каких навыков чаще всего не хватает — по {gaps['total']} подходящим "
-                  "вакансиям (Backend, ML / AI)</h2></summary>",
-                  _table(["Навык", "Ключевой (нет в резюме)", "Nice-to-have"], gap_rows), "</details>"]
+        parts += [f"<details><summary><h2>📊 Skills missing most often — over {gaps['total']} fitting "
+                  "vacancies (Backend, ML / AI)</h2></summary>",
+                  _table(["Skill", "Key (not in the CV)", "Nice-to-have"], gap_rows), "</details>"]
     if staffing_rows:
         parts += [f"<details><summary><h2>Staffing / outsourcing — {len(staffing_rows)}</h2></summary>",
-                  _table(["Компания", "Вакансия", "Локация", "Причина"], staffing_rows), "</details>"]
+                  _table(["Company", "Vacancy", "Location", "Reason"], staffing_rows), "</details>"]
     parts += [f"<script>{_JS}</script></body></html>"]
     return "\n".join(parts)

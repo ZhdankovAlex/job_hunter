@@ -1,10 +1,10 @@
-"""Проверка вакансии по полному тексту (verify.check): скрыть, оштрафовать или отметить для ручной проверки."""
+"""Checking a vacancy by its full text (verify.check): hide it, add a penalty or mark it for a manual check."""
 import pytest
 
 from jobhunter import verify
 from jobhunter.models import Job
 
-# достаточно длинное описание, чтобы текст считался полным (MIN_TEXT_CHARS)
+# a description long enough for the text to count as full (MIN_TEXT_CHARS)
 BODY = " We build a payments platform with Python, FastAPI, PostgreSQL and Kafka." * 12
 
 
@@ -17,9 +17,9 @@ def check(text, location="Remote", title="Senior Python Developer", full=True):
 
 @pytest.mark.parametrize("text,location,reason", [
     ("This role is onsite in our Berlin office 5 days a week.", "Berlin", verify.ONSITE_REASON),
-    ("You must be authorized to work in the United States.", "Remote", "привязка к стране"),
+    ("You must be authorized to work in the United States.", "Remote", "tied to country"),
     ("Requirements: strong Java and Spring Boot experience.", "Remote", "JVM / Spring"),
-    ("Удалённая работа только из России. Python, Django.", "Удалённо", "удалёнка только из России"),
+    ("Удалённая работа только из России. Python, Django.", "Удалённо", "remote from Russia only"),
     ("Train AI models as a freelance AI trainer, paid per task.", "Remote", "AI trainer"),
 ], ids=["onsite", "us-work-authorization", "jvm", "russia-only", "ai-trainer"])
 def test_rejects(text, location, reason):
@@ -46,9 +46,9 @@ def test_experience_is_a_penalty_not_a_reject(years, penalty):
 
 def test_short_text_needs_manual_check():
     job = check("Python", full=True)
-    assert job.manual_check == "текст вакансии недоступен"
+    assert job.manual_check == "vacancy text unavailable"
 
 
 def test_remote_without_region_needs_manual_check():
     job = check(BODY)
-    assert job.manual_check.startswith("регион remote не указан")
+    assert job.manual_check.startswith("remote region stated")

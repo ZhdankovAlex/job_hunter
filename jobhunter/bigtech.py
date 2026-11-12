@@ -1,9 +1,9 @@
-"""Карьерные сайты крупных компаний: Microsoft, Workday-сайты (NVIDIA, Salesforce…), Oracle, Amazon.
+"""Career sites of big companies: Microsoft, Workday sites (NVIDIA, Salesforce…), Oracle, Amazon.
 
-У всех открытый JSON-поиск, которым пользуется сам сайт; robots.txt проверяет Http, лимит —
-1 запрос в секунду на хост. Поиск по словам из settings.toml [bigtech].queries; полный текст
-открывается только для вакансий, прошедших фильтр по названию, не больше details_per_company
-на компанию — сначала домашняя страна ([home]) и remote, потом самые свежие (релокацию видно только по тексту).
+All have an open JSON search the site itself uses; Http checks robots.txt, the limit is
+1 request per second per host. The search uses words from settings.toml [bigtech].queries; the full text
+is opened only for vacancies that passed the title filter, at most details_per_company
+per company — home country ([home]) and remote first, then the freshest (relocation is visible only in the text).
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ DETAILS_PER_COMPANY = int(SETTINGS.get("details_per_company", 60))
 
 
 def _priority(location: str, posted) -> tuple:
-    """Порядок открытия вакансий: домашняя страна, remote, Европа, остальное; внутри — свежие первыми."""
+    """Order of opening vacancies: home country, remote, Europe, the rest; within each — freshest first."""
     if c.HOME_RX.search(location):
         rank = 0
     elif c.REMOTE_RX.search(location):
@@ -39,13 +39,13 @@ def _priority(location: str, posted) -> tuple:
 
 
 def _pick(cards: dict) -> list:
-    """Карточки, которые стоит открыть: подходящее название, не больше DETAILS_PER_COMPANY."""
+    """Cards worth opening: a fitting title, at most DETAILS_PER_COMPANY."""
     good = [card for card in cards.values() if filters.title_candidate(card["title"])]
     good.sort(key=lambda card: _priority(card["location"], card["posted"]))
     return good[:DETAILS_PER_COMPANY]
 
 
-# --- Microsoft: apply.careers.microsoft.com (Eightfold, /api/pcsx разрешён в robots.txt) ---
+# --- Microsoft: apply.careers.microsoft.com (Eightfold, /api/pcsx is allowed in robots.txt) ---
 
 _MS = "https://apply.careers.microsoft.com"
 
@@ -87,7 +87,7 @@ def microsoft(http: Http) -> Iterator[Job]:
         )
 
 
-# --- Workday: {tenant}.wdN.myworkdayjobs.com, поиск — POST /wday/cxs/{tenant}/{site}/jobs ---
+# --- Workday: {tenant}.wdN.myworkdayjobs.com, search — POST /wday/cxs/{tenant}/{site}/jobs ---
 
 _POSTED_RX = re.compile(r"posted\s+(today|yesterday|(\d+)\+?\s+days?\s+ago)", re.I)
 
@@ -102,7 +102,7 @@ def _workday_posted(text: str):
 
 
 def workday(company: str, host: str, tenant: str, site: str):
-    """Источник для одного Workday-сайта."""
+    """Source for one Workday site."""
     base = f"https://{host}.myworkdayjobs.com"
     api = f"{base}/wday/cxs/{tenant}/{site}"
 
@@ -144,7 +144,7 @@ def workday(company: str, host: str, tenant: str, site: str):
     return fetch
 
 
-# --- Oracle: Oracle Recruiting Cloud (hcmRestApi), сайт CX_45001 ------------------------
+# --- Oracle: Oracle Recruiting Cloud (hcmRestApi), site CX_45001 ------------------------
 
 _ORACLE = "https://eeho.fa.us2.oraclecloud.com/hcmRestApi/resources/latest"
 _ORACLE_SITE = "CX_45001"
@@ -193,7 +193,7 @@ def oracle(http: Http) -> Iterator[Job]:
         )
 
 
-# --- Amazon: amazon.jobs/en/search.json — полный текст сразу в ответе поиска ---------------
+# --- Amazon: amazon.jobs/en/search.json — the full text comes right in the search response ---------
 
 def amazon(http: Http) -> Iterator[Job]:
     seen = set()

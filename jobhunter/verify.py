@@ -1,13 +1,13 @@
-"""Проверка вакансии по полному тексту: локация, опыт, стек, вид работы.
+"""Checking a vacancy by its full text: location, experience, stack, kind of work.
 
-Метка локации у источника ненадёжна («Spain only» при тексте «In-person in our
-Chennai office»), поэтому окончательный статус ставится по тексту вакансии:
+A source's location label is unreliable ("Spain only" with the text "In-person in our
+Chennai office"), so the final status is set by the vacancy text:
 
-* job.reject / job.reject_quote — вакансия скрывается, причина попадает в раздел
-  «Отброшено фильтрами»;
-* job.manual_check — статус ❓: текст недоступен или регион remote не подтверждён;
-  такие вакансии не попадают в «Топ для разбора»;
-* job.penalties — штрафы к баллу (уровень, опыт, роль, язык).
+* job.reject / job.reject_quote — the vacancy is hidden, the reason goes to the
+  "Rejected by filters" section;
+* job.manual_check — status ❓: the text is unavailable or the remote region is not confirmed;
+  such vacancies do not get into "Top to review";
+* job.penalties — penalties to the score (level, experience, role, language).
 """
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ import re
 from . import config as c
 from . import filters, geo
 
-MIN_TEXT_CHARS = 400  # короче — считаем, что текста вакансии нет
-ONSITE_REASON = f"on-site вне {c.HOME_COUNTRY}" if c.HOME_COUNTRY else "on-site"
-# remote только из России («на территории РФ») — как «US only» для русскоязычных источников:
-# settings.toml [filters].hide_russia_only = true скрывает такие вакансии
+MIN_TEXT_CHARS = 400  # shorter — we assume there is no vacancy text
+ONSITE_REASON = f"on-site outside {c.HOME_COUNTRY}" if c.HOME_COUNTRY else "on-site"
+# remote from Russia only ("на территории РФ") — like "US only" for Russian-language sources:
+# settings.toml [filters].hide_russia_only = true hides such vacancies
 HIDE_RUSSIA_ONLY = bool(geo.S.get("filters", {}).get("hide_russia_only", False))
 
 _SENTENCE_RX = re.compile(r"[^\n.!?;•]+")
@@ -46,7 +46,7 @@ _COUNTRIES = (
 _FOREIGN_PLACE_RX = re.compile(rf"\b(?:{_CITIES})\b|(?<![\w.])(?:{_COUNTRIES})(?![\w])")
 _HOME_OR_OPEN_RX = re.compile(c.HOME_RX.pattern + r"|\beurope\b|\bemea\b|\bcet\b|anywhere|any country|worldwide", re.I)
 
-# Фразы «работа из офиса»; "hybrid" — только в значении формата работы, не "hybrid cloud"
+# "work from the office" phrases; "hybrid" — only as a work format, not "hybrid cloud"
 _ONSITE_RX = re.compile(
     r"\bin[\s-]person\b|\bon[\s-]?site\b|\bin (?:the|our) (?:[\w-]+ ){0,2}offices?\b|\boffice[\s-]based\b|"
     r"\bdays? (?:a|per|each) week (?:in|at|from) (?:the|our) (?:[\w-]+ )?office|"
@@ -62,7 +62,7 @@ _CITY_WORKPLACE_RX = re.compile(
     rf"\b(?:role|position|job) is (?:based |located )?in (?:the |our )?(?P<d>{_CITIES})\b)"
 )
 _ABOUT_YOU_RX = re.compile(r"\b(?:you|your|candidates?|role|position|must|required|expected|this job)\b", re.I)
-# Смягчители: офис упомянут, но приходить не обязательно
+# Softeners: the office is mentioned, but coming in is optional
 _SOFTENER_RX = re.compile(
     r"optional|not (?:required|mandatory|necessary)|no (?:need|requirement|obligation|expectation)|"
     r"if you (?:want|prefer|like|wish|choose|live)|option(?:ally)? to|can also|(?:or|and) (?:fully |100% )?remote|"
@@ -82,7 +82,7 @@ _RESIDENCY_RX = re.compile(
     r"eligible to work in|authori[sz]ed to work in|work authori[sz]ation (?:in|for)",
     re.I,
 )
-# Текст подтверждает remote без привязки к стране
+# The text confirms remote without a tie to a country
 _REMOTE_ANYWHERE_RX = re.compile(
     r"work(?:ing)? from anywhere|anywhere in (?:the )?(?:world|europe|emea)|remote(?:ly)? (?:with)?in (?:europe|emea)|"
     r"across (?:europe|emea)|fully distributed|globally distributed|world[\s-]?wide|location[\s-]agnostic|"
@@ -100,7 +100,7 @@ _EXPERIENCE_CONTEXT_RX = re.compile(
     r"разработ|коммерческ|в роли|работы", re.I
 )
 _NOT_A_JOB_RX = re.compile(
-    # «annotation» само по себе — не разметка (аннотации PDF, type annotations в Python)
+    # "annotation" by itself is not data labelling (PDF annotations, type annotations in Python)
     r"\bai trainer\b|train AI systems|per[\s-]task\b|output[\s-]based|\bannotators?\b|"
     r"data annotation|annotation (?:tasks?|work|projects?|jobs?)|data label", re.I
 )
@@ -127,7 +127,7 @@ _CORE_TITLE_RX = re.compile(r"back[\s-]?end|software|б[эе]к[\s-]?енд", re
 
 
 def quote(text: str, start: int, end: int, max_words: int = 12) -> str:
-    """Цитата не длиннее max_words слов вокруг фрагмента text[start:end]."""
+    """A quote of at most max_words words around the fragment text[start:end]."""
     before = text[:start].split()[-(max_words // 3):]
     phrase = text[start:end].split()
     after = text[end:].split()[: max(0, max_words - len(before) - len(phrase))]
@@ -135,12 +135,12 @@ def quote(text: str, start: int, end: int, max_words: int = 12) -> str:
 
 
 def core_text(text: str) -> str:
-    """Текст вакансии без строки навыков, которую скрипт дописывает сам."""
+    """Vacancy text without the skills line the script appends itself."""
     return _SKILLS_LINE_RX.sub("", text or "").strip()
 
 
 def label_kind(location: str, title: str) -> str:
-    """'home' (домашняя страна) | 'broad' (Worldwide/Europe/EMEA/CIS…) | 'bare' (просто Remote или страна)."""
+    """'home' (home country) | 'broad' (Worldwide/Europe/EMEA/CIS…) | 'bare' (just Remote or a country)."""
     if c.HOME_RX.search(f"{location} {title}"):
         return "home"
     if c.BROAD_RX.search(location) or c.TITLE_BROAD_RX.search(title):
@@ -149,7 +149,7 @@ def label_kind(location: str, title: str) -> str:
 
 
 def _onsite(text: str, home_label: bool) -> tuple[int, int] | None:
-    """Позиция фразы об обязательной работе из офиса вне домашней страны либо None."""
+    """Position of a phrase about mandatory office work outside the home country, or None."""
     for m in _SENTENCE_RX.finditer(text):
         sentence, offset = m.group(), m.start()
         if c.HOME_RX.search(sentence) or _SOFTENER_RX.search(sentence):
@@ -160,7 +160,7 @@ def _onsite(text: str, home_label: bool) -> tuple[int, int] | None:
         hit = _ONSITE_RX.search(sentence)
         if not hit:
             continue
-        # у вакансии в домашней стране «on-site» допустим — мешает только чужой город рядом
+        # for a vacancy in the home country "on-site" is fine — only another city next to it is a problem
         if home_label and not _FOREIGN_PLACE_RX.search(sentence):
             continue
         return offset + hit.start(), offset + hit.end()
@@ -168,7 +168,7 @@ def _onsite(text: str, home_label: bool) -> tuple[int, int] | None:
 
 
 def _residency(text: str) -> tuple[int, int] | None:
-    """«must be based in / right to work in <чужая страна>» либо None."""
+    """"must be based in / right to work in <another country>", or None."""
     for m in _RESIDENCY_RX.finditer(text):
         window = text[m.end(): m.end() + 90]
         place = _FOREIGN_PLACE_RX.search(window)
@@ -178,7 +178,7 @@ def _residency(text: str) -> tuple[int, int] | None:
 
 
 def _years(text: str) -> tuple[int, tuple[int, int]] | None:
-    """Наибольшее требование по годам опыта и его позиция в тексте."""
+    """The largest years-of-experience requirement and its position in the text."""
     best = None
     for m in _YEARS_RX.finditer(text):
         n = int(next(g for g in m.groups() if g))
@@ -190,7 +190,7 @@ def _years(text: str) -> tuple[int, tuple[int, int]] | None:
 
 
 def _required_language(title: str, text: str) -> tuple[int, int] | None:
-    """Другой язык заявлен обязательным, а Python в тексте почти не упоминается."""
+    """Another language is stated as required, and Python is hardly mentioned in the text."""
     if c.PYTHON_RX.search(title) or len(c.PYTHON_RX.findall(text)) > 1:
         return None
     for m in _SENTENCE_RX.finditer(text):
@@ -200,7 +200,7 @@ def _required_language(title: str, text: str) -> tuple[int, int] | None:
     return None
 
 
-# remote / работа только из России: «удалённо на территории РФ», «гражданство РФ»
+# remote / work from Russia only: "удалённо на территории РФ", "гражданство РФ" (Russian vacancy texts)
 _RU_ONLY_RX = re.compile(
     r"(?:территори\w*|пределах|находит\w*|проживани\w*|гражданств\w*|резидент\w*|только из|только в)\s+"
     r"(?:в\s+)?(?:РФ|России|Российской|Москв|Санкт|СПб)",
@@ -210,16 +210,16 @@ ABROAD_OK_RX = re.compile(r"за пределами (?:РФ|России)|из �
 
 
 def ru_only(text):
-    """Работа возможна только из России (и не сказано, что можно из-за рубежа)."""
+    """Work is possible only from Russia (and it does not say work from abroad is fine)."""
     return bool(_RU_ONLY_RX.search(text)) and not ABROAD_OK_RX.search(text)
 
 
 
 def check(job, text: str, full_text: bool) -> None:
-    """Проставляет job.reject / job.manual_check / job.penalties по тексту вакансии.
+    """Sets job.reject / job.manual_check / job.penalties from the vacancy text.
 
-    job — Job или TgJob; text — описание; full_text — описание получено целиком
-    (для источников, которые отдают только превью, — False).
+    job — Job or TgJob; text — the description; full_text — the description was received in full
+    (False for sources that give only a preview).
     """
     title, location = job.title, job.location or ""
     body = core_text(text)
@@ -231,24 +231,24 @@ def check(job, text: str, full_text: bool) -> None:
         job.reject = reason
         job.reject_quote = quote(source, *span) if span else ""
 
-    # --- remote только из России (settings.toml [filters].hide_russia_only)
+    # --- remote from Russia only (settings.toml [filters].hide_russia_only)
     m = _RU_ONLY_RX.search(body) if HIDE_RUSSIA_ONLY else None
     if m and not ABROAD_OK_RX.search(body):
-        return reject("удалёнка только из России", m.span())
+        return reject("remote from Russia only", m.span())
 
-    # --- вид работы
+    # --- kind of work
     m = _NOT_A_JOB_RX.search(f"{title}\n{body}")
     if m:
-        return reject("AI trainer / сдельная разметка", m.span(), f"{title}\n{body}")
+        return reject("AI trainer / piecework data labelling", m.span(), f"{title}\n{body}")
 
-    # --- локация по тексту
-    # вакансия с релокацией в целевую страну: офис там — это ожидаемо, а не причина отказа
+    # --- location by the text
+    # a vacancy with relocation to the target country: an office there is expected, not a reason to reject
     relocation = getattr(job, "reloc_type", "") in (geo.RELOCATION, geo.UNCONFIRMED)
     span = None if relocation else _onsite(body, home_label=(kind == "home"))
     if span and geo.RELOCATION_ENABLED:
-        # «Cyprus — Onsite, employment contract with relocation support»: офис в другой стране + переезд
-        # за счёт работодателя — вакансия для 🌍, а не отказ (даже если источник пометил её remote).
-        # Страна — сначала из названия («… - Relocation to Cyprus»), потом из текста.
+        # "Cyprus — Onsite, employment contract with relocation support": an office in another country + a move
+        # paid by the employer — a vacancy for 🌍, not a reject (even if the source labelled it remote).
+        # The country is taken from the title first ("… - Relocation to Cyprus"), then from the text.
         reloc_quote = geo.relocation_quote(body)
         if reloc_quote and not any(rx.search(f"{location} {title}") for rx in geo.EXCLUDE_RX):
             job.reloc_type, job.reloc_quote = geo.RELOCATION, reloc_quote
@@ -258,45 +258,45 @@ def check(job, text: str, full_text: bool) -> None:
         return reject(ONSITE_REASON, span)
     span = None if relocation else _residency(body)
     if span and kind != "home":
-        return reject("привязка к стране: нужно жить / иметь право работать в другой стране", span)
+        return reject("tied to country: you must live / have the right to work in another country", span)
 
-    # --- опыт
+    # --- experience
     experience = (getattr(job, "extra", None) or {}).get("enrichment", {}).get("experience_years_min") or 0
     years = _years(body)
-    # от 8 лет — не приговор: вакансия остаётся, но со штрафом (ниже в списках, не в топе)
+    # 8+ years is not a verdict: the vacancy stays, but with a penalty (lower in the lists, not in the top)
     if (years and years[0] >= 8) or experience >= 8:
         job.penalties.append("experience_8")
     elif experience == 7 or (years and years[0] == 7):
         job.penalties.append("experience_7")
 
-    # --- стек
+    # --- stack
     lang = filters.language_mismatch_text(title, body)
     if lang in HIDE_LANGUAGES:
         rx = c.TITLE_LANGS.get(lang) or c.OTHER_LANGS.get(lang)
         m = rx.search(f"{title}\n{body}") if rx else None
-        return reject(f"основной язык — {lang}", m.span() if m else None, f"{title}\n{body}")
+        return reject(f"primary language — {lang}", m.span() if m else None, f"{title}\n{body}")
     m = c.JVM_SPRING_RX.search(body)
     if m:
-        return reject("JVM / Spring в требованиях", m.span())
+        return reject("JVM / Spring in the requirements", m.span())
     span = _required_language(title, body)
     if span:
-        return reject("обязательный язык не Python", span)
+        return reject("required language is not Python", span)
     if lang:
         job.penalties.append("language")
 
-    # --- штрафы за уровень и роль
+    # --- penalties for level and role
     if _LEVEL_RX.search(title):
         job.penalties.append("level")
     if _ROLE_PENALTY_RX.search(title) and not _CORE_TITLE_RX.search(title):
         job.penalties.append("role")
-    # название «Software Engineer», а по тексту — Terraform, Kubernetes, on-call и инциденты
+    # the title says "Software Engineer", but the text is about Terraform, Kubernetes, on-call and incidents
     ops = len(_OPS_TEXT_RX.findall(body))
     product = len(_PRODUCT_TEXT_RX.findall(body))
     if ops >= 6 and ops >= 2 * max(product, 1):
         job.penalties.append("ops_heavy")
 
-    # --- статус
+    # --- status
     if not has_text:
-        job.manual_check = "текст вакансии недоступен"
+        job.manual_check = "vacancy text unavailable"
     elif kind == "bare" and not getattr(job, "reloc_type", "") and not _REMOTE_ANYWHERE_RX.search(body):
-        job.manual_check = "регион remote не указан ни в метке, ни в тексте"
+        job.manual_check = "remote region stated neither in the label nor in the text"

@@ -1,8 +1,8 @@
-# job-hunter в контейнере: веб-интерфейс + скрипты. Код и данные — с хоста (volume в docker-compose.yml),
-# в образе только Python-зависимости и Chromium для PDF-резюме.
+# job-hunter in a container: web UI + scripts. Code and data come from the host (volume in docker-compose.yml),
+# the image has only the Python dependencies and Chromium for PDF CVs.
 FROM python:3.11-slim
 
-# Chromium — PDF-резюме (cvgen), шрифты: Liberation Sans по метрикам совпадает с Arial из шаблона резюме
+# Chromium — PDF CVs (cvgen), fonts: Liberation Sans has the same metrics as Arial from the CV template
 RUN apt-get update \
     && apt-get install -y --no-install-recommends chromium fonts-liberation fonts-dejavu-core tzdata \
     && rm -rf /var/lib/apt/lists/*

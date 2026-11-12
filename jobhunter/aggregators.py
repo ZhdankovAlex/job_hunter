@@ -1,4 +1,4 @@
-"""Открытые агрегаторы с публичным API: Arbeitnow, Remote OK, Himalayas."""
+"""Open aggregators with a public API: Arbeitnow, Remote OK, Himalayas."""
 import logging
 
 from . import config
@@ -15,7 +15,7 @@ def _json(http, url, params=None):
     try:
         return r.json()
     except ValueError as e:
-        raise FetchError(f"{url}: не JSON ({e})")
+        raise FetchError(f"{url}: not JSON ({e})")
 
 
 def arbeitnow(http):
@@ -41,7 +41,7 @@ def remoteok(http):
     data = _json(http, "https://remoteok.com/api")
     for j in data:
         if not isinstance(j, dict) or "position" not in j:
-            continue  # первый элемент — юридическая заметка
+            continue  # the first element is a legal notice
         yield Job(
             company=j.get("company", ""),
             title=j.get("position", ""),
@@ -85,11 +85,11 @@ SOURCES = {"arbeitnow": arbeitnow, "remoteok": remoteok, "himalayas": himalayas}
 
 
 def fetch(name, http):
-    """Собирает что успеет; при ошибке возвращает уже полученное."""
+    """Collects what it can; on an error returns what it already has."""
     jobs = []
     try:
         for job in SOURCES[name](http):
             jobs.append(job)
     except FetchError as e:
-        log.warning("агрегатор %s: %s", name, e)
+        log.warning("aggregator %s: %s", name, e)
     return jobs

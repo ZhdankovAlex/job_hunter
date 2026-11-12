@@ -1,4 +1,4 @@
-"""freehire.me: запись API -> Job, дешёвый предфильтр и разметка локации."""
+"""freehire.me: API record -> Job, cheap prefilter and location labelling."""
 import pytest
 
 from jobhunter import freehire
@@ -20,7 +20,7 @@ def raw(**over):
 
 def test_to_job():
     job = freehire.to_job(raw(), "A")
-    assert job.url == "https://acme.example/jobs/1?ref=x"  # utm-метки убраны, остальное — нет
+    assert job.url == "https://acme.example/jobs/1?ref=x"  # utm tags removed, the rest kept
     assert job.location == "PL (remote)" and job.remote is True
     assert job.salary == "EUR 60,000–80,000 / year"
     assert job.description.endswith("Skills: Python, PostgreSQL")
@@ -35,8 +35,8 @@ def test_short_description_is_marked_as_preview():
 @pytest.mark.parametrize("over,passes,reason", [
     ({}, True, ""),
     ({"title": "Frontend Developer"}, False, ""),
-    ({"enrichment": {"category": "backend", "experience_years_min": 10}}, False, "опыт от 10 лет"),
-    ({"enrichment": {"category": "backend", "employment_type": "part_time"}}, False, "не full-time"),
+    ({"enrichment": {"category": "backend", "experience_years_min": 10}}, False, "experience from 10 years"),
+    ({"enrichment": {"category": "backend", "employment_type": "part_time"}}, False, "not full-time"),
     ({"enrichment": {"category": "sales"}}, False, ""),
 ], ids=["ok", "frontend", "experience", "part-time", "not-engineering"])
 def test_prefilter(over, passes, reason):
@@ -55,11 +55,11 @@ def test_prepare_relocation_from_enrichment():
                               description="Office in Madrid." + TEXT,
                               enrichment={"category": "backend", "relocation": "supported"}), "A")
     assert freehire.prepare(job), job.reject
-    assert (job.reloc_country, job.reloc_type) == ("Spain", "релокация")
+    assert (job.reloc_country, job.reloc_type) == ("Spain", "relocation")
 
 
 def test_prepare_rejects_foreign_onsite():
     job = freehire.to_job(raw(countries=["US"], work_mode="onsite", location="Austin, TX",
                               description="Onsite in Austin." + TEXT, enrichment={"category": "backend"}), "A")
     assert not freehire.prepare(job)
-    assert job.reject.startswith("локация")
+    assert job.reject.startswith("location")

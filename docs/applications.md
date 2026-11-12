@@ -31,7 +31,7 @@ last letter dates, days of silence, the history and a link to the last letter.
   A new application after a rejection is a new process: its status counts only events after the first new
   application — with stages there it is 🟢, otherwise 🟡; stages before it (for another vacancy) do not count.
 - **Cancelled meetings.** A series of stage letters (pick a slot → confirmation → reminder) that ends with a
-  cancellation is not a stage in the funnel; in the history such a letter is "отмена". A "Meeting cancelled" after a
+  cancellation is not a stage in the funnel; in the history such a letter is "cancelled". A "Meeting cancelled" after a
   rejection does not make it look like silence after a stage. Events written by hand in `applications_manual.toml`
   are never dropped from such a series.
 - **Days of silence** — only for live processes (waiting, stages going); empty for rejections and offers; 0, not a
@@ -50,14 +50,14 @@ last letter dates, days of silence, the history and a link to the last letter.
   corporate domain), the letter text ("…position with Acme", "interest in Acme's … role"), iCIMS / Recruitee senders
   ("Acme @ icims"). A LinkedIn InMail titled "JOB OFFER AT …" is a recruiter writing first, not an offer; an offer
   mentioned in the process description of an application confirmation is not an offer either.
-- Letters that look like an application / stage / rejection but have no clear company go to "Компания не
-  определена" at the bottom. Fix company spelling in `settings.toml` → `[mail.company_aliases]`; for letters where the
+- Letters that look like an application / stage / rejection but have no clear company go to "Company not
+  identified" at the bottom. Fix company spelling in `settings.toml` → `[mail.company_aliases]`; for letters where the
   company is nowhere, bind a sender (part of the name or address, also searched in the signature) in
   `[mail.sender_company]`; your own name in senders goes to `[mail].own_names`.
-- **Funnel.** Above the table: "Отклики N → скрининг → техничка → финал → оффер" — how many companies got at least to
+- **Funnel.** Above the table: "Applied N → screening → technical → final → offer" — how many companies got at least to
   each stage, % of applications. The stage is the furthest one by the words in letter subjects and notes (tech /
   live coding / take-home / with the team — tech interview; final / CTO / founder — final; other invitations —
-  screening; cancelled meetings and "next: …" plans do not count). The "Дошли до" column shows it per company; links
+  screening; cancelled meetings and "next: …" plans do not count). The "Got to" column shows it per company; links
   open in a new tab.
 - The mail cache is `state/mail_cache.json`, the token — `state/gmail_token.json` (`state/` is in `.gitignore`).
 

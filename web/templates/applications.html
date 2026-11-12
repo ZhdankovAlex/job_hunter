@@ -1,29 +1,29 @@
 {% extends "base.html" %}
-{% block title %}Отклики · job-hunter{% endblock %}
+{% block title %}Applications · job-hunter{% endblock %}
 {% block main_class %}full{% endblock %}
 {% block content %}
 <div class="toolbar">
   <span class="muted"></span>
-  <button id="toggle-form">＋ Событие</button>
-  <button data-run="applications" class="primary">↻ Обновить почту</button>
+  <button id="toggle-form">＋ Event</button>
+  <button data-run="applications" class="primary">↻ Update mail</button>
 </div>
 <form class="event-form" id="event-form" {{ '' if prefill.company or prefill.url else 'hidden' }}>
-  <input name="company" list="companies" placeholder="Компания" required value="{{ prefill.company }}">
+  <input name="company" list="companies" placeholder="Company" required value="{{ prefill.company }}">
   <datalist id="companies">{% for c in companies %}<option value="{{ c }}">{% endfor %}</datalist>
   <select name="kind">
     {% for k, label in kinds.items() %}<option value="{{ k }}" {{ 'selected' if k == (prefill.kind or 'applied') }}>{{ label }}</option>{% endfor %}
   </select>
-  <input name="note" placeholder="Что произошло" value="{{ ('Отклик: ' ~ prefill.title) if prefill.title else '' }}" class="grow">
-  <input name="url" placeholder="Ссылка на вакансию (необязательно)" value="{{ prefill.url }}" class="grow">
-  <input name="source" placeholder="Откуда: сайт, LinkedIn, Telegram…">
-  <input name="date" type="datetime-local" title="по умолчанию — сейчас">
-  <button class="primary" type="submit">Сохранить</button>
+  <input name="note" placeholder="What happened" value="{{ ('Applied: ' ~ prefill.title) if prefill.title else '' }}" class="grow">
+  <input name="url" placeholder="Link to the vacancy (optional)" value="{{ prefill.url }}" class="grow">
+  <input name="source" placeholder="Where: site, LinkedIn, Telegram…">
+  <input name="date" type="datetime-local" title="now by default">
+  <button class="primary" type="submit">Save</button>
   <span class="small muted" id="event-status"></span>
 </form>
 {% if exists %}
-<iframe class="viewer" id="viewer" src="/files/reports/applications.html" title="Отклики"></iframe>
+<iframe class="viewer" id="viewer" src="/files/reports/applications.html" title="Applications"></iframe>
 {% else %}
-<p class="page muted">Страницы откликов ещё нет — нажмите «Обновить почту».</p>
+<p class="page muted">There is no applications page yet — click "Update mail".</p>
 {% endif %}
 {% endblock %}
 {% block scripts %}
@@ -37,8 +37,8 @@ form.addEventListener('submit', async e => {
     url: form.url.value.trim(), source: form.source.value.trim(), date: form.date.value || null };
   const r = await fetch('/api/applications/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const d = await r.json();
-  if (!r.ok) { status.textContent = '⚠️ ' + (typeof d.detail === 'string' ? d.detail : 'проверьте поля'); return; }
-  status.textContent = `✔ записано: ${d.company}, ${form.kind.selectedOptions[0].text.toLowerCase()}`;
+  if (!r.ok) { status.textContent = '⚠️ ' + (typeof d.detail === 'string' ? d.detail : 'check the fields'); return; }
+  status.textContent = `✔ saved: ${d.company}, ${form.kind.selectedOptions[0].text.toLowerCase()}`;
   form.note.value = ''; form.url.value = '';
   const viewer = document.getElementById('viewer');
   if (viewer) viewer.src = viewer.src.split('?')[0] + '?t=' + Date.now(); else location.reload();
@@ -46,10 +46,10 @@ form.addEventListener('submit', async e => {
 document.querySelector('[data-run]').addEventListener('click', async e => {
   const b = e.currentTarget;
   b.disabled = true;
-  b.textContent = 'Читаю почту…';
+  b.textContent = 'Reading mail…';
   const r = await fetch('/api/runs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ kind: 'applications' }) });
-  if (!r.ok) { alert((await r.json()).detail); b.disabled = false; b.textContent = '↻ Обновить почту'; return; }
+  if (!r.ok) { alert((await r.json()).detail); b.disabled = false; b.textContent = '↻ Update mail'; return; }
   const timer = setInterval(async () => {
     const d = await (await fetch('/api/progress')).json();
     if (d && !d.busy) { clearInterval(timer); location.reload(); }

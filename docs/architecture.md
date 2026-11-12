@@ -130,7 +130,7 @@ freehire and on an ATS appears once, with the source `freehire + greenhouse`, an
 vacancy was first seen (`state/seen.json`), so old vacancies do not pass as new.
 
 **Rejected vacancies stay visible.** Every rejected vacancy keeps a reason and a quote from the text. They go to
-the "Отброшено фильтрами" section and to `state/rejected_latest.tsv`. If a filter is wrong, it shows, and a
+the "Rejected by filters" section and to `state/rejected_latest.tsv`. If a filter is wrong, it shows, and a
 vacancy does not disappear silently.
 
 More: [pipeline.md](pipeline.md) · [sources.md](sources.md) · [filters.md](filters.md)

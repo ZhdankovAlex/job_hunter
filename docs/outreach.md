@@ -13,8 +13,8 @@ builds links and drafts; you open them and write to the person yourself.
   "… backend engineer" — an engineer you can ask for a referral. If a Telegram post gave an @contact, the link to
   the author goes first.
 - **Drafts up to 300 characters** (the limit of a connection request note); buttons copy them to the clipboard:
-  "✉️ рекрутеру" (to a recruiter) — the role, your pitch, 2–3 matching technologies, where you are based;
-  "🤝 реферал" (referral) — to an engineer at the company: the role, who you are, and that you will send a CV and a
+  "✉️ to a recruiter" — the role, your pitch, 2–3 matching technologies, where you are based;
+  "🤝 referral" — to an engineer at the company: the role, who you are, and that you will send a CV and a
   short summary to make the referral easy. If it does not fit into 300 characters, the technologies go first, then
   the role title.
 

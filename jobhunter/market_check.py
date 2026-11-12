@@ -1,9 +1,9 @@
-"""«Резюме против рынка»: локальный ATS-чекер по вакансиям из отчёта.
+""""CV vs market": a local ATS checker over the vacancies of a report.
 
-Сравнивает резюме не с абстрактным списком навыков, а с подходящими вакансиями конкретного дня
-(state/jobs/<дата>.json): какие технологии рынок требует и есть ли они в PDF-резюме и в базе
-cv/base.toml, как называются вакансии и совпадает ли с этим заголовок резюме, и простая гигиена
-пунктов опыта (цифры, глагол в начале, длина). Ничего никуда не отправляет.
+Compares the CV not with an abstract skill list but with the fitting vacancies of a specific day
+(state/jobs/<date>.json): which technologies the market requires and whether they are in the PDF CV and in the
+cv/base.toml base, what the vacancies are called and whether the CV headline matches, and simple hygiene
+of experience bullets (numbers, a verb at the start, length). Sends nothing anywhere.
 """
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ from pathlib import Path
 
 from . import config, cv_match, geo
 
-# какие вакансии считать «своим рынком»: роль по названию
+# which vacancies count as "your market": the role by its title
 RELEVANT_TITLE_RX = re.compile(r"back[\s-]?end|python|software engineer|software developer|platform engineer|"
                                r"\bai engineer|\bml engineer|llm|full[\s-]?stack", re.I)
-# как называются роли: фраза -> регулярка по названию вакансии
+# what roles are called: phrase -> regex over the vacancy title
 TITLE_PHRASES = {
     "Backend Engineer": r"back[\s-]?end (?:software )?engineer",
     "Backend Developer": r"back[\s-]?end developer",
@@ -37,18 +37,18 @@ ACTION_VERBS = set("""architected built designed developed reduced cut migrated 
 implemented led rebuilt integrated delivered created improved optimized launched owned raised replaced moved
 scaled wrote set established drove""".split())
 _NUMBER_RX = re.compile(r"\d")
-# слова, по которым резюме «звучит как ИИ» или как пересказ обязанностей (чек-лист из канала @zerotooffer)
+# words that make a CV "sound like AI" or like a list of duties (a checklist from the @zerotooffer channel)
 _STOP_RX = re.compile(r"\b(?:helped|(?<!the )supported|assisted|leveraged|leveraging|utilized|utilizing|various|basic|"
                       r"responsible for|worked on|participated in|spearheaded|cutting-edge|seamless(?:ly)?|"
                       r"robust|synergy|dynamic environment|passionate)\b", re.I)
-SAME_FORM_SHARE = 0.8  # доля пунктов «глагол в начале» — выше: все пункты одной формы
-NUMBERS_PER_JOB_SOFT = 4  # больше пунктов с цифрами на одно место работы — может выглядеть накрученным
-BULLET_WORDS_MAX = 45  # длиннее — пункт читается тяжело, кандидат на сокращение
+SAME_FORM_SHARE = 0.8  # share of "verb at the start" bullets — above it all bullets have one form
+NUMBERS_PER_JOB_SOFT = 4  # more bullets with numbers per workplace may look inflated
+BULLET_WORDS_MAX = 45  # longer — the bullet is hard to read, a candidate for shortening
 TOP_KEYWORDS = 30
 
 
 def _cv_texts() -> tuple[str, str, list[Path]]:
-    """(текст PDF-резюме, текст базы cv/base.toml, пути к PDF) — то же, что читает cv_match."""
+    """(PDF CV text, cv/base.toml base text, paths to the PDFs) — the same that cv_match reads."""
     settings = geo.S.get("cv", {})
     profile = cv_match.CvProfile(settings)
     pdf_text = "\n".join(t for _, t in profile.cvs)
@@ -58,7 +58,7 @@ def _cv_texts() -> tuple[str, str, list[Path]]:
 
 
 def _bullets(base_text: str) -> list[str]:
-    """Пункты опыта из базы, без разметки **жирного**."""
+    """Experience bullets from the base, without **bold** markup."""
     try:
         base = tomllib.loads(base_text)
     except tomllib.TOMLDecodeError:
@@ -68,7 +68,7 @@ def _bullets(base_text: str) -> list[str]:
 
 
 def hygiene(base_text: str, pdfs: list[Path], pdf_text: str) -> dict:
-    """Проверки резюме: страницы PDF, пункты с цифрами / глаголом / короткие, контакты, заголовок."""
+    """CV checks: PDF pages, bullets with numbers / a verb / short ones, contacts, headline."""
     from pypdf import PdfReader
 
     bullets = _bullets(base_text)
@@ -84,7 +84,7 @@ def hygiene(base_text: str, pdfs: list[Path], pdf_text: str) -> dict:
         base = {}
     texts = bullets + [a["text"] for a in base.get("summary", {}).get("achievements", [])]
     stop = sorted({m.group(0).lower() for t in texts for m in _STOP_RX.finditer(t)})
-    # цифры по местам работы: «результат в цифрах» хорошо, но сплошные цифры выглядят накрученными
+    # numbers per workplace: "results in numbers" is good, but numbers everywhere look inflated
     numbers_by_job = {job["company"]: sum(bool(_NUMBER_RX.search(b["text"])) for b in job.get("bullets", [])
                                           if not b.get("generic"))
                       for job in base.get("experience", [])}
@@ -101,20 +101,20 @@ def hygiene(base_text: str, pdfs: list[Path], pdf_text: str) -> dict:
         "contacts": {
             "email": bool(re.search(r"[\w.+-]+@[\w-]+\.\w+", pdf_text)),
             "LinkedIn": "linkedin.com/in/" in pdf_text.lower(),
-            "телефон": bool(re.search(r"\+\d[\d\s()-]{7,}", pdf_text)),
-            "часовой пояс / локация": bool(re.search(r"\b(?:CET|CEST|GMT|UTC|[A-Z]{2,4}T)\b|time zone", pdf_text)
+            "phone": bool(re.search(r"\+\d[\d\s()-]{7,}", pdf_text)),
+            "time zone / location": bool(re.search(r"\b(?:CET|CEST|GMT|UTC|[A-Z]{2,4}T)\b|time zone", pdf_text)
                                            or config.HOME_RX.search(pdf_text)),
         },
     }
 
 
 def analyze(day: str = "") -> dict:
-    """Отчёт «резюме против рынка» по вакансиям дня day (по умолчанию — последнего отчёта).
+    """The "CV vs market" report over the vacancies of the day (by default — of the last report).
 
     Returns:
         {day, total, relevant, fit: {median, share80}, keywords: [...], titles: [...], seniority: [...],
-         headline, hygiene}. keywords: технология, доля вакансий, где она ключевая, где она в резюме
-         ("pdf" — в PDF-резюме, "base" — только в базе, "" — нигде).
+         headline, hygiene}. keywords: technology, share of vacancies where it is key, where it is in the CV
+         ("pdf" — in the PDF CV, "base" — only in the base, "" — nowhere).
     """
     files = sorted(config.JOBS_ARCHIVE_DIR.glob("*.json"))
     path = next((f for f in files if f.stem == day), files[-1] if files else None)
@@ -144,7 +144,7 @@ def analyze(day: str = "") -> dict:
 
     n = len(relevant) or 1
     keywords = [{"name": name, "count": c, "share": round(100 * c / n), "in_cv": where(name),
-                 "partial": cv_match.PARTIAL.get(name, "")}  # AWS: только S3 — есть, но с оговоркой
+                 "partial": cv_match.PARTIAL.get(name, "")}  # AWS: S3 only — present, but with a caveat
                 for name, c in core.most_common(TOP_KEYWORDS)]
     titles = Counter()
     levels = Counter()
@@ -176,10 +176,10 @@ def analyze(day: str = "") -> dict:
 
 
 def advice(report: dict) -> list[str]:
-    """Выводы для страницы: что поправить в резюме, по убыванию пользы."""
+    """Conclusions for the page: what to fix in the CV, most useful first."""
     out = []
-    # названия ролей: честные синонимы бэкенда генератор CV подставляет сам (cvgen.HEADLINE_ROLES),
-    # остальное (AI Engineer, Full Stack, Platform) — не переименование, а другой профиль
+    # role names: the CV generator substitutes honest backend synonyms itself (cvgen.HEADLINE_ROLES),
+    # the rest (AI Engineer, Full Stack, Platform) is not a rename, but a different profile
     synonyms = {"Software Engineer", "Software Developer", "Python Developer", "Python Engineer",
                 "Backend Developer", "Backend Engineer"}
     missing = [t for t in report.get("titles", []) if not t["in_headline"] and t["share"] >= 10]
@@ -187,50 +187,50 @@ def advice(report: dict) -> list[str]:
     other_role = [t for t in missing if t["name"] not in synonyms]
     if same_role:
         top = same_role[0]
-        names = ", ".join(f"«{t['name']}» ({t['share']}%)" for t in same_role)
-        out.append(f"Так же называют твою роль, но в заголовке этого нет: {names}. Рекрутеры и ATS ищут по названию "
-                   f"роли. Поправь заголовок LinkedIn (по нему тебя находят) и базовых PDF, например: «Senior Backend / "
-                   f"{top['name']} | Python · PostgreSQL · …». В резюме по кнопке «📄 CV» это уже делается само: "
-                   "заголовок подстраивается под название вакансии.")
+        names = ", ".join(f'"{t["name"]}" ({t["share"]}%)' for t in same_role)
+        out.append(f"Your role is also called this, but your headline does not say so: {names}. Recruiters and ATS search "
+                   f"by role title. Fix your LinkedIn headline (people find you by it) and the base PDFs, for example: "
+                   f"\"Senior Backend / {top['name']} | Python · PostgreSQL · …\". The \"📄 CV\" button already does this: "
+                   "the headline follows the vacancy title.")
     if other_role:
-        names = ", ".join(f"«{t['name']}» ({t['share']}%)" for t in other_role)
-        out.append(f"Частые, но другие роли: {names}. Переименовываться не нужно. Если есть близкий опыт (например, "
-                   "RAG / LLM для AI-ролей), на бэкенд-позиции в таких командах можно откликаться: генератор CV для "
-                   "AI-вакансий ставит заголовок с LLM / RAG.")
+        names = ", ".join(f'"{t["name"]}" ({t["share"]}%)' for t in other_role)
+        out.append(f"Frequent, but different roles: {names}. No need to rename yourself. If you have related experience "
+                   "(for example, RAG / LLM for AI roles), you can apply to backend positions in such teams: the CV generator "
+                   "puts an LLM / RAG headline for AI vacancies.")
     in_base = [k for k in report.get("keywords", []) if k["in_cv"] == "base" and k["share"] >= 5]
     if in_base:
-        out.append("Есть в базе cv/base.toml, но нет в PDF-резюме: " + ", ".join(
-            f"{k['name']} ({k['share']}%)" for k in in_base) + " — пересоберите базовые резюме (cvgen.py --base …).")
+        out.append("In the cv/base.toml base, but not in the PDF CV: " + ", ".join(
+            f"{k['name']} ({k['share']}%)" for k in in_base) + " — rebuild the base CVs (cvgen.py --base …).")
     gaps = [k for k in report.get("keywords", []) if not k["in_cv"] and k["share"] >= 10]
     if gaps:
-        out.append("Пробелы — требуются часто, а в резюме нет: " + ", ".join(
-            f"{k['name']} ({k['share']}%)" for k in gaps) + ". Это про опыт, не про формулировки: если опыт есть — "
-            "добавьте в базу, если нет — кандидаты на изучение.")
+        out.append("Gaps — often required, but missing from the CV: " + ", ".join(
+            f"{k['name']} ({k['share']}%)" for k in gaps) + ". This is about experience, not wording: if you have it — "
+            "add it to the base, if not — these are candidates to learn.")
     partial = [k for k in report.get("keywords", []) if k["partial"] and k["share"] >= 10]
     if partial:
-        out.append("Есть частично: " + ", ".join(f"{k['name']} — {k['partial']} ({k['share']}%)" for k in partial) + ".")
+        out.append("Partly present: " + ", ".join(f"{k['name']} — {k['partial']} ({k['share']}%)" for k in partial) + ".")
     h = report.get("hygiene", {})
     long_cvs = [name for name, pages in h.get("pages", {}).items() if pages > 1]
     if long_cvs:
-        out.append(f"PDF-резюме больше одной страницы ({', '.join(long_cvs)}). Для западного рынка при 6 годах "
-                   "опыта лучше одна — у кнопки «1 стр.» в отчёте и на странице «Резюме» вариант на страницу.")
+        out.append(f"The PDF CV is longer than one page ({', '.join(long_cvs)}). For the Western market with 6 years "
+                   "of experience one page is better — the \"1 page\" button in the report and on the CV page builds it.")
     if h.get("stop_words"):
-        out.append("Слова, по которым резюме звучит как пересказ обязанностей или как ИИ: "
-                   + ", ".join(f"«{w}»" for w in h["stop_words"]) + " — замените конкретным действием и результатом.")
+        out.append("Words that make the CV sound like a list of duties or like AI: "
+                   + ", ".join(f"\"{w}\"" for w in h["stop_words"]) + " — replace them with a concrete action and result.")
     if h.get("bullets") and h["with_verb"] >= SAME_FORM_SHARE * h["bullets"]:
-        out.append(f"Все пункты одной формы: {h['with_verb']} из {h['bullets']} начинаются с глагола в прошедшем "
-                   "времени. Однообразие выдаёт шаблон (и ИИ) — начните часть пунктов с результата или с проблемы, "
-                   "добавьте пару коротких.")
+        out.append(f"All bullets have one form: {h['with_verb']} of {h['bullets']} start with a past-tense verb. "
+                   "Sameness gives away a template (and AI) — start some bullets with the result or the problem, "
+                   "add a couple of short ones.")
     heavy = [f"{job} ({n})" for job, n in h.get("numbers_by_job", {}).items() if n > NUMBERS_PER_JOB_SOFT]
     if heavy:
-        out.append(f"Цифры почти в каждом пункте: {', '.join(heavy)} пунктов с цифрами. Измеримый результат — сильно, "
-                   "но сплошные цифры могут выглядеть накрученными: оставьте самые весомые, в остальных — масштаб "
-                   "или кто этим пользуется. (Мнения расходятся: часть советов — «цифры везде», часть — «не больше "
-                   "двух-трёх на место работы».)")
+        out.append(f"Numbers in almost every bullet: {', '.join(heavy)} bullets with numbers. A measurable result is strong, "
+                   "but numbers everywhere can look inflated: keep the weightiest, and in the rest show the scale "
+                   "or who uses it. (Opinions differ: some advice says \"numbers everywhere\", some \"no more "
+                   "than two or three per workplace\".)")
     elif h.get("bullets") and h["with_numbers"] < h["bullets"] / 2:
-        out.append(f"Пунктов с измеримым результатом мало: {h['with_numbers']} из {h['bullets']} — где результат "
-                   "есть (время, объём, доля), его стоит показать.")
+        out.append(f"Few bullets with a measurable result: {h['with_numbers']} of {h['bullets']} — where there is a result "
+                   "(time, volume, share), show it.")
     if h.get("long"):
-        out.append(f"Длинные пункты (больше {BULLET_WORDS_MAX} слов): {len(h['long'])} — на них тратят 5 секунд, "
-                   "лучше одна мысль на пункт.")
+        out.append(f"Long bullets (more than {BULLET_WORDS_MAX} words): {len(h['long'])} — readers spend 5 seconds on them, "
+                   "one idea per bullet is better.")
     return out

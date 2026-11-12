@@ -1,4 +1,4 @@
-"""Ключи для сравнения: ссылка на вакансию, ID вакансии в ссылке, название компании, борд ATS по ссылке."""
+"""Keys for comparison: vacancy link, vacancy ID in the link, company name, ATS board from the link."""
 import re
 from urllib.parse import parse_qsl, urlsplit
 
@@ -9,13 +9,13 @@ _ID_PARAMS = {"gh_jid", "jid", "id", "job", "jobid", "job_id", "vacancy"}
 def norm_url(url):
     parts = urlsplit(url.strip())
     host = parts.netloc.lower().removeprefix("www.")
-    # utm-метки отбрасываем, но параметр с ID вакансии — часть адреса
+    # utm tags are dropped, but a parameter with the vacancy ID is part of the address
     ids = sorted(f"{k.lower()}={v}" for k, v in parse_qsl(parts.query) if k.lower() in _ID_PARAMS)
     return host + parts.path.rstrip("/").lower() + ("?" + "&".join(ids) if ids else "")
 
 
 def url_ids(url):
-    """ID вакансии внутри URL (uuid или длинное число) — переживает смену домена."""
+    """Vacancy ID inside the URL (uuid or a long number) — survives a domain change."""
     return {m.lower() for m in _ID_RX.findall(url)}
 
 
@@ -28,14 +28,14 @@ _LEGAL_RX = re.compile(r"(?<!\w)(?:ооо|оао|зао|пао|ао|ип|гк|in
 
 
 def company_key(name):
-    """'ООО Яндекс' -> 'yandex', 'Т-Банк' -> 'tbank': без юр. форм, пунктуации, в латинице."""
+    """'ООО Яндекс' -> 'yandex', 'Т-Банк' -> 'tbank': no legal forms, no punctuation, in Latin letters."""
     text = _LEGAL_RX.sub(" ", name.lower())
     text = "".join(_TRANSLIT.get(ch, ch) for ch in text)
     key = re.sub(r"[^a-z0-9]", "", text).replace("ks", "x")
     return key
 
 
-# Прямая ссылка на борд -> (platform, slug)
+# A direct link to a board -> (platform, slug)
 _ATS_LINK_RXS = (
     ("greenhouse", re.compile(
         r"(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io/(?:embed/job_board(?:/js)?\?for=)?([\w-]+)|"
@@ -54,7 +54,7 @@ _NOT_A_SLUG = {"embed", "jobs", "www", "app", "apply", "boards", "job-boards", "
 
 
 def ats_from_link(url: str) -> tuple[str, str] | None:
-    """(platform, slug), если ссылка ведёт прямо на поддерживаемую ATS."""
+    """(platform, slug) if the link leads straight to a supported ATS."""
     for platform, rx in _ATS_LINK_RXS:
         for m in rx.finditer(url or ""):
             slug = next((g for g in m.groups() if g), "")

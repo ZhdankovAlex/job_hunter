@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
 <link rel="stylesheet" href="/static/app.css?v={{ v }}">
 <script>
-  // до отрисовки, чтобы панель не «прыгала»: свёрнута ли она (выбор пользователя в localStorage)
+  // before rendering, so the panel does not "jump": is it collapsed (the user's choice in localStorage)
   try { if (localStorage.getItem('nav-collapsed') === '1') document.documentElement.classList.add('nav-collapsed'); } catch (e) {}
 </script>
 </head>
@@ -26,8 +26,8 @@
   </nav>
   <div class="sidenav-foot">
     <span class="run-pill" id="run-pill" hidden><i class="pulse"></i><span class="nav-label" id="run-pill-text"></span></span>
-    <button class="nav-toggle" id="nav-toggle" type="button" title="Свернуть / развернуть панель" aria-label="Свернуть / развернуть панель">
-      <span class="nav-ic" aria-hidden="true">«</span><span class="nav-label">Свернуть</span>
+    <button class="nav-toggle" id="nav-toggle" type="button" title="Collapse / expand the panel" aria-label="Collapse / expand the panel">
+      <span class="nav-ic" aria-hidden="true">«</span><span class="nav-label">Collapse</span>
     </button>
   </div>
 </aside>

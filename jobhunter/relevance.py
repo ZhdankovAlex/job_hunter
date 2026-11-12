@@ -1,4 +1,4 @@
-"""Оценка релевантности вакансии профилю из profile.toml (навыки из резюме)."""
+"""Relevance of a vacancy to the profile from profile.toml (skills from the CV)."""
 from __future__ import annotations
 
 import logging
@@ -23,7 +23,7 @@ _OUTSOURCING_RX = re.compile(
     re.I,
 )
 _CYRILLIC_RX = re.compile(r"[а-яё]", re.I)
-# русский язык в требованиях или русскоязычная команда (поправка russian_language в profile.toml)
+# Russian in the requirements or a Russian-speaking team (the russian_language adjustment in profile.toml)
 _RU_SPEAKING_RX = re.compile(
     r"russian[\s-]speak\w*|native russian|fluent (?:in )?russian|russian (?:language )?(?:is )?(?:a )?(?:plus|must|required)|"
     r"(?:knowledge of|speak\w*) russian|русскоязычн\w+|русскоговорящ\w+|на русском языке",
@@ -34,15 +34,15 @@ _LETTER_RX = re.compile(r"[a-zа-яё]", re.I)
 
 @dataclass(frozen=True)
 class Skill:
-    """Навык из резюме: имя для отчёта, вес и шаблон поиска в тексте вакансии."""
+    """A skill from the CV: name for the report, weight and pattern to search in the vacancy text."""
 
     name: str
     weight: int
     rx: re.Pattern
 
 
-# Правки навыков из веб-интерфейса (страница «Навыки») — поверх profile.toml, чтобы не трогать его
-# комментарии: {"skills": {имя: {"weight": N} | {"disabled": true}}, "added": [{name, pattern, weight}]}
+# Skill edits from the web UI (the "Skills" page) — on top of profile.toml, so its comments stay untouched:
+# {"skills": {name: {"weight": N} | {"disabled": true}}, "added": [{name, pattern, weight}]}
 OVERRIDES_FILE = config.ROOT / "profile_overrides.json"
 
 
@@ -61,7 +61,7 @@ def write_overrides(data: dict) -> None:
 
 
 def skill_table(path=config.PROFILE_FILE) -> list[dict]:
-    """Все навыки с учётом правок: name, pattern, base_weight, weight, disabled, added (свой, из интерфейса)."""
+    """All skills with edits applied: name, pattern, base_weight, weight, disabled, added (own, from the UI)."""
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     over = read_overrides()
     rows = []
@@ -77,10 +77,10 @@ def skill_table(path=config.PROFILE_FILE) -> list[dict]:
 
 
 class Profile:
-    """Навыки и поправки к баллу, загруженные из profile.toml (+ правки из profile_overrides.json)."""
+    """Skills and score adjustments loaded from profile.toml (+ edits from profile_overrides.json)."""
 
     def __init__(self, path=config.PROFILE_FILE) -> None:
-        """Читает profile.toml и правки; неверные шаблоны пропускаются с записью в errors.log."""
+        """Reads profile.toml and the edits; invalid patterns are skipped and written to errors.log."""
         data = tomllib.loads(path.read_text(encoding="utf-8"))
         self.weights: dict[str, int] = data.get("scoring", {})
         self.skills: list[Skill] = []
@@ -90,7 +90,7 @@ class Profile:
             try:
                 rx = re.compile(item["pattern"], re.I)
             except re.error as e:
-                log.warning("profile: неверный шаблон навыка %r (%s)", item["name"], e)
+                log.warning("profile: invalid skill pattern %r (%s)", item["name"], e)
                 continue
             self.skills.append(Skill(item["name"], item["weight"], rx))
 
@@ -98,10 +98,10 @@ class Profile:
         return int(self.weights.get(key, 0))
 
     def score(self, job, text: str, marks: list[str], location_points: int) -> tuple[int, list[str]]:
-        """Балл релевантности и совпавшие навыки (по убыванию веса).
+        """Relevance score and matched skills (by weight, descending).
 
-        job — Job или TgJob; text — где искать навыки; marks — уже проставленные
-        пометки (язык и т.п.); location_points — поправка за локацию.
+        job — Job or TgJob; text — where to look for skills; marks — marks already set
+        (language etc.); location_points — location adjustment.
         """
         title = job.title
         full = f"{title}\n{text}"
@@ -141,14 +141,14 @@ class Profile:
             total += self._w("jvm_spring")
         if config.YEARS_8_PLUS_RX.search(full):
             total += self._w("years_8_plus")
-        if any("местный язык желателен" in m for m in marks):
+        if any("local language is a plus" in m for m in marks):
             total += self._w("local_language_nice")
-        if any("не на английском" in m for m in marks) and not in_russian:
+        if any("not in English" in m for m in marks) and not in_russian:
             total += self._w("not_english")
 
         for penalty in getattr(job, "penalties", []):
             total += self._w(f"penalty_{penalty}")
-        # соответствие резюме: полное — вверх, пробелы и несоответствия — вниз
+        # match with the CV: a full one goes up, gaps and mismatches go down
         if getattr(job, "cv_full", False):
             total += self._w("cv_full_match")
         missing = len(getattr(job, "cv_missing", []))
@@ -169,7 +169,7 @@ class Profile:
         return total, [s.name for s in matched]
 
     def base_score(self, job, text: str) -> tuple[int, list[str]]:
-        """Балл только по навыкам и названию роли — без штрафов и поправок за локацию."""
+        """Score only by skills and role title — without penalties and location adjustments."""
         full = f"{job.title}\n{text}"
         matched = sorted((s for s in self.skills if s.rx.search(full)), key=lambda s: -s.weight)
         total = sum(s.weight for s in matched)
@@ -182,7 +182,7 @@ class Profile:
         return total, [s.name for s in matched]
 
     def location_points(self, job) -> int:
-        """Поправка за локацию для вакансии из ATS/агрегатора."""
+        """Location adjustment for a vacancy from an ATS/aggregator."""
         if job.reloc_type == geo.RELOCATION:
             return self._w("location_relocation")
         if job.reloc_type == geo.RESIDENTS_ONLY:
@@ -190,9 +190,9 @@ class Profile:
         if job.reloc_type:
             return self._w("location_country")
         if job.manual_check:
-            return 0  # ❓ локация не подтверждена текстом
+            return 0  # ❓ location not confirmed by the text
         return self._w("location_other_country") if job.location_check else self._w("location_remote_ok")
 
     def tg_location_points(self, job) -> int:
-        """Поправка за локацию для вакансии из Telegram (по её метке)."""
+        """Location adjustment for a vacancy from Telegram (by its label)."""
         return self._w("location_remote_ok") if job.label.startswith("✅") and not job.manual_check else 0

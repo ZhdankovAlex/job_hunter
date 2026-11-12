@@ -1,41 +1,41 @@
 {% extends "base.html" %}
-{% set labels = {"initiative": "инициатива", "early_detection": "заметил раньше других", "pushback": "предложил другое",
-                 "research": "незнакомая тема", "incident": "инцидент", "ownership": "ответственность"} %}
-{% block title %}Подготовка · job-hunter{% endblock %}
+{% set labels = {"initiative": "initiative", "early_detection": "noticed before others", "pushback": "proposed another way",
+                 "research": "unfamiliar topic", "incident": "incident", "ownership": "ownership"} %}
+{% block title %}Interview prep · job-hunter{% endblock %}
 {% block content %}
-<h1>Подготовка к интервью</h1>
+<h1>Interview prep</h1>
 <form method="get" class="add-skill">
-  <input name="url" type="url" placeholder="Ссылка на вакансию — из отчёта или любая" value="{{ url }}" style="flex:1;min-width:320px">
-  <button class="primary" type="submit">🎤 Собрать</button>
+  <input name="url" type="url" placeholder="Link to the vacancy — from a report or any" value="{{ url }}" style="flex:1;min-width:320px">
+  <button class="primary" type="submit">🎤 Build</button>
 </form>
-<p class="muted small">Только факты из <code>cv/base.toml</code> — ничего не придумывается. Истории — раздел <code>[[stories]]</code>
-  там же (черновики: проверь формулировки).</p>
+<p class="muted small">Only facts from <code>cv/base.toml</code> — nothing is invented. Stories come from the <code>[[stories]]</code> section
+  of the same file (drafts: check the wording).</p>
 <details class="card paste-job"{% if form %} open{% endif %}>
-  <summary>Нет ссылки (PDF от рекрутера, переписка) — вставить текст вакансии</summary>
+  <summary>No link (a PDF from a recruiter, correspondence) — paste the vacancy text</summary>
   <form method="post" class="paste-form">
     <div class="row2">
-      <input name="company" placeholder="Компания" value="{{ form.company if form else '' }}">
-      <input name="title" placeholder="Вакансия" value="{{ form.title if form else '' }}">
+      <input name="company" placeholder="Company" value="{{ form.company if form else '' }}">
+      <input name="title" placeholder="Vacancy" value="{{ form.title if form else '' }}">
     </div>
-    <input name="location" placeholder="Локация / формат (необязательно)" value="{{ form.location if form else '' }}">
-    <textarea name="text" rows="8" placeholder="Текст вакансии">{{ form.text if form else '' }}</textarea>
-    <div><button class="primary" type="submit">🎤 Собрать по тексту</button></div>
+    <input name="location" placeholder="Location / format (optional)" value="{{ form.location if form else '' }}">
+    <textarea name="text" rows="8" placeholder="Vacancy text">{{ form.text if form else '' }}</textarea>
+    <div><button class="primary" type="submit">🎤 Build from the text</button></div>
   </form>
 </details>
 {% if error %}<p class="bad">⚠️ {{ error }}</p>{% endif %}
 
 {% if r %}
-<h2 class="sub-h">{{ r.company }} — {{ r.title }} <span class="muted small">Fit {{ r.fit }}%{% if r.url %} · <a href="{{ r.url }}" target="_blank">вакансия ↗</a>{% endif %}</span></h2>
+<h2 class="sub-h">{{ r.company }} — {{ r.title }} <span class="muted small">Fit {{ r.fit }}%{% if r.url %} · <a href="{{ r.url }}" target="_blank">vacancy ↗</a>{% endif %}</span></h2>
 <section class="grid two">
   <div class="card">
-    <h2>Рассказ о себе (черновик, EN)</h2>
+    <h2>About yourself (draft, EN)</h2>
     <p class="pitch">{{ r.pitch }}</p>
-    <p class="muted small">Структура: текущая роль → компания одной фразой → задачи языком вакансии → стек → прошлый опыт короче →
-      вопрос «про что рассказать подробнее». Произнеси вслух 2–3 раза, подстрой под себя.</p>
-    <h2 class="sub-h">Требования, которые у тебя есть</h2>
+    <p class="muted small">Structure: current role → the company in one sentence → tasks in the vacancy's words → stack → past experience, shorter →
+      the question "what should I tell you more about". Say it aloud 2–3 times and adjust it to yourself.</p>
+    <h2 class="sub-h">Requirements you meet</h2>
     <ul class="checks">{% for h in r.have %}<li class="ok">✔ <b>{{ h.tech }}</b> <span class="small muted">— {{ h.proof[:220] }}</span></li>{% endfor %}</ul>
     {% if r.missing or r.mismatch or r.partial %}
-    <h2 class="sub-h">Чего нет — сказать честно и показать близкое</h2>
+    <h2 class="sub-h">What you lack — say so honestly and show what is close</h2>
     <ul class="checks">
       {% for m in r.missing %}<li class="warn">⚠ {{ m }}</li>{% endfor %}
       {% for m in r.partial %}<li class="warn">◐ {{ m }}</li>{% endfor %}
@@ -46,24 +46,24 @@
 
   <div class="col">
     <div class="card">
-      <h2>Поведенческие вопросы → истории</h2>
+      <h2>Behavioural questions → stories</h2>
       <ul class="picks qa">{% for b in r.behavioral %}<li><div>{{ b.question }}</div>
-        <div class="small">{% for s in b.stories %}<span class="chip">{{ s }}</span> {% else %}<span class="muted">подходящей истории нет — подумай заранее</span>{% endfor %}</div></li>{% endfor %}</ul>
+        <div class="small">{% for s in b.stories %}<span class="chip">{{ s }}</span> {% else %}<span class="muted">no fitting story — think of one in advance</span>{% endfor %}</div></li>{% endfor %}</ul>
     </div>
     <div class="card">
-      <h2>Истории ближе всего к вакансии</h2>
+      <h2>Stories closest to the vacancy</h2>
       {% for s in r.stories %}
-      <details {{ 'open' if loop.first }}><summary><b>{{ s.title }}</b>{% if s.draft %} <span class="tag">черновик</span>{% endif %}
+      <details {{ 'open' if loop.first }}><summary><b>{{ s.title }}</b>{% if s.draft %} <span class="tag">draft</span>{% endif %}
         <span class="small muted">{% for q in s.questions %}{{ labels.get(q, q) }}{{ ", " if not loop.last }}{% endfor %}</span></summary>
         <p class="small"><b>Situation.</b> {{ s.situation }}<br><b>Action.</b> {{ s.action }}<br><b>Result.</b> {{ s.result }}</p>
       </details>
       {% endfor %}
     </div>
     <div class="card">
-      <h2>К HR-звонку</h2>
+      <h2>For the HR call</h2>
       <ul class="small">{% for h in r.hr %}<li>{{ h }}</li>{% endfor %}</ul>
-      {% if r.market %}<p class="small">📊 <a href="{{ r.market_url }}" target="_blank">{{ r.market }}</a> — все грейды; senior ближе к 75-му перцентилю.</p>{% endif %}
-      <h2 class="sub-h">Вопросы к ним</h2>
+      {% if r.market %}<p class="small">📊 <a href="{{ r.market_url }}" target="_blank">{{ r.market }}</a> — all grades; senior is closer to the 75th percentile.</p>{% endif %}
+      <h2 class="sub-h">Questions to ask them</h2>
       <ul class="small">{% for q in r.ask %}<li>{{ q }}</li>{% endfor %}</ul>
     </div>
   </div>

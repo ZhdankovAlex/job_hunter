@@ -2,7 +2,7 @@
 
 [← README](../README.md)
 
-The "Подготовка" page of the web UI (`/prep`, API `POST /api/prep`), code — `jobhunter/interview_prep.py`.
+The "Interview prep" page of the web UI (`/prep`, API `POST /api/prep`), code — `jobhunter/interview_prep.py`.
 It opens from the "🎤" button next to a vacancy in the report or by a vacancy link. Everything is built from the
 facts in `cv/base.toml` — nothing is invented:
 

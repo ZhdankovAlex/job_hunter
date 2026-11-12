@@ -1,12 +1,12 @@
-# Список компаний, чьи ATS-борды (Greenhouse, Lever, Ashby, Workable…) опрашиваются каждый прогон.
-# Скопируйте в companies.txt (он в .gitignore) и составьте свой; пока companies.txt нет,
-# программа читает этот файл.
+# Companies whose ATS boards (Greenhouse, Lever, Ashby, Workable…) are checked on every run.
+# Copy to companies.txt (it is in .gitignore) and make your own list; until companies.txt exists,
+# the program reads this file.
 #
-# Формат: Компания | приоритет (0–3) | заметка
-# Строка без "|" — приоритет 0. Строки с "#" игнорируются.
-# Приоритет поднимает вакансии компании в отчёте (profile.toml → company_priority_per_point)
-# и рисует ★ рядом с названием. Если заметка начинается с VERIFY — она попадёт в отчёт.
-# Борд ищется по названию автоматически (slug), найденное кэшируется в ats_mapping.json.
+# Format: Company | priority (0–3) | note
+# A line without "|" has priority 0. Lines starting with "#" are ignored.
+# Priority raises the company's vacancies in the report (profile.toml → company_priority_per_point)
+# and draws ★ next to the name. A note starting with VERIFY goes to the report.
+# The board is found by the name automatically (slug), the result is cached in ats_mapping.json.
 
 GitLab|2|all-remote
 Grafana Labs|2|remote-first

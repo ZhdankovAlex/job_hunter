@@ -1,8 +1,8 @@
-"""Вакансия для резюме по ссылке: из сохранённых отчётов, а если её там нет — со страницы вакансии.
+"""A vacancy for a CV by link: from saved reports, and if it is not there — from the vacancy page.
 
-Страница читается через jobhunter.http (robots.txt, 1 запрос в секунду на хост). Текст берётся из
-разметки JobPosting (JSON-LD), которую отдают большинство ATS и карьерных сайтов, иначе — весь
-текст страницы.
+The page is read through jobhunter.http (robots.txt, 1 request per second per host). The text comes from
+the JobPosting markup (JSON-LD) most ATS and career sites serve, otherwise it is the whole
+page text.
 """
 from __future__ import annotations
 
@@ -19,11 +19,11 @@ _TITLE_RX = re.compile(r"<title[^>]*>(.*?)</title>", re.S | re.I)
 
 
 class VacancyNotFound(Exception):
-    """Вакансию не удалось найти ни в отчётах, ни по ссылке."""
+    """The vacancy was found neither in the reports nor by the link."""
 
 
 def archived(url: str, day: str = "") -> dict | None:
-    """Вакансия из state/jobs/<дата>.json (сначала указанная дата, потом остальные от новых к старым)."""
+    """A vacancy from state/jobs/<date>.json (the given date first, then the others from newest to oldest)."""
     key = norm_url(url)
     files = sorted(config.JOBS_ARCHIVE_DIR.glob("*.json"), reverse=True)
     if day:
@@ -41,7 +41,7 @@ def archived(url: str, day: str = "") -> dict | None:
 
 
 def _job_posting(raw: str) -> dict | None:
-    """Первый JobPosting из JSON-LD страницы (в том числе внутри @graph и списков)."""
+    """The first JobPosting from the page JSON-LD (inside @graph and lists too)."""
     for block in _JSONLD_RX.findall(raw):
         try:
             data = json.loads(block.strip())
@@ -61,18 +61,18 @@ def _job_posting(raw: str) -> dict | None:
 
 
 def fetch(url: str, http: Http | None = None) -> dict:
-    """Вакансия со страницы: {url, company, title, text}. Компания и название — из JobPosting или <title>.
+    """A vacancy from the page: {url, company, title, text}. Company and title come from JobPosting or <title>.
 
     Raises:
-        VacancyNotFound: страница недоступна, закрыта robots.txt или текста слишком мало.
+        VacancyNotFound: the page is unavailable, closed by robots.txt or has too little text.
     """
     http = http or Http()
     try:
         r = http.get(url, timeout=25, headers={"Accept": "text/html"})
     except FetchError as e:
-        raise VacancyNotFound(f"страница не открылась: {e}") from e
+        raise VacancyNotFound(f"the page did not open: {e}") from e
     if r.status_code != 200:
-        raise VacancyNotFound(f"страница ответила HTTP {r.status_code}")
+        raise VacancyNotFound(f"the page answered HTTP {r.status_code}")
     posting = _job_posting(r.text)
     if posting:
         org = posting.get("hiringOrganization") or {}
@@ -83,6 +83,6 @@ def fetch(url: str, http: Http | None = None) -> dict:
         visible = re.sub(r"(?is)<(script|style|noscript|svg)[^>]*>.*?</\1>", " ", r.text)
         company, text = "", html_to_text(visible)
         title = html_to_text((_TITLE_RX.search(r.text) or [None, ""])[1])
-    if len(text) < 300:  # список вакансий, страница входа или вакансия рисуется скриптом
-        raise VacancyNotFound("на странице почти нет текста вакансии — вставьте текст вручную")
+    if len(text) < 300:  # a vacancy list, a sign-in page, or a vacancy drawn by a script
+        raise VacancyNotFound("the page has almost no vacancy text — paste the text by hand")
     return {"url": url, "company": company.strip(), "title": title.strip(), "text": text, "found_in": "page"}

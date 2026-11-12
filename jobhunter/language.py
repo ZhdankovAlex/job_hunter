@@ -1,12 +1,12 @@
-"""Языковой фильтр: нужен ли местный язык (свои языки по умолчанию — английский и русский)."""
+"""Language filter: is a local language required (own languages by default — English and Russian)."""
 import re
 from collections import Counter
 
-MUST_MARK = "🚫 нужен местный язык (must-have)"
-NICE_MARK = "🗣️ местный язык желателен"
-RUSSIAN_MARK = "🇷🇺 русский — плюс/требование"
+MUST_MARK = "🚫 local language required (must-have)"
+NICE_MARK = "🗣️ local language is a plus"
+RUSSIAN_MARK = "🇷🇺 Russian — a plus/required"
 
-# Частые служебные слова — простой детектор языка текста
+# Frequent function words — a simple detector of the text language
 _STOPWORDS = {
     "en": "the and of to with for you we our is are will on as in",
     "de": "und der die das mit für wir ist nicht eine oder auch bei sowie deine unser werden sind",
@@ -36,7 +36,7 @@ _NICE_RX = re.compile(
     re.I,
 )
 _LANG_RX = re.compile(_LANG, re.I)
-# "fluent in English or German" — достаточно английского
+# "fluent in English or German" — English is enough
 _EITHER_RX = re.compile(rf"English\W+(?:\w+\W+){{0,2}}or\W+(?:\w+\W+){{0,2}}{_LANG}|{_LANG}\W+(?:\w+\W+){{0,2}}or\W+(?:\w+\W+){{0,2}}English", re.I)
 _RUSSIAN_RX = re.compile(
     r"Russian[\s-]speak\w*|\bRussian\b\W+(?:\w+\W+){0,4}?(?:required|is a plus|a plus|native|fluen\w+|language)|"
@@ -48,7 +48,7 @@ _SENTENCE_SPLIT_RX = re.compile(r"[\n.!?;•]+")
 
 
 def detect_language(text):
-    """Код языка текста ('en', 'de', ...) по частым словам; '' если текста мало."""
+    """Language code of the text ('en', 'de', ...) by frequent words; '' if there is too little text."""
     counts = Counter()
     for word in re.findall(r"[a-zà-ÿ]+", text.lower()):
         for lang, words in _STOPWORDS.items():
@@ -63,11 +63,11 @@ def detect_language(text):
 
 
 def analyze(title, text):
-    """-> (пометки, нужен_ли_местный_язык)."""
+    """-> (marks, whether a local language is required)."""
     marks, must, nice = [], False, False
     lang = detect_language(text)
     if lang not in ("", "en") or (not lang and _GERMAN_TITLE_RX.search(title)):
-        marks.append(f"🗣️ вакансия не на английском ({lang or 'de'})")
+        marks.append(f"🗣️ vacancy not in English ({lang or 'de'})")
     for sentence in _SENTENCE_SPLIT_RX.split(text):
         if not _LANG_RX.search(sentence):
             continue

@@ -1,4 +1,4 @@
-"""Релокация и remote по стране (geo.py, страны — settings.example.toml) и разбор вилок (salary.py)."""
+"""Relocation and remote by country (geo.py, countries — settings.example.toml) and parsing salary ranges (salary.py)."""
 import pytest
 
 from jobhunter import geo, salary
@@ -25,9 +25,9 @@ def test_classify_target_country(location, text, remote, country, kind):
 
 
 @pytest.mark.parametrize("location,text,remote", [
-    ("Bangalore, India", "Relocation assistance available.", False),  # исключённая страна
-    ("Tbilisi, Georgia", "Office in Tbilisi.", False),  # офис без релокации
-    ("Atlanta, Georgia", "Hybrid in Atlanta, GA, USA.", False),  # штат, а не страна
+    ("Bangalore, India", "Relocation assistance available.", False),  # an excluded country
+    ("Tbilisi, Georgia", "Office in Tbilisi.", False),  # an office without relocation
+    ("Atlanta, Georgia", "Hybrid in Atlanta, GA, USA.", False),  # a state, not a country
 ], ids=["excluded-country", "office-without-relocation", "us-state-georgia"])
 def test_classify_not_taken(location, text, remote):
     assert not geo.classify(job(location, text), remote)
@@ -51,7 +51,7 @@ def test_relocation_quote_skips_negation():
 
 @pytest.mark.parametrize("text,expected", [
     ("€4,500 - €6,000 per month", (4500, 6000)),
-    ("4.5–5.5k EUR", (4500, 5500)),  # «k» только у второго числа
+    ("4.5–5.5k EUR", (4500, 5500)),  # "k" only at the second number
     ("€90 - €110K per year", (7500, 9167)),
     ("60 000 – 80 000 EUR gross per year", (5000, 6667)),
     ("Salary: 5000 EUR", (5000, 5000)),
@@ -63,7 +63,7 @@ def test_salary_parse(text, expected):
 
 
 def test_k_is_not_carried_over_non_range_numbers():
-    """«3 days in office, 60k EUR» — тройка не становится 3000."""
+    """"3 days in office, 60k EUR" — the three does not become 3000."""
     assert salary.parse("3 days in office, salary 60k EUR per year") == (5000, 5000)
 
 

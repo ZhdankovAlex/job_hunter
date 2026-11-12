@@ -1,46 +1,46 @@
-# Профиль для оценки релевантности вакансий — пример для Python backend-разработчика.
-# Скопируйте в profile.toml (он в .gitignore) и поправьте под своё резюме; пока profile.toml нет,
-# программа читает этот файл.
+# Profile for scoring vacancy relevance — an example for a Python backend developer.
+# Copy to profile.toml (it is in .gitignore) and adjust it to your CV; until profile.toml exists,
+# the program reads this file.
 #
-# Балл вакансии = сумма весов совпавших навыков + поправки из [scoring].
-# pattern — регулярное выражение (без учёта регистра), ищется в названии и тексте вакансии.
-# Веса и выключение навыков можно менять и в веб-интерфейсе (страница «Навыки»): правки
-# сохраняются в profile_overrides.json, этот файл не меняется.
+# Vacancy score = sum of the weights of matched skills + adjustments from [scoring].
+# pattern — a regular expression (case-insensitive), searched in the vacancy title and text.
+# Skill weights and on/off can also be changed in the web UI (the Skills page): the edits
+# are saved to profile_overrides.json, this file does not change.
 
 [scoring]
-title_python = 5          # Python / Django / FastAPI в названии роли
-title_backend = 3         # Backend в названии
-title_database = 2        # PostgreSQL / Database в названии
-title_senior = 1          # Senior в названии
-title_product = 2         # продуктовая роль (Product Engineer и т.п.)
-title_platform = -3       # платформа / инфраструктура: допустимо, но ниже продукта
-outsourcing_text = -3     # "our client", "outstaffing", "staff augmentation" в тексте
-company_priority_per_point = 3  # за каждый балл приоритета компании (0–3) из companies.txt
-russian_language = 0      # русский в требованиях / «Russian-speaking team» / вакансия на русском
-location_remote_ok = 4    # ✅ remote без привязки к стране / домашняя страна ([home] в settings.toml)
-location_relocation = 2   # 🌍 подтверждённая релокация
-location_country = 1      # 🌍 без подтверждения / remote в целевой стране
-location_residents = -4   # ❌ только резиденты страны
-location_other_country = -3  # ❓ remote, привязанный к другой стране
-language_mismatch = -8    # основной язык не Python (Java, Ruby, …)
-go_required = -15         # Go / Golang как обязательный язык (вместо language_mismatch)
-jvm_spring = -10          # JVM / Java Virtual Machine / Spring в тексте
-years_8_plus = -5         # «8+ years», «10+ years» опыта
-penalty_experience_7 = -5   # требуют 7 лет опыта
-penalty_experience_8 = -5   # требуют 8+ лет (вдобавок к years_8_plus)
-penalty_level = -5          # Staff / Principal / Head / Director в названии
-penalty_ops_heavy = -5      # по тексту роль эксплуатационная (Terraform, Kubernetes, on-call…), а не продуктовая
+title_python = 5          # Python / Django / FastAPI in the role title
+title_backend = 3         # Backend in the title
+title_database = 2        # PostgreSQL / Database in the title
+title_senior = 1          # Senior in the title
+title_product = 2         # a product role (Product Engineer and the like)
+title_platform = -3       # platform / infrastructure: acceptable, but below product
+outsourcing_text = -3     # "our client", "outstaffing", "staff augmentation" in the text
+company_priority_per_point = 3  # for each company priority point (0–3) from companies.txt
+russian_language = 0      # Russian in the requirements / "Russian-speaking team" / a vacancy in Russian
+location_remote_ok = 4    # ✅ remote not tied to a country / home country ([home] in settings.toml)
+location_relocation = 2   # 🌍 confirmed relocation
+location_country = 1      # 🌍 unconfirmed / remote in the target country
+location_residents = -4   # ❌ country residents only
+location_other_country = -3  # ❓ remote tied to another country
+language_mismatch = -8    # the primary language is not Python (Java, Ruby, …)
+go_required = -15         # Go / Golang as a required language (instead of language_mismatch)
+jvm_spring = -10          # JVM / Java Virtual Machine / Spring in the text
+years_8_plus = -5         # "8+ years", "10+ years" of experience
+penalty_experience_7 = -5   # 7 years of experience required
+penalty_experience_8 = -5   # 8+ years required (on top of years_8_plus)
+penalty_level = -5          # Staff / Principal / Head / Director in the title
+penalty_ops_heavy = -5      # by the text the role is about operations (Terraform, Kubernetes, on-call…), not product
 penalty_role = -8           # Data/Analytics Engineer, Data Scientist, Research, DevOps, SRE, Security
-cv_full_match = 6           # полное соответствие резюме (нет пробелов и несоответствий)
-cv_missing_each = -2        # за каждую требуемую технологию, которой нет в резюме
-cv_missing_cap = -10        # но не больше этого в сумме
-cv_mismatch_each = -3       # за несоответствие: опыт, уровень английского, образование, основной язык
+cv_full_match = 6           # full match with the CV (no gaps and mismatches)
+cv_missing_each = -2        # for each required technology missing from the CV
+cv_missing_cap = -10        # but no more than this in total
+cv_mismatch_each = -3       # for a mismatch: experience, English level, education, primary language
 freehire_relocation = 3     # freehire: relocation = supported
-salary_eur_60k = 2          # зарплата в EUR от 60 000 в год
-local_language_nice = -1    # 🗣️ местный язык желателен
-not_english = -3            # текст вакансии не на английском (и не на русском)
+salary_eur_60k = 2          # salary from 60,000 EUR a year
+local_language_nice = -1    # 🗣️ local language is a plus
+not_english = -3            # the vacancy text is not in English (and not in Russian)
 
-# --- Ядро -------------------------------------------------------------------------
+# --- Core ---------------------------------------------------------------------------
 [[skills]]
 name = "Python"
 weight = 3
@@ -71,7 +71,7 @@ name = "Distributed systems"
 weight = 2
 pattern = 'distributed (?:systems?|architecture|services)|microservices?'
 
-# --- Данные и инфраструктура приложения ----------------------------------------------
+# --- Application data and infrastructure ---------------------------------------------
 [[skills]]
 name = "SQL / query optimization"
 weight = 2
@@ -112,7 +112,7 @@ name = "Testing (pytest)"
 weight = 1
 pattern = 'pytest|unit tests?|test coverage|\btdd\b'
 
-# --- Инструменты -----------------------------------------------------------------
+# --- Tools --------------------------------------------------------------------------
 [[skills]]
 name = "Docker"
 weight = 1

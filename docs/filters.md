@@ -22,7 +22,7 @@
 `jobhunter/verify.py` — a source's location label cannot be trusted ("Remote" with "two days a week in our
 London office" in the text), so the status is set by the text:
 
-- **Hidden** (the "Отброшено фильтрами" section, with the reason and a quote): a mandatory office outside the
+- **Hidden** (the "Rejected by filters" section, with the reason and a quote): a mandatory office outside the
   home country ("in-person", "on-site", "in our … office", "N days in the office", a city as the workplace),
   "must be based in / right to work in" another country, primary language Go / Java / Kotlin / Ruby / PHP /
   .NET / Rust, "Spring Boot" / "JVM", "AI trainer / per task / annotator".
@@ -38,7 +38,7 @@ London office" in the text), so the status is set by the text:
 Companies and vacancies with a "rejected" / "ignored" / "declined" status in your applications are shown as
 usual: you can apply again. A vacancy you already applied to is marked "🔁". Only vacancies whose application
 is still in progress are hidden. `hide_previous_rejections = true` moves companies that rejected you to a
-separate "Ранее отказ" section. The full list of rejected vacancies is `state/rejected_latest.tsv`.
+separate "Rejected before" section. The full list of rejected vacancies is `state/rejected_latest.tsv`.
 
 ## Default profile: product backend, not DevOps
 
@@ -54,9 +54,9 @@ Location status (by priority):
 
 1. `✅` — remote without a country binding, or the location includes the home country.
 2. `🌍` — the location is in a `relocation_countries` country:
-   - "релокация" (relocation) — the text has a marker (relocation, visa sponsorship, work permit, Blue Card…),
+   - "relocation" — the text has a marker (relocation, visa sponsorship, work permit, Blue Card…),
      quoted in the report; negated phrases ("no visa sponsorship") do not count;
-   - "релокация (не подтверждена)" (unconfirmed) — no marker, but the company is in `[relocation_companies]`;
+   - "relocation (unconfirmed)" — no marker, but the company is in `[relocation_companies]`;
    - for remote within a country: "allows work from outside" / "unclear" / "❌ residents only".
    With `any_country = true` a vacancy in any other country also goes to 🌍 ("Other"), but only with a
    relocation-support marker. An office in another country with relocation support in the text is 🌍, not a
@@ -64,7 +64,7 @@ Location status (by priority):
 3. `❓` — remote bound to another country.
 
 Language filter (`jobhunter/language.py`): `🚫 local language required` moves the vacancy to the
-"Требуется местный язык" appendix; "local language is a plus" and "vacancy not in English" are only marks.
+"Local language required" appendix; "local language is a plus" and "vacancy not in English" are only marks.
 
 Staffing (`staffing_blacklist.txt`): staffing agencies and marketplaces (names and `re:` patterns), vacancies
 with "Contract" in the title, and texts that mention outstaffing / outsourcing / "for one of our clients" go to the

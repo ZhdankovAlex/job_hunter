@@ -1,8 +1,8 @@
 # docker compose up -d --build   ->  http://127.0.0.1:8765
 #
-# Код и все данные (state/, reports/, cv_out/, настройки, токен Gmail) остаются в папке проекта на хосте:
-# она смонтирована в /app, контейнер ничего не хранит внутри себя. Порт опубликован только на 127.0.0.1 —
-# в отчётах почта, отклики и контакты.
+# Code and all data (state/, reports/, cv_out/, settings, Gmail token) stay in the project folder on the host:
+# it is mounted at /app, the container keeps nothing inside. The port is published on 127.0.0.1 only —
+# reports contain mail, applications and contacts.
 services:
   jobhunter:
     build: .
@@ -12,9 +12,9 @@ services:
       - "127.0.0.1:8765:8765"
     volumes:
       - .:/app
-      # виртуальное окружение Windows из папки проекта контейнеру не нужно и не подходит
+      # the Windows virtual environment from the project folder is neither needed nor usable in the container
       - /app/.venv
     environment:
-      # ежедневный прогон «всё» (почта, потом вакансии), как run_daily.bat; пусто — выключено
+      # the daily "everything" run (mail, then vacancies), like run_daily.bat; empty — off
       JOBHUNTER_DAILY_AT: "09:00"
     restart: unless-stopped

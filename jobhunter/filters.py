@@ -1,4 +1,4 @@
-"""Отбор вакансий: ключевые слова, локация, основной язык."""
+"""Vacancy selection: keywords, location, primary language."""
 import re
 
 from . import config as c
@@ -6,15 +6,15 @@ from . import geo, language
 
 
 def role_ok(title, text, relaxed=False):
-    """Единый фильтр роли для всех разделов (ATS, агрегаторы, Telegram).
+    """One role filter for all sections (ATS, aggregators, Telegram).
 
-    relaxed — для приоритетных компаний: подходит любая инженерная роль с python в тексте.
+    relaxed — for priority companies: any engineering role with python in the text fits.
     """
     if c.ROLE_EXCLUDE_RX.search(title) or c.TITLE_EXCLUDE_RX.search(title):
         return False
     full = f"{title}\n{text}"
     if c.OPS_ROLE_RX.search(title) and not c.CORE_TITLE_RX.search(title):
-        return bool(c.PYTHON_RX.search(full))  # DevOps / SRE — категория 3, только с Python
+        return bool(c.PYTHON_RX.search(full))  # DevOps / SRE — category 3, only with Python
     if relaxed and c.PRIORITY_ROLE_RX.search(title):
         return bool(c.PYTHON_RX.search(full))
     if c.ROLE_CORE_RX.search(title):
@@ -25,7 +25,7 @@ def role_ok(title, text, relaxed=False):
 
 
 def title_candidate(title):
-    """Грубая проверка по одному названию — стоит ли открывать страницу вакансии."""
+    """A rough check by the title alone — is it worth opening the vacancy page."""
     if c.ROLE_EXCLUDE_RX.search(title) or c.TITLE_EXCLUDE_RX.search(title):
         return False
     if c.OPS_ROLE_RX.search(title) and not c.CORE_TITLE_RX.search(title):
@@ -37,14 +37,14 @@ def title_candidate(title):
 
 
 def full_time(title, employment, text):
-    """Штат или контракт на полный день; part-time, фриланс, почасовка и стажировки — нет."""
+    """Full-time employee or contract; part-time, freelance, hourly pay and internships are not."""
     if c.NOT_FULL_TIME_RX.search(f"{title} {employment}") or c.NOT_A_JOB_TITLE_RX.search(title):
         return False
     return not (c.HOURLY_PAY_RX.search(text) or c.NOT_A_JOB_TEXT_RX.search(text))
 
 
 def residency_blocked(text, location):
-    """«must reside in …» / «not providing relocation», если рядом нет домашней страны или EU."""
+    """"must reside in …" / "not providing relocation", unless the home country or EU is next to it."""
     if c.RESIDENCY_OK_RX.search(location):
         return False
     for m in c.RESIDENCY_RX.finditer(text):
@@ -54,7 +54,7 @@ def residency_blocked(text, location):
 
 
 def no_support(text):
-    """В тексте прямо сказано, что релокации или визовой поддержки нет."""
+    """The text says outright that there is no relocation or visa support."""
     return bool(c.NO_SUPPORT_RX.search(text))
 
 
@@ -64,27 +64,27 @@ def keyword_match(job):
 
 
 def location_verdict(job):
-    """'ok' | 'check' (remote, но привязан к стране/городу) | None (не подходит)."""
+    """'ok' | 'check' (remote, but tied to a country/city) | None (does not fit)."""
     loc = job.location or ""
     text = f"{loc} {job.title}"
     if c.HOME_RX.search(text):
         return "ok"
     if not (job.remote or c.REMOTE_RX.search(text)):
         return None
-    # "Remote - CA", "U.S. Anywhere", "NAMER" — привязка к США, если рядом нет Европы
+    # "Remote - CA", "U.S. Anywhere", "NAMER" — tied to the USA unless Europe is next to it
     if c.US_BOUND_RX.search(text) and not c.LOCATION_EUROPE_RX.search(loc):
         return None if c.NON_EU_RX.search(loc) else "check"
     if c.BROAD_RX.search(loc) or c.TITLE_BROAD_RX.search(job.title):
         return "ok"
     if not c.LOCATION_NOISE_RX.sub("", loc):
-        return "ok"  # просто "Remote", без региона
+        return "ok"  # just "Remote", no region
     if c.NON_EU_RX.search(loc):
         return None
     return "check"
 
 
 def _python_is_secondary(desc, match):
-    """Упоминание Python стоит в nice-to-have контексте?"""
+    """Is Python mentioned in a nice-to-have context?"""
     line_start = desc.rfind("\n", 0, match.start()) + 1
     line_end = desc.find("\n", match.end())
     line = desc[line_start: line_end if line_end != -1 else len(desc)]
@@ -98,7 +98,7 @@ def _python_is_secondary(desc, match):
 
 
 def language_mismatch(job):
-    """Имя языка, который выглядит основным вместо Python, либо ''."""
+    """The name of a language that looks primary instead of Python, or ''."""
     return language_mismatch_text(job.title, job.description)
 
 
@@ -121,9 +121,9 @@ _PLUS_LINE_RX = re.compile(
 
 
 def _required_lang(desc):
-    """Другой язык, если блок требований называет его и не называет Python, иначе ''.
+    """Another language, if the requirements block names it and does not name Python, otherwise ''.
 
-    Пример: в задачах «code in C++ and Python», а в «What We Look For» — только C++.
+    Example: the tasks say "code in C++ and Python", but "What We Look For" names only C++.
     """
     start = _REQ_START_RX.search(desc)
     if not start:
@@ -133,18 +133,18 @@ def _required_lang(desc):
     section = rest[: end.start() if end else 2000]
     if c.PYTHON_RX.search(section):
         return ""
-    # «Node.js или Rust будут плюсом» внутри требований — не обязательный язык
+    # "Node.js or Rust is a plus" inside the requirements — not a required language
     section = "\n".join(line for line in section.splitlines() if not _PLUS_LINE_RX.search(line))
     if not section.strip():
         return ""
-    # C++ проверяется только здесь: в тексте ML-вакансий он часто стоит рядом с Python как плюс
+    # C++ is checked only here: ML vacancies often list it next to Python as a plus
     langs = {**c.OTHER_LANGS, "C++": c.TITLE_LANGS["C++"]}
     found = [name for name, rx in langs.items() if rx.search(section)]
     return found[0] if len(found) == 1 else ""
 
 
 def language_mismatch_text(title, desc):
-    """То же по названию и тексту (для вакансий без поля description — Telegram)."""
+    """The same by title and text (for vacancies without a description field — Telegram)."""
     if c.PYTHON_RX.search(title):
         return ""
     for name, rx in c.TITLE_LANGS.items():
@@ -161,7 +161,7 @@ def language_mismatch_text(title, desc):
     py = list(c.PYTHON_RX.finditer(desc))
     if not py:
         return top if n >= 2 else ""
-    # "Python, Go, or Java" — Python перечислен наравне с другим языком, это не «чужой» стек
+    # "Python, Go, or Java" — Python is listed on a par with another language, this is not a "foreign" stack
     for m in py:
         start = max(desc.rfind(ch, 0, m.start()) for ch in "\n.;•") + 1
         ends = [i for i in (desc.find(ch, m.end()) for ch in "\n.;•") if i != -1]
@@ -176,33 +176,33 @@ def language_mismatch_text(title, desc):
 
 
 def _reject(job, reason, quote=""):
-    """Запоминает причину отказа (для раздела «Отброшено фильтрами») и возвращает False."""
+    """Stores the reject reason (for the "Rejected by filters" section) and returns False."""
     job.reject, job.reject_quote = reason, quote
     return False
 
 
 def apply(job):
-    """True, если вакансия проходит; заодно проставляет пометки.
+    """True if the vacancy passes; also sets the marks.
 
-    Если вакансия подходит по роли, но отсеяна другим правилом, причина остаётся в job.reject.
+    If the vacancy fits by role but is dropped by another rule, the reason stays in job.reject.
     """
-    from . import verify  # verify импортирует этот модуль
+    from . import verify  # verify imports this module
 
     if not job.url or not keyword_match(job):
         return False
     if not full_time(job.title, job.employment, job.description):
         m = (c.NOT_FULL_TIME_RX.search(f"{job.title} {job.employment}") or c.HOURLY_PAY_RX.search(job.description)
              or c.NOT_A_JOB_TEXT_RX.search(job.description) or c.NOT_A_JOB_TITLE_RX.search(job.title))
-        return _reject(job, "не full-time: part-time / фриланс / почасовая или сдельная оплата", m.group() if m else "")
+        return _reject(job, "not full-time: part-time / freelance / hourly or piecework pay", m.group() if m else "")
     verdict = location_verdict(job)
     if verdict != "ok":
         if no_support(job.description):
-            return _reject(job, "локация по метке источника: не remote и не домашняя страна", job.location[:80])
-        # привязана к стране: возможно, это релокация / remote в целевой стране
+            return _reject(job, "location by the source label: not remote and not the home country", job.location[:80])
+        # tied to a country: possibly relocation / remote in the target country
         is_remote = bool(job.remote or c.REMOTE_RX.search(f"{job.location} {job.title}"))
         in_target = geo.RELOCATION_ENABLED and geo.classify(job, is_remote)
         if not in_target and (verdict is None or not geo.COUNTRY_BOUND_REMOTE):
-            return _reject(job, "локация по метке источника: не remote и не домашняя страна", job.location[:80])
+            return _reject(job, "location by the source label: not remote and not the home country", job.location[:80])
     job.location_check = verdict == "check"
     full_text = job.source not in c.PREVIEW_ONLY_SOURCES
     verify.check(job, job.description, full_text)

@@ -1,4 +1,4 @@
-"""Отклики из applications_manual.toml: на какие вакансии и в какие компании уже откликались."""
+"""Applications from applications_manual.toml: which vacancies and companies you already applied to."""
 import logging
 import re
 import tomllib
@@ -19,8 +19,8 @@ class Applications:
         def col(name, default):
             return next((i for i, h in enumerate(header) if h.startswith(name)), default)
 
-        ci, si, ui = col("компания", 0), col("статус", 1), col("вакансия", 2)
-        self.urls, self.ids, self.companies = {}, {}, {}  # ссылка / id вакансии -> статус
+        ci, si, ui = col("company", 0), col("status", 1), col("vacancy", 2)
+        self.urls, self.ids, self.companies = {}, {}, {}  # link / vacancy id -> status
         self.count = 0
         for row in rows[1:]:
             row = row + [""] * (max(ci, si, ui) + 1 - len(row))
@@ -32,19 +32,19 @@ class Applications:
                 self.urls[norm_url(url)] = status
                 self.ids.update(dict.fromkeys(url_ids(url), status))
             if company:
-                self.companies.setdefault(norm_name(company), set()).add(status or "без статуса")
+                self.companies.setdefault(norm_name(company), set()).add(status or "no status")
 
     def job_status(self, job):
-        """Статус отклика на эту вакансию, None — откликов на неё нет."""
+        """Status of the application to this vacancy; None — no applications to it."""
         status = self.urls.get(norm_url(job.url))
         if status is None:
             status = next((self.ids[i] for i in url_ids(job.url) if i in self.ids), None)
         return status
 
     def has_job(self, job):
-        """Вакансия уже в работе: отклик без ответа или идёт собеседование.
+        """The vacancy is already in progress: an application without an answer, or interviews are going on.
 
-        После «Отказ» / «Игнор» / «Отказался сам» вакансия снова показывается — можно откликнуться ещё раз.
+        After "Rejected" / "Ignored" / "Declined" the vacancy is shown again — you can apply once more.
         """
         status = self.job_status(job)
         return status is not None and not config.RETRY_STATUS_RX.search(status)
@@ -58,13 +58,13 @@ class Applications:
         return ""
 
 
-# kind события из applications_manual.toml -> статус (RETRY_STATUS_RX понимает «Отказ»)
-_KIND_STATUS = {"applied": "Отклик", "interview": "Собеседование", "rejected": "Отказ", "offer": "Оффер",
-                "declined": "Отказался сам", "other": "Отклик"}
+# event kind from applications_manual.toml -> status (RETRY_STATUS_RX understands "Rejected")
+_KIND_STATUS = {"applied": "Applied", "interview": "Interview", "rejected": "Rejected", "offer": "Offer",
+                "declined": "Declined", "other": "Applied"}
 
 
 def _manual_rows() -> list[list[str]]:
-    """Строки «компания, статус, ссылка» из событий applications_manual.toml, где указан url."""
+    """Rows "company, status, link" from applications_manual.toml events that have a url."""
     if not config.MANUAL_APPLICATIONS_FILE.exists():
         return []
     data = tomllib.loads(config.MANUAL_APPLICATIONS_FILE.read_text(encoding="utf-8"))
@@ -72,12 +72,12 @@ def _manual_rows() -> list[list[str]]:
     for entry in data.get("application", []):
         for event in entry.get("events", []):
             if event.get("url"):
-                rows.append([entry["company"], _KIND_STATUS.get(event.get("kind", ""), "Отклик"), event["url"]])
+                rows.append([entry["company"], _KIND_STATUS.get(event.get("kind", ""), "Applied"), event["url"]])
     return rows
 
 
 def load_applications():
-    """Отклики из событий с url в applications_manual.toml -> Applications."""
-    apps = Applications([["Компания", "Статус", "Вакансия"], *_manual_rows()])
-    log.info("Отклики: %d строк (applications_manual.toml)", apps.count)
+    """Applications from events with a url in applications_manual.toml -> Applications."""
+    apps = Applications([["Company", "Status", "Vacancy"], *_manual_rows()])
+    log.info("Applications: %d rows (applications_manual.toml)", apps.count)
     return apps

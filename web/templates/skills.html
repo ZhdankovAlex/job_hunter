@@ -1,31 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Навыки · job-hunter{% endblock %}
+{% block title %}Skills · job-hunter{% endblock %}
 {% block content %}
-<h1>Навыки профиля</h1>
-<p class="muted">Из навыков складывается балл вакансии: вес каждого найденного в вакансии навыка суммируется
-  (плюс поправки за название, локацию и т.п.). Отрицательный вес — штраф: так можно «отфильтровать вниз»
-  вакансии с нежелательной технологией. Правки пишутся в <code>profile_overrides.json</code>, <code>profile.toml</code>
-  не меняется; балл пересчитается при <b>следующем прогоне</b>.
-  {% if day %}Доля — среди {{ relevant }} подходящих вакансий отчёта за {{ day }}.{% endif %}</p>
+<h1>Profile skills</h1>
+<p class="muted">Skills make up the vacancy score: the weights of all skills found in a vacancy are added up
+  (plus adjustments for the title, location and so on). A negative weight is a penalty: this way you can push down
+  vacancies with an unwanted technology. Edits are written to <code>profile_overrides.json</code>, <code>profile.toml</code>
+  does not change; scores are recomputed on the <b>next run</b>.
+  {% if day %}The share is among {{ relevant }} fitting vacancies of the report for {{ day }}.{% endif %}</p>
 
 <section class="card">
   <div class="table-head">
-    <h2>Навыки <span class="muted small">{{ skills|length }}</span></h2>
-    <input id="q" type="search" placeholder="Поиск по названию…">
+    <h2>Skills <span class="muted small">{{ skills|length }}</span></h2>
+    <input id="q" type="search" placeholder="Search by name…">
   </div>
   <table class="data skills" id="skills">
-    <thead><tr><th>Вкл.</th><th>Навык</th><th>Шаблон</th><th class="num">Вес</th><th class="num">В вакансиях</th><th></th></tr></thead>
+    <thead><tr><th>On</th><th>Skill</th><th>Pattern</th><th class="num">Weight</th><th class="num">In vacancies</th><th></th></tr></thead>
     <tbody>
     {% for s in skills|sort(attribute="weight", reverse=true) %}
     <tr data-name="{{ s.name }}" class="{{ 'off' if s.disabled }}">
-      <td><input type="checkbox" class="on" {{ '' if s.disabled else 'checked' }} title="учитывать в балле"></td>
-      <td><b>{{ s.name }}</b>{% if s.added %} <span class="tag">свой</span>{% endif %}{% if s.invalid %} <span class="bad small">неверный шаблон</span>{% endif %}</td>
+      <td><input type="checkbox" class="on" {{ '' if s.disabled else 'checked' }} title="count in the score"></td>
+      <td><b>{{ s.name }}</b>{% if s.added %} <span class="tag">own</span>{% endif %}{% if s.invalid %} <span class="bad small">invalid pattern</span>{% endif %}</td>
       <td class="small muted mono">{{ s.pattern }}</td>
       <td class="num"><input type="number" class="w" min="-30" max="30" value="{{ s.weight }}">
-        {% if s.weight != s.base_weight and not s.added %}<div class="small muted">было {{ s.base_weight }}</div>{% endif %}</td>
+        {% if s.weight != s.base_weight and not s.added %}<div class="small muted">was {{ s.base_weight }}</div>{% endif %}</td>
       <td class="num"><div class="mini"><i style="width:{{ s.share }}%"></i></div><span class="small">{{ s.share }}% · {{ s.matches }}</span></td>
-      <td>{% if s.added %}<button class="reset small" title="удалить свой навык">удалить</button>
-        {% elif s.weight != s.base_weight or s.disabled %}<button class="reset small" title="вернуть как в profile.toml">сброс</button>{% endif %}</td>
+      <td>{% if s.added %}<button class="reset small" title="delete your own skill">delete</button>
+        {% elif s.weight != s.base_weight or s.disabled %}<button class="reset small" title="restore as in profile.toml">reset</button>{% endif %}</td>
     </tr>
     {% endfor %}
     </tbody>
@@ -33,12 +33,12 @@
 </section>
 
 <section class="card">
-  <h2>Добавить свой навык</h2>
+  <h2>Add your own skill</h2>
   <form id="add" class="add-skill">
-    <input name="name" placeholder="Название, например ClickHouse" required>
-    <input name="pattern" placeholder="Регулярка, например \bclickhouse\b" required class="mono">
-    <input name="weight" type="number" value="2" min="-30" max="30" title="вес; отрицательный — штраф">
-    <button class="primary" type="submit">Добавить</button>
+    <input name="name" placeholder="Name, for example ClickHouse" required>
+    <input name="pattern" placeholder="Regex, for example \bclickhouse\b" required class="mono">
+    <input name="weight" type="number" value="2" min="-30" max="30" title="weight; negative is a penalty">
+    <button class="primary" type="submit">Add</button>
   </form>
   <div class="muted small" id="add-status"></div>
 </section>

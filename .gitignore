@@ -1,23 +1,23 @@
-# окружение и кэши
+# environment and caches
 .venv/
 __pycache__/
 *.pyc
 
-# данные прогонов: вакансии, отчёты, кэш почты, токены
+# run data: vacancies, reports, mail cache, tokens
 state/
 reports/
 cv_out/
 *.log
 *.out
 
-# кэш найденных ATS-бордов (создаётся сам)
+# cache of found ATS boards (created automatically)
 ats_mapping.json
 
-# доступы Google (OAuth-клиент, сервисный ключ)
+# Google credentials (OAuth client, service key)
 credentials.json
 gmail_client.json
 
-# личное: в репозитории только примеры *.example.* (код читает пример, если своего файла нет)
+# personal files: the repo has only *.example.* samples (the code reads the sample if there is no own file)
 settings.toml
 companies.txt
 profile.toml
@@ -27,5 +27,5 @@ applications_manual.toml
 cv/base.toml
 cv/*.pdf
 
-# локальные настройки Claude Code
+# local Claude Code settings
 .claude/

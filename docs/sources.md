@@ -28,7 +28,7 @@ Results are cached in `ats_mapping.json`; companies that were not found are re-c
 Cyrillic "а") is normalised before the slug is guessed.
 
 **A board is gone** (404, 401/403/410, or an HTML page instead of data): the script searches for a new board at once.
-Found — the run feed gets "борд переехал old → new" and the mapping is updated; not found — one warning "борда нет"
+Found — the run feed gets "board moved old → new" and the mapping is updated; not found — one warning "no board"
 and the next check in 30 days, so the same warning does not repeat every run. `ats_mapping.json` is saved by merging:
 only entries changed by this run are written, edits made while the run was going are kept.
 
@@ -91,12 +91,12 @@ vacancies in `relocation_hubs` countries go to 🌍 as "relocation (unconfirmed)
 - `[career_pages]`: `Company = "url"` or `{ url = "...", location = "Remote", links = "https://example.com/careers/" }`
   (the company must be in `companies.txt`); `links` is the beginning of vacancy addresses, so that menu links with
   similar titles ("Hire Python Developers") are not taken for vacancies. `sites.career_page` looks for links with matching titles and opens them: Python / backend
-  first, up to `PAGE_DETAIL_LIMIT` (100); if there are more, a warning says "открыто N из M". A generic "Apply" button
+  first, up to `PAGE_DETAIL_LIMIT` (100); if there are more, a warning says "opened N of M". A generic "Apply" button
   takes the title from the link address (`/job/senior-python-developer`). Pages listed here are
   read even for staffing companies (you chose them by hand) — their vacancies go to the "Staffing/outsourcing"
   appendix. Pages that build the list with scripts cannot be read this way.
 - `[manual_jobs].urls`: vacancies you found by hand. They are opened every run and go to the report with the
-  same filters, Fit and application status; the source is "вручную" (manual). Data comes from JSON-LD
+  same filters, Fit and application status; the source is "manual". Data comes from JSON-LD
   `JobPosting`, else Next.js page data, else `<title>` and the page text.
 
 ## Telegram channels (optional)
@@ -111,5 +111,5 @@ one vacancy, digests split by "Apply" links, posts with a link to an ATS (the fu
 board), posts with a telegra.ph link (the text comes from `api.telegra.ph/getPage`), and others. Channels without
 their own parser use the generic one. Hosts in `[telegram].aggregator_hosts` get a liveness check of the link.
 
-The result is the "Telegram-каналы" section of the report: `✅` first, then `❓`, by date. With
+The result is the "Telegram channels" section of the report: `✅` first, then `❓`, by date. With
 `[filters].hide_russia_only = true`, posts where remote work is possible only from Russia are hidden.

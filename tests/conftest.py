@@ -1,8 +1,8 @@
-"""Общая настройка тестов.
+"""Common test setup.
 
-Модули jobhunter читают settings.toml при импорте. Чтобы тесты давали одно и то же у всех и в CI,
-до любого импорта подставляются файлы-примеры из репозитория (личные настройки не нужны). Настройки —
-settings.example.toml с тестовыми значениями (домашняя страна, страны релокации), см. _test_settings().
+jobhunter modules read settings.toml on import. So that tests give the same result for everyone and in CI,
+the example files from the repo are put in place before any import (no personal settings needed). Settings —
+settings.example.toml with test values (home country, relocation countries), see _test_settings().
 """
 import os
 import tempfile
@@ -17,13 +17,13 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 
 def _test_settings() -> Path:
-    """settings.example.toml + значения, на которые опираются тесты: домашняя страна (вымышленный пример —
-    Польша), страны релокации, исключённая страна, «только из России», опыт в резюме."""
+    """settings.example.toml + values the tests rely on: home country (a made-up example —
+    Poland), relocation countries, an excluded country, "Russia only", experience in the CV."""
     text = (ROOT / "settings.example.toml").read_text(encoding="utf-8")
     for old, new in [
         ('country = ""', 'country = "Poland"'),
         ('iso = ""', 'iso = "PL"'),
-        ('places = []', 'places = ["Warsaw", "Krakow", "Польша", "Варшава"]'),
+        ('places = []', 'places = ["Warsaw", "Krakow", "Польша", "Варшава"]'),  # Russian spellings for Telegram posts
         ('relocation_countries = ["Netherlands", "Germany", "Spain"]',
          'relocation_countries = ["Spain", "Netherlands", "Portugal", "Cyprus", "Georgia", "Germany"]'),
         ("exclude_countries = []", 'exclude_countries = ["India"]'),
@@ -33,7 +33,7 @@ def _test_settings() -> Path:
         ("hide_russia_only = false", "hide_russia_only = true"),
         ("years_experience = 0", "years_experience = 6"),
     ]:
-        assert old in text, f"settings.example.toml изменился: нет «{old}»"
+        assert old in text, f"settings.example.toml changed: \"{old}\" is missing"
         text = text.replace(old, new, 1)
     path = Path(tempfile.mkdtemp(prefix="jobhunter-tests-")) / "settings.toml"
     path.write_text(text, encoding="utf-8")
@@ -43,7 +43,7 @@ def _test_settings() -> Path:
 os.environ["JOBHUNTER_SETTINGS"] = str(_test_settings())
 os.environ["JOBHUNTER_PROFILE"] = str(ROOT / "profile.example.toml")
 os.environ["JOBHUNTER_CV_BASE"] = str(ROOT / "cv" / "base.example.toml")
-os.environ["JOBHUNTER_NO_WARM"] = "1"  # web.app не считает кэш в фоне на настоящих данных
+os.environ["JOBHUNTER_NO_WARM"] = "1"  # web.app does not compute the cache in the background on real data
 
 
 def fixture_text(name: str) -> str:
@@ -61,7 +61,7 @@ class FakeResponse:
 
 
 class FakeHttp:
-    """Вместо jobhunter.http.Http: адрес -> текст ответа; запросы записываются в .calls. Сети нет."""
+    """Instead of jobhunter.http.Http: address -> response text; requests are recorded in .calls. No network."""
 
     def __init__(self, pages: dict[str, str]):
         self.pages, self.calls = pages, []
@@ -80,5 +80,5 @@ def now():
 
 @pytest.fixture
 def at(now):
-    """at(-3) — три дня назад от «сейчас» теста."""
+    """at(-3) — three days before the test's "now"."""
     return lambda days, hours=0: now + timedelta(days=days, hours=hours)

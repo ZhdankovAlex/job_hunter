@@ -1,9 +1,9 @@
-"""Статусы откликов по переписке в Gmail: отклик, этапы, отказ, оффер — по компаниям.
+"""Application statuses from Gmail letters: applied, stages, rejection, offer — per company.
 
-Доступ только на чтение (scope gmail.readonly): письма не отправляются, не помечаются и не удаляются.
-Вход — через OAuth-окно Google в браузере (пароль вводит сам владелец почты), токен хранится
-локально в state/gmail_token.json. Прочитанные письма кэшируются в state/mail_cache.json, так что
-при следующих запусках скачиваются только новые. Не больше 1 запроса в секунду к Gmail API.
+Read-only access (scope gmail.readonly): letters are not sent, marked or deleted.
+Sign-in goes through the Google OAuth window in the browser (the mailbox owner types the password), the token
+is kept locally in state/gmail_token.json. Letters already read are cached in state/mail_cache.json, so
+later runs download only new ones. At most 1 request per second to the Gmail API.
 """
 from __future__ import annotations
 
@@ -26,11 +26,11 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 API = "https://gmail.googleapis.com/gmail/v1/users/me"
 SETTINGS = geo.S.get("mail", {})
 QUERY = SETTINGS.get("query", "newer_than:365d -in:sent -in:chats -in:spam -in:trash")
-BODY_CHARS = 4000  # сколько текста письма хранить и разбирать
+BODY_CHARS = 4000  # how much letter text to keep and parse
 
-# --- Чьи это письма ------------------------------------------------------------------------
+# --- Whose letters are these ----------------------------------------------------------------
 
-# ATS и площадки: компания — в имени отправителя или в теме, а не в домене
+# ATS and job sites: the company is in the sender name or the subject, not in the domain
 ATS_DOMAINS_RX = re.compile(
     r"greenhouse(?:-mail)?\.io|lever\.co|ashbyhq\.com|workable(?:mail)?\.com|teamtailor(?:-mail)?\.com|"
     r"recruitee(?:-mailbox)?\.com|bamboohr\.com|breezy\.hr|smartrecruiters\.com|myworkday(?:jobs)?\.com|workday\.com|"
@@ -42,15 +42,15 @@ ATS_DOMAINS_RX = re.compile(
     r"codility\.com|codesignal\.com|google\.com|zoom\.us|hibob\.com|teamtailor\.com",
     re.I,
 )
-# поддомен ATS = компания: acme.teamtailor-mail.com, globex.comeet-notifications.com
+# ATS subdomain = company: acme.teamtailor-mail.com, globex.comeet-notifications.com
 _ATS_SUBDOMAIN_RX = re.compile(
     r"^(?:[\w-]+\.)?([\w-]+)\.(?:teamtailor-mail|comeet-notifications|bamboohr|breezy(?:-mail)?|recruitee)\.", re.I)
-# адрес вида acme-jobs@m.personio.com, globex-careers@… — компания в имени ящика
+# an address like acme-jobs@m.personio.com, globex-careers@… — the company is in the mailbox name
 _LOCAL_COMPANY_RX = re.compile(r"^([a-z][\w]{2,30}?)[-_.](?:jobs|careers?|recruit\w*|hiring|talent|hr)\b", re.I)
-# в имени отправителя: "Jane Smith from Acme", "John Doe - Globex", "Recruitment via Sage HR"
+# in the sender name: "Jane Smith from Acme", "John Doe - Globex", "Recruitment via Sage HR"
 _DISPLAY_COMPANY_RX = re.compile(r"(?:\s(?:from|at)\s|\s[-–—|]\s)(?P<c>.+)$", re.I)
 _PERSON_RX = re.compile(r"^[A-ZА-ЯЁ][a-zа-яёćčšžđ'-]+\.?\s+[A-ZА-ЯЁ][a-zа-яёćčšžđ'.-]+$")
-# «компания», которая на деле должность: "Backend Engineer", "Senior Python Developer"
+# a "company" that is really a job title: "Backend Engineer", "Senior Python Developer"
 _ROLE_NAME_RX = re.compile(
     r"\b(?:engineer|developer|software engineer|python|backend|position|role|vacancy|вакансия|разработчик)\b", re.I)
 FREE_MAIL_RX = re.compile(
@@ -58,7 +58,7 @@ FREE_MAIL_RX = re.compile(
     r"hotmail\.\w+|live\.\w+|icloud\.com|me\.com|proton(?:mail)?\.\w+|yahoo\.\w+|gmx\.\w+",
     re.I,
 )
-# "Acme Hiring Team", "Talent Acquisition at Globex", "Greenhouse" -> только название компании
+# "Acme Hiring Team", "Talent Acquisition at Globex", "Greenhouse" -> only the company name
 _NAME_NOISE_RX = re.compile(
     r"\b(?:the\s+)?(?:hiring|recruit\w*|talent(?:\s+acquisition)?|careers?|jobs?|people|hr|team|"
     r"no-?reply|notifications?|mailer|via|at|from|группа|команда|подбор\w*|рекрут\w*|отдел|персонал\w*)\b",
@@ -73,18 +73,18 @@ _GENERIC_SENDER_RX = re.compile(
     r"application submitted|application received|thank you|thanks|screen invitation)?$",
     re.I,
 )
-# ваше имя в подписи / отправителе (settings.toml [mail].own_names) — не название компании
+# your name in a signature / sender (settings.toml [mail].own_names) — not a company name
 _OWN_NAMES = {n.strip().lower() for n in geo.S.get("mail", {}).get("own_names", []) if n.strip()}
-# компания в теме письма: "Thank you for applying to Acme", "Your application was sent to Globex",
-# "Interview with Initech", "Отклик на вакансию … в компанию «Ромашка»"
+# company in the subject: "Thank you for applying to Acme", "Your application was sent to Globex",
+# "Interview with Initech", and the same on Russian job sites ("Отклик на вакансию … в компанию «Ромашка»")
 _SUBJECT_COMPANY_RXS = [
-    # "... Senior Software Engineer at NVIDIA" — компания после последнего "at" в конце темы
+    # "... Senior Software Engineer at NVIDIA" — the company after the last "at" at the end of the subject
     re.compile(r"\b(?i:at)\s+(?P<c>[A-Z][\w&.'’-]{1,30}(?:\s[A-Z][\w&.'’-]{1,30})?)\s*[!.]?\s*$"),
     # «Your Application at Acme – …», «Thank you for applying to Acme + Globex Labs!»
     re.compile(r"(?i:applying|application|applied|interest|sent)\s+(?:to|at|for|with|in)\s+(?:the\s+)?"
                r"(?P<c>[A-Z0-9][\w&.'’+ -]{1,40}?)"
                r"(?:\s*[!.,:|–—-]|\s+(?:for|has|was|is|team)\b|$)"),
-    # LinkedIn: «Jane, your application was sent to Acme» / «… sent to globex.» — название бывает со строчной
+    # LinkedIn: "Jane, your application was sent to Acme" / "… sent to globex." — the name may be lowercase
     re.compile(r"application was sent to\s+(?P<c>[\w&'’+-][\w&.'’+ -]{0,38}?)\.?\s*$", re.I),
     re.compile(r"(?i:interview|call|chat|meeting|invitation|offer|update|next steps?|introduction|request)\s+"
                r"(?i:with|from|at|to|for)\s+"
@@ -96,7 +96,7 @@ _SUBJECT_COMPANY_RXS = [
     re.compile(r"\s[-–—|]\s(?P<c>[\w&'’][\w&.'’ ]{1,30}?)\.?\s*$"),
     re.compile(r"(?:в компани[июи]|от компании|компания)\s+[«\"]?(?P<c>[^»\"\n,.!]{2,40})", re.I),
 ]
-# в тексте письма площадки (hh.ru, LinkedIn): "Компания «Ромашка» приглашает…", "your application to Globex"
+# in the text of a job site letter (hh.ru, LinkedIn): "Компания «Ромашка» приглашает…", "your application to Globex"
 _BODY_COMPANY_RXS = [
     re.compile(r"компани[яиюе]\s+[«\"](?P<c>[^»\"\n]{2,40})[»\"]", re.I),
     re.compile(r"(?:application|applying)\s+(?:to|at|with)\s+(?P<c>[A-Z][\w&.'’-]{1,30}(?:\s[A-Z][\w&.'’-]{1,30})?)"),
@@ -106,10 +106,10 @@ _BODY_COMPANY_RXS = [
     re.compile(r"interest in\s+(?P<c>[A-Z][\w&.-]{1,30}(?:\s[A-Z][\w&.-]{1,30})?)(?:'s|’s)\s"),
 ]
 
-# --- Что это за письмо ----------------------------------------------------------------------
+# --- What kind of letter is this -------------------------------------------------------------
 
 OFFER, REJECTED, INTERVIEW, APPLIED, OTHER = "offer", "rejected", "interview", "applied", "other"
-DECLINED = "declined"  # отказался сам — только в applications_manual.toml, из писем не определяется
+DECLINED = "declined"  # declined by you — only in applications_manual.toml, never detected from letters
 _OFFER_RX = re.compile(
     r"offer letter|job offer|pleased to (?:extend|offer)|extend (?:you )?an offer|оффер|предложение о работе", re.I)
 _REJECT_RX = re.compile(
@@ -118,7 +118,7 @@ _REJECT_RX = re.compile(
     r"other candidates|more closely align|"
     r"not (?:be )?(?:a |the )?(?:right |strong )?(?:fit|match)\b|position has been filled|no longer (?:being )?consider|"
     r"won't be (?:moving|progressing)|not (?:been )?selected|"
-    # мягкие формулировки
+    # soft wording
     r"decided not to (?:proceed|move|progress|continue)|will not be (?:moving|proceeding|progressing)|"
     r"(?:went|go|going) (?:in )?(?:a )?different direction|pursue other (?:candidates|applicants)|"
     r"keep (?:your )?(?:cv|resume|details|profile|information) on file|"
@@ -127,23 +127,23 @@ _REJECT_RX = re.compile(
     r"приняли решение не|решили продолжить с другим|выбрали другого кандидата|не можем предложить",
     re.I,
 )
-# «Unfortunately, due to the volume of applications, we can't reply to everyone» — дисклеймер в
-# подтверждении отклика, а не отказ: такие предложения при поиске отказа не учитываются
+# "Unfortunately, due to the volume of applications, we can't reply to everyone" is a disclaimer in an
+# application confirmation, not a rejection: such sentences are ignored when looking for a rejection
 _DISCLAIMER_RX = re.compile(
     r"(?:(?:can(?:no|')t|unable to|not (?:be )?able to)\s+(?:\w+\s+){0,3}?(?:reply|respond|answer|get back|"
     r"contact|provide (?:individual )?feedback)|due to (?:the )?(?:high |large )?(?:volume|number)|"
-    # «While this opportunity may not be the right fit…» — оговорка в подтверждении отклика, а не отказ
+    # "While this opportunity may not be the right fit…" — a caveat in an application confirmation, not a rejection
     r"\b(?:may|might|could) not be (?:the |a )?(?:right |good )?(?:fit|match)|"
     r"не (?:сможем|можем) ответить (?:всем|каждому))",
     re.I,
 )
-# начало процитированной переписки: всё ниже — старые письма, не это
+# start of quoted correspondence: everything below is old letters, not this one
 _QUOTE_START_RX = re.compile(
     r"^\s*(?:On .{5,200}? wrote:|.{5,200}? (?:пишет|написал\w*):|-{2,}\s*Original Message\s*-{2,}|"
     r"-{2,}\s*Forwarded message\s*-{2,}|From:\s.+\n(?:Sent|Date):|_{10,})\s*$",
     re.I | re.M,
 )
-# реальное приглашение: ссылка на созвон, Calendly, выбор слота, «пригласить»
+# a real invitation: a call link, Calendly, picking a slot, "invite"
 _INVITE_RX = re.compile(
     r"invite you|invitation:|calendly\.com|book (?:a|your) (?:time|slot|call)|"
     r"would (?:like|love) to (?:meet|talk|chat|speak|invite|schedule)|meet\.google\.com|zoom\.us/j|"
@@ -153,7 +153,7 @@ _INVITE_RX = re.compile(
     r"укажи\w* удобн\w+",
     re.I,
 )
-# этапы процесса: в подтверждении отклика это описание «что дальше», а не приглашение
+# process stages: in an application confirmation this describes "what's next", not an invitation
 _STAGE_RX = re.compile(
     r"schedule (?:a|an|your)\b|next (?:step|stage|round)s?\b|technical (?:interview|call|screen|assessment)|"
     r"coding (?:challenge|assessment|interview)|home assignment|take-home|test (?:task|assignment)|"
@@ -183,18 +183,18 @@ _SENTENCE_END_RX = re.compile(r"([.!?\n])")
 
 
 def _drop_sentences(text: str, *patterns) -> str:
-    """Предложения, где нашёлся любой из шаблонов, заменяются пробелом; знаки конца предложения остаются.
+    """Sentences that contain any of the patterns are replaced with a space; sentence end marks stay.
 
-    Раньше то же делал re.sub с шаблоном «[^.!?\\n]*…[^.!?\\n]*», но на длинных письмах он работал за
-    квадратичное время: разбор ~440 писем из кэша занимал 13 с, и страница «Отклики» открывалась долго.
+    Earlier re.sub with the pattern "[^.!?\\n]*…[^.!?\\n]*" did the same, but on long letters it ran in
+    quadratic time: parsing ~440 cached letters took 13 s, and the Applications page opened slowly.
     """
-    parts = _SENTENCE_END_RX.split(text)  # [предложение, знак, предложение, знак, …]
+    parts = _SENTENCE_END_RX.split(text)  # [sentence, mark, sentence, mark, …]
     return "".join(" " if i % 2 == 0 and any(p.search(part) for p in patterns) else part
                    for i, part in enumerate(parts))
 
 
 def own_text(body: str) -> str:
-    """Текст письма без процитированной переписки и строк, начинающихся с «>»."""
+    """Letter text without quoted correspondence and lines starting with ">"."""
     m = _QUOTE_START_RX.search(body)
     if m:
         body = body[: m.start()]
@@ -202,18 +202,18 @@ def own_text(body: str) -> str:
 
 
 def classify(subject: str, body: str) -> str:
-    """Тип письма: оффер > отказ > этап в теме > отклик в теме > этап в тексте > отклик в тексте.
+    """Letter kind: offer > rejection > stage in subject > applied in subject > stage in text > applied in text.
 
-    Разбирается только собственный текст письма (без цитат). Условные фразы («If your profile fits,
-    we will schedule an interview», «if we decide not to move forward…») и дисклеймеры («we can't
-    reply to everyone») не считаются ни приглашением, ни отказом.
+    Only the letter's own text is parsed (no quotes). Conditional phrases ("If your profile fits,
+    we will schedule an interview", "if we decide not to move forward…") and disclaimers ("we can't
+    reply to everyone") count neither as an invitation nor as a rejection.
     """
-    # «won’t», «we’ve»: типографский апостроф — к обычному, иначе правила с ' не срабатывают
+    # "won’t", "we’ve": the typographic apostrophe becomes a plain one, otherwise rules with ' do not fire
     subject, body = subject.replace("’", "'"), own_text(body).replace("’", "'")
     plain = _drop_sentences(body, _CONDITIONAL_RX, _DISCLAIMER_RX)
     rejected = bool(_REJECT_RX.search(subject) or _REJECT_RX.search(plain))
-    # «Confirmation of Application Receipt»: в описании процесса бывает «…to a much-anticipated offer letter» —
-    # оффер из текста не засчитываем, если тема — подтверждение отклика
+    # "Confirmation of Application Receipt": a process description may say "…to a much-anticipated offer letter" —
+    # an offer from the text does not count if the subject is an application confirmation
     offer_in_body = _OFFER_RX.search(plain) and not _APPLIED_RX.search(subject)
     if (_OFFER_RX.search(subject) or offer_in_body) and not rejected:
         return OFFER
@@ -241,11 +241,11 @@ def _clean_name(name: str) -> str:
 
 
 def _display_company(display: str) -> str:
-    """Компания из имени отправителя у ATS; имя человека («Jane Smith») — не компания."""
+    """Company from the ATS sender name; a person's name ("Jane Smith") is not a company."""
     m = _DISPLAY_COMPANY_RX.search(display)
     if m:
         return m.group("c")
-    # «Acme @ icims» — компания до « @ »; «Globex School/Backend Python Developer» — до «/»
+    # "Acme @ icims" — the company before " @ "; "Globex School/Backend Python Developer" — before "/"
     m = re.match(r"^(?P<c>[^@/]{2,40}?)\s*(?:\s@\s|/)", display)
     if m:
         return m.group("c")
@@ -261,15 +261,15 @@ def _domain_company(domain: str) -> str:
 
 
 def company_of(sender: str, subject: str, body: str) -> str:
-    """Название компании или '' — если ни тема, ни отправитель, ни текст его не выдают.
+    """Company name, or '' if neither the subject, the sender nor the text give it away.
 
-    Порядок: тема («Thank you for applying to X», «… at X»), имя отправителя у ATS, поддомен ATS,
-    текст письма площадки, корпоративный домен. LinkedIn и календари пишут от имени человека —
-    у них имя отправителя не используется.
+    Order: subject ("Thank you for applying to X", "… at X"), ATS sender name, ATS subdomain,
+    job site letter text, corporate domain. LinkedIn and calendars write on behalf of a person —
+    their sender name is not used.
     """
     aliases = {company_key(k): v for k, v in SETTINGS.get("company_aliases", {}).items()}
-    # ручная привязка: имя или адрес -> компания — для писем, где компании нет нигде. Ищется в отправителе
-    # и в тексте: HiBob пишет от «No-reply (via Bob)», а имя рекрутера есть только в подписи
+    # manual binding: name or address -> company — for letters with no company anywhere. Looked up in the sender
+    # and in the text: HiBob writes from "No-reply (via Bob)", and the recruiter name is only in the signature
     head = body[:3000].lower()
     for part, company in SETTINGS.get("sender_company", {}).items():
         if part.lower() in sender.lower() or part.lower() in head:
@@ -286,8 +286,8 @@ def company_of(sender: str, subject: str, body: str) -> str:
         local_m = _LOCAL_COMPANY_RX.match(address)
         if local_m:
             candidates.append(local_m.group(1))
-    # Google Calendar пишет от calendar-notification@google.com, а организатора ставит в имя:
-    # «j.smith@acme.com (Google Calendar)» — компания по его корпоративному домену
+    # Google Calendar writes from calendar-notification@google.com and puts the organizer in the name:
+    # "j.smith@acme.com (Google Calendar)" — the company comes from their corporate domain
     organizer = re.search(r"[\w.+-]+@([\w-]+(?:\.[\w-]+)+)", display)
     if organizer and not FREE_MAIL_RX.search(organizer.group(1)) and not ATS_DOMAINS_RX.search(organizer.group(1)):
         candidates.append(_domain_company(organizer.group(1).lower()))
@@ -307,12 +307,12 @@ def company_of(sender: str, subject: str, body: str) -> str:
 
 # --- Gmail API ------------------------------------------------------------------------------
 
-LOGIN_TIMEOUT_SECONDS = 180  # сколько ждать вход в браузере
-SYNC_STALE_HOURS = 24  # почта старше — в отчётах появляется предупреждение
+LOGIN_TIMEOUT_SECONDS = 180  # how long to wait for the sign-in in the browser
+SYNC_STALE_HOURS = 24  # if mail is older, reports show a warning
 
 
 def cached_messages() -> list[dict]:
-    """Письма из локального кэша — когда Gmail недоступен."""
+    """Letters from the local cache — when Gmail is unavailable."""
     if not config.MAIL_CACHE_FILE.exists():
         return []
     return list(json.loads(config.MAIL_CACHE_FILE.read_text(encoding="utf-8")).values())
@@ -325,7 +325,7 @@ def _read_sync() -> dict:
 
 
 def save_sync(error: str = "") -> None:
-    """Запоминает итог обновления почты: при успехе — время, при ошибке — её текст."""
+    """Remembers how the mail update ended: on success — the time, on error — its text."""
     state = _read_sync()
     if not error:
         state["ok_at"] = datetime.now(timezone.utc).isoformat()
@@ -335,20 +335,20 @@ def save_sync(error: str = "") -> None:
 
 
 def stale_warning() -> str:
-    """Текст предупреждения, если статусы откликов устарели; пустая строка — почта свежая."""
+    """Warning text if application statuses are out of date; an empty string — mail is fresh."""
     state = _read_sync()
     ok_at = datetime.fromisoformat(state["ok_at"]) if state.get("ok_at") else None
-    since = f"данные на {ok_at.astimezone():%d.%m %H:%M}" if ok_at else "свежих данных нет"
+    since = f"data as of {ok_at.astimezone():%d.%m %H:%M}" if ok_at else "no fresh data"
     if state.get("error"):
-        return f"Почта не обновилась, {since}: {state['error']}. Запустите applications.py"
+        return f"Mail was not updated, {since}: {state['error']}. Run applications.py"
     if not ok_at:
-        return "Почта ещё не обновлялась: запустите applications.py"
+        return "Mail has not been updated yet: run applications.py"
     if (datetime.now(timezone.utc) - ok_at).total_seconds() > SYNC_STALE_HOURS * 3600:
-        return f"Почта давно не обновлялась, {since}. Запустите applications.py"
+        return f"Mail has not been updated for a long time, {since}. Run applications.py"
     return ""
 
 def credentials():
-    """OAuth-токен Gmail (только чтение). Окно входа Google открывается при первом запуске и когда токен отозван."""
+    """Gmail OAuth token (read-only). The Google sign-in window opens on the first run and when the token is revoked."""
     from google.auth.exceptions import RefreshError
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
@@ -362,18 +362,18 @@ def credentials():
         try:
             creds.refresh(Request())
         except RefreshError as e:
-            log.warning("токен Gmail истёк или отозван (%s) — нужен новый вход", e)
+            log.warning("Gmail token expired or was revoked (%s) — a new sign-in is needed", e)
             creds = None
     if not creds or not creds.valid:
         if not config.GMAIL_CLIENT_FILE.exists():
             raise FileNotFoundError(
-                f"нет {config.GMAIL_CLIENT_FILE.name}: создайте OAuth-клиент «Desktop app» в Google Cloud "
-                "(см. docs/applications.md, раздел «One-time Gmail setup»)"
+                f"no {config.GMAIL_CLIENT_FILE.name}: create an OAuth client \"Desktop app\" in Google Cloud "
+                "(see docs/applications.md, section \"One-time Gmail setup\")"
             )
         from google_auth_oauthlib.flow import InstalledAppFlow
 
         flow = InstalledAppFlow.from_client_secrets_file(str(config.GMAIL_CLIENT_FILE), SCOPES)
-        # без таймаута запуск из Планировщика вечно ждал бы вход и не дошёл бы до поиска вакансий
+        # without a timeout a run from the Task Scheduler would wait for the sign-in forever and never reach the vacancy search
         creds = flow.run_local_server(port=0, open_browser=True, timeout_seconds=LOGIN_TIMEOUT_SECONDS)
     config.GMAIL_TOKEN_FILE.parent.mkdir(exist_ok=True)
     config.GMAIL_TOKEN_FILE.write_text(creds.to_json(), encoding="utf-8")
@@ -381,7 +381,7 @@ def credentials():
 
 
 class Gmail:
-    """Чтение писем через Gmail REST API, не чаще 1 запроса в секунду."""
+    """Reading letters through the Gmail REST API, at most 1 request per second."""
 
     def __init__(self, creds):
         from google.auth.transport.requests import AuthorizedSession
@@ -424,7 +424,7 @@ class Gmail:
 
 
 def _body_text(payload: dict) -> str:
-    """Текст письма: text/plain, а если его нет — text/html без разметки."""
+    """Letter text: text/plain, and if there is none — text/html without markup."""
     plain, html = [], []
 
     def walk(part):
@@ -440,7 +440,7 @@ def _body_text(payload: dict) -> str:
 
 
 def fetch_messages() -> tuple[list[dict], str]:
-    """Все письма по запросу из settings.toml [mail].query (новые — из API, старые — из кэша)."""
+    """All letters for the query from settings.toml [mail].query (new ones from the API, old ones from the cache)."""
     cache = {}
     if config.MAIL_CACHE_FILE.exists():
         cache = json.loads(config.MAIL_CACHE_FILE.read_text(encoding="utf-8"))
@@ -448,25 +448,25 @@ def fetch_messages() -> tuple[list[dict], str]:
     address = gmail.address()
     ids = gmail.message_ids(QUERY)
     new = [i for i in ids if i not in cache]
-    log.info("почта %s: писем по запросу %d, новых %d (≈%d с при 1 запросе/с)", address, len(ids), len(new), len(new))
+    log.info("mail %s: letters for the query %d, new %d (≈%d s at 1 request/s)", address, len(ids), len(new), len(new))
     progress.set_total(len(new))
     for n, msg_id in enumerate(new, 1):
-        if progress.skip_requested():  # кнопка «Пропустить»: остальные письма — в следующий раз
+        if progress.skip_requested():  # the "Skip" button: the remaining letters wait for the next run
             break
-        progress.step(f"письмо {n} из {len(new)}")
+        progress.step(f"letter {n} of {len(new)}")
         try:
             cache[msg_id] = gmail.message(msg_id)
-        except Exception as e:  # одно битое письмо не должно ронять весь разбор
-            log.warning("письмо %s: %s", msg_id, e)
+        except Exception as e:  # one broken letter must not break the whole parse
+            log.warning("letter %s: %s", msg_id, e)
         if n % 100 == 0:
-            log.info("почта: прочитано %d из %d", n, len(new))
+            log.info("mail: read %d of %d", n, len(new))
             config.MAIL_CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
     config.MAIL_CACHE_FILE.parent.mkdir(exist_ok=True)
     config.MAIL_CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
     return [cache[i] for i in ids if i in cache], address
 
 
-# --- Сводка по компаниям --------------------------------------------------------------------
+# --- Summary by company ----------------------------------------------------------------------
 
 @dataclass
 class Event:
@@ -488,13 +488,13 @@ class Application:
 
     @property
     def status(self) -> str:
-        """Последнее значимое событие: письма «просто переписка» статус не меняют."""
+        """The last meaningful event: "just correspondence" letters do not change the status."""
         meaningful = [e for e in self.ordered if e.kind != OTHER]
         return meaningful[-1].kind if meaningful else OTHER
 
     @property
     def stages(self) -> int:
-        """Сколько разных дней приходили приглашения на этапы."""
+        """On how many different days stage invitations came."""
         return len({e.when.date() for e in self.events if e.kind == INTERVIEW})
 
     @property
@@ -507,7 +507,7 @@ class Application:
 
 
 def summarize(messages: list[dict]) -> tuple[list[Application], list[dict]]:
-    """-> (компании с событиями, письма без компании, которые похожи на отклик/этап/отказ)."""
+    """-> (companies with events, letters without a company that look like an application/stage/rejection)."""
     apps: dict[str, Application] = {}
     unknown = []
     ignore_senders = [s.lower() for s in SETTINGS.get("ignore_senders", [])]
@@ -517,7 +517,7 @@ def summarize(messages: list[dict]) -> tuple[list[Application], list[dict]]:
             continue
         kind = classify(subject, body)
         if kind == OFFER and re.search(r"inmail|hit-reply@linkedin", sender, re.I):
-            kind = APPLIED  # «JOB OFFER AT X» в LinkedIn InMail — это рекрутер пишет первым, а не оффер
+            kind = APPLIED  # "JOB OFFER AT X" in a LinkedIn InMail is a recruiter writing first, not an offer
         company = company_of(sender, subject, body)
         when = datetime.fromtimestamp(msg["date"], tz=timezone.utc)
         if not company:
@@ -525,7 +525,7 @@ def summarize(messages: list[dict]) -> tuple[list[Application], list[dict]]:
                 unknown.append({**msg, "kind": kind})
             continue
         if kind == OTHER and ATS_DOMAINS_RX.search(sender) is None and FREE_MAIL_RX.search(sender) is None:
-            # обычное письмо с корпоративного домена без признаков отклика — скорее всего, не про найм
+            # an ordinary letter from a corporate domain with no sign of an application — most likely not about hiring
             if not re.search(r"recruit|talent|hiring|career|hr\b|people|подбор|рекрут", sender, re.I):
                 continue
         _add_event(apps, company, Event(when, kind, subject, sender, msg["thread"]))
@@ -536,22 +536,22 @@ def summarize(messages: list[dict]) -> tuple[list[Application], list[dict]]:
 
 def _add_event(apps: dict, company: str, event: Event) -> None:
     key = company_key(company) or company.lower()
-    # «Acme» и «Acme Industries, LLC», «Globex AI» и «Globex» — одна компания
+    # "Acme" and "Acme Industries, LLC", "Globex AI" and "Globex" — one company
     key = next((k for k in apps if min(len(k), len(key)) >= 4 and (k.startswith(key) or key.startswith(k))), key)
     app = apps.setdefault(key, Application(company))
     if len(company) < len(app.company):
-        app.company = company  # короткое написание обычно чище: «Acme», а не «Acme Industries, LLC»
+        app.company = company  # the short spelling is usually cleaner: "Acme", not "Acme Industries, LLC"
     app.events.append(event)
 
 
-# часовой пояс событий без пояса в applications_manual.toml: по умолчанию — этого компьютера (летом и зимой
-# разный); settings.toml [mail].utc_offset_hours задаёт его явно (например, в Docker с TZ=UTC)
+# time zone of events without a zone in applications_manual.toml: by default this computer's (it differs in summer
+# and winter); settings.toml [mail].utc_offset_hours sets it explicitly (for example, in Docker with TZ=UTC)
 _OFFSET = geo.S.get("mail", {}).get("utc_offset_hours")
 _LOCAL_TZ = timezone(timedelta(hours=float(_OFFSET))) if _OFFSET is not None else None
 
 
 def manual_events() -> list[tuple[str, Event]]:
-    """События из applications_manual.toml (Telegram, LinkedIn, звонки) — у них нет ссылки на письмо."""
+    """Events from applications_manual.toml (Telegram, LinkedIn, calls) — they have no link to a letter."""
     if not config.MANUAL_APPLICATIONS_FILE.exists():
         return []
     import tomllib
@@ -561,13 +561,13 @@ def manual_events() -> list[tuple[str, Event]]:
     for entry in data.get("application", []):
         for e in entry.get("events", []):
             when = e["date"]
-            if not isinstance(when, datetime):  # дата без времени
+            if not isinstance(when, datetime):  # a date without time
                 when = datetime(when.year, when.month, when.day, 12)
-            if when.tzinfo is None:  # время как в чате — по часовому поясу этого компьютера (или из настроек)
+            if when.tzinfo is None:  # time as in the chat — in this computer's time zone (or from the settings)
                 when = when.replace(tzinfo=_LOCAL_TZ) if _LOCAL_TZ else when.astimezone()
             kind = e.get("kind", OTHER)
             if kind not in (OFFER, REJECTED, INTERVIEW, APPLIED, OTHER, DECLINED):
-                log.warning("%s: неизвестный kind %r в %s", entry["company"], kind, config.MANUAL_APPLICATIONS_FILE.name)
+                log.warning("%s: unknown kind %r in %s", entry["company"], kind, config.MANUAL_APPLICATIONS_FILE.name)
                 kind = OTHER
-            result.append((entry["company"], Event(when, kind, e.get("note", ""), entry.get("source", "вручную"), "")))
+            result.append((entry["company"], Event(when, kind, e.get("note", ""), entry.get("source", "manual"), "")))
     return result

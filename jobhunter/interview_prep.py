@@ -1,12 +1,12 @@
-"""Подготовка к интервью под конкретную вакансию — из фактов cv/base.toml, ничего не придумывает.
+"""Interview prep for a specific vacancy — from the facts in cv/base.toml, invents nothing.
 
-Что собирается:
-- требования вакансии, которые есть в опыте, и пункт опыта, который это доказывает;
-- требования, которых в опыте нет (честно сказать и показать близкое);
-- черновик «рассказа о себе» на английском: текущая роль → компания одной фразой → задачи языком
-  вакансии → совпадающий стек → прошлый опыт короче → «про какой проект рассказать подробнее?»;
-- истории из банка [[stories]] под типовые поведенческие вопросы, по совпадению с вакансией;
-- чек-лист к HR-звонку (зарплата — с медианой levels.fyi по стране вакансии) и вопросы к ним.
+What it builds:
+- vacancy requirements you have experience with, and the experience bullet that proves it;
+- requirements missing from your experience (say so honestly and show what is close);
+- a draft "tell me about yourself" in English: current role → the company in one sentence → tasks in the
+  vacancy's words → matching stack → past experience, shorter → "which project should I tell you more about?";
+- stories from the [[stories]] bank for typical behavioural questions, matched to the vacancy;
+- a checklist for the HR call (salary — with the levels.fyi median for the vacancy country) and questions to ask them.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from . import config, cv_match, cvgen, geo
 
 _FROM_HOME = f" from {config.HOME_COUNTRY}" if config.HOME_COUNTRY else ""
 
-# типовые поведенческие вопросы на собеседованиях
+# typical behavioural interview questions
 
 BEHAVIORAL = {
     "initiative": "Tell me about something you changed in a product or service on your own initiative. Why?",
@@ -47,7 +47,7 @@ def _plain(text: str) -> str:
 
 
 def _headline(bullet: str) -> str:
-    """Короткая суть пункта — его жирный заголовок: «**Built a … service** for …» -> «built a … service»."""
+    """The short gist of a bullet is its bold heading: "**Built a … service** for …" -> "built a … service"."""
     m = re.search(r"\*\*(.+?)\*\*", bullet)
     text = (m.group(1) if m else _first_sentence(_plain(bullet))).strip().rstrip(":.")
     return text[0].lower() + text[1:]
@@ -58,11 +58,11 @@ def _first_sentence(text: str) -> str:
 
 
 def build(company: str, title: str, text: str, location: str = "") -> dict:
-    """Материалы к интервью: {fit, have: [{tech, proof}], missing, pitch, stories, behavioral, hr, ask, market}.
+    """Interview materials: {fit, have: [{tech, proof}], missing, pitch, stories, behavioral, hr, ask, market}.
 
     Args:
-        company, title, text: вакансия (текст — чем полнее, тем точнее подбор).
-        location: локация вакансии — для медианы levels.fyi в подсказке про зарплату.
+        company, title, text: the vacancy (the fuller the text, the better the selection).
+        location: the vacancy location — for the levels.fyi median in the salary hint.
     """
     from .levels import Levels
 
@@ -74,14 +74,14 @@ def build(company: str, title: str, text: str, location: str = "") -> dict:
     bullets = [(job, b) for job in base["experience"] for b in job["bullets"] if not b.get("generic")]
     ranked = sorted(bullets, key=lambda jb: -vac.score(jb[1]["text"], jb[1].get("topics", [])))
 
-    # требование -> лучший пункт опыта, где эта технология есть
+    # requirement -> the best experience bullet that has this technology
     have = []
     for tech in holder.cv_core_have:
         proof = next((f"{job['company']}: {_plain(b['text'])}" for job, b in ranked
                       if tech in cvgen._techs(b["text"])), "")
-        have.append({"tech": tech, "proof": proof or "есть в навыках резюме"})
+        have.append({"tech": tech, "proof": proof or "listed in the CV skills"})
 
-    # «рассказ о себе»: всё из базы, порядок — по структуре
+    # "tell me about yourself": everything from the base, ordered by the structure
     current, previous = base["experience"][0], base["experience"][-1]
     top = [_headline(b["text"]) for job, b in ranked if job is current][:3]
     stack = [t for t in current["tech"] if t in vac.techs or t in cvgen.core_tech(base)][:6]

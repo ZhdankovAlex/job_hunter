@@ -74,7 +74,7 @@ Both scripts split the work into stages and keep `state/progress.json` (`jobhunt
 When run in a terminal, a live line is drawn at the bottom and the log is printed above it:
 
 ```
-[3/11] ATS-борды, агрегаторы, карьерные страницы ████████░░░░░░░░░░░░░░░░ 41/120 34% · ~1:12 · GitLab
+[3/11] ATS boards, aggregators, career pages ████████░░░░░░░░░░░░░░░░ 41/120 34% · ~1:12 · GitLab
 ```
 
 Stage number and name, a bar by the stage counter, ETA for the stage and the source being processed.
@@ -122,7 +122,7 @@ passed filters, new, rejected) and the last 5 warnings. A run whose process ende
  "started": "2026-11-05T12:01:13", "updated": "2026-11-05T12:01:17", "elapsed": 4,
  "stage": "sources", "eta_stage": 344, "last_item": "GitLab",
  "active": [{"item": "PostHog", "seconds": 4}],
- "stages": [{"key": "sources", "title": "ATS-борды, …", "status": "running",
+ "stages": [{"key": "sources", "title": "ATS boards, …", "status": "running",
              "done": 17, "total": 120, "started": "…", "finished": null, "note": ""}],
  "counters": {"fetched": 0}, "errors": [{"time": "…", "level": "WARNING", "message": "…"}]
 }

@@ -1,4 +1,4 @@
-"""HTTP-клиент: не чаще 1 запроса в секунду на хост + проверка robots.txt."""
+"""HTTP client: at most 1 request per second per host + robots.txt check."""
 import logging
 import re
 import threading
@@ -11,14 +11,14 @@ from . import config
 
 log = logging.getLogger(__name__)
 
-# «Пропустить этап» на источниках: запросы недоделанных источников обрываются сразу, а не после
-# их долгого обхода (карьерная страница — до 100 вакансий по секунде). Ставит и снимает main.py.
+# "Skip stage" on sources: requests of unfinished sources are cut at once, not after
+# their long crawl (a career page — up to 100 vacancies at one per second). Set and cleared by main.py.
 cancel = threading.Event()
 
 
 class Cancelled(BaseException):
-    """Запрос отменён кнопкой. BaseException — чтобы не ловился как ошибка источника (except FetchError /
-    except Exception): источник просто выходит, не помечая борд сломанным. Ловит пул потоков (future)."""
+    """The request was cancelled with the button. BaseException so it is not caught as a source error (except
+    FetchError / except Exception): the source just exits without marking the board broken. Caught by the pool."""
 
 
 class FetchError(Exception):
@@ -30,7 +30,7 @@ class RobotsDisallowed(FetchError):
 
 
 class _Robots:
-    """Минимальный парсер robots.txt с поддержкой * и $ (urllib их не умеет)."""
+    """Minimal robots.txt parser with * and $ support (urllib cannot do them)."""
 
     def __init__(self, text, ua_token):
         self.rules = []  # (allow: bool, pattern: str)
@@ -70,7 +70,7 @@ class _Robots:
         return re.match(rx + ("$" if anchored else ""), path) is not None
 
     def allowed(self, path):
-        best = (0, True)  # самое длинное правило побеждает, при равенстве — allow
+        best = (0, True)  # the longest rule wins, on a tie — allow
         for allow, pattern in self.rules:
             if self._matches(pattern, path):
                 best = max(best, (len(pattern), allow))
@@ -85,7 +85,7 @@ class Http:
         self._host_locks = {}
         self._next_slot = {}
         self._robots = {}
-        self._rate_limited = {}  # host -> сколько запросов подряд закончились 429
+        self._rate_limited = {}  # host -> how many requests in a row ended with 429
 
     def _session(self):
         if not hasattr(self._local, "session"):
@@ -113,7 +113,7 @@ class Http:
 
     def _load_robots(self, scheme, host):
         r = None
-        for _ in range(2):  # одна повторная попытка при сетевом сбое
+        for _ in range(2):  # one retry on a network failure
             self._throttle(host)
             try:
                 r = self._session().get(f"{scheme}://{host}/robots.txt", timeout=20)
@@ -121,13 +121,13 @@ class Http:
             except requests.RequestException as e:
                 error = e
         if r is None:
-            log.warning("robots.txt недоступен для %s (%s) — хост пропущен", host, error)
+            log.warning("robots.txt unavailable for %s (%s) — host skipped", host, error)
             return None
         if r.status_code == 200:
             return _Robots(r.text, config.USER_AGENT.lower())
         if 400 <= r.status_code < 500:
-            return _Robots("", "")  # нет robots.txt — ограничений нет (RFC 9309)
-        log.warning("robots.txt %s вернул %s — хост пропущен", host, r.status_code)
+            return _Robots("", "")  # no robots.txt — no restrictions (RFC 9309)
+        log.warning("robots.txt %s returned %s — host skipped", host, r.status_code)
         return None
 
     def _check_robots(self, url):
@@ -142,19 +142,19 @@ class Http:
         robots = self._robots[host]
         path = parts.path + ("?" + parts.query if parts.query else "")
         if robots is None or not robots.allowed(path):
-            raise RobotsDisallowed(f"robots.txt запрещает {url}")
+            raise RobotsDisallowed(f"robots.txt disallows {url}")
 
     def get(self, url, params=None, timeout=40, headers=None):
-        """GET с лимитом и повторами. Возвращает requests.Response (в т.ч. 404).
+        """GET with the limit and retries. Returns requests.Response (404 included).
 
-        headers — дополнительные заголовки (например, Accept: text/html для сайтов, которые на JSON отвечают 404).
+        headers — extra headers (for example, Accept: text/html for sites that answer 404 to JSON).
         """
         return self._request("GET", url, params=params, timeout=timeout, headers=headers)
 
     def post(self, url, json=None, timeout=40, headers=None):
-        """POST с JSON-телом — поиск вакансий, который сайт делает POST-запросом (Workday).
+        """POST with a JSON body — a vacancy search the site makes with a POST request (Workday).
 
-        Те же robots.txt, лимит частоты и повторы, что у get(); ничего не отправляет, кроме поискового запроса.
+        Same robots.txt, rate limit and retries as get(); sends nothing but the search query.
         """
         return self._request("POST", url, json=json, timeout=timeout, headers=headers)
 
@@ -163,8 +163,8 @@ class Http:
         self._check_robots(url)
         host = urlsplit(url).netloc
         if self._rate_limited.get(host, 0) >= 3:
-            # хост упорно отвечает 429 — до конца запуска его не трогаем
-            raise FetchError(f"{url}: хост отключён до следующего запуска (429)")
+            # the host keeps answering 429 — leave it alone until the end of the run
+            raise FetchError(f"{url}: host turned off until the next run (429)")
         last = None
         for attempt in range(3):
             if cancel.is_set():

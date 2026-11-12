@@ -1,9 +1,9 @@
-"""Новые события откликов из веб-интерфейса -> applications_manual.toml.
+"""New application events from the web UI -> applications_manual.toml.
 
-Файл тот же, что ведётся руками: событие дописывается в конец отдельным блоком [[application]]
-(несколько блоков одной компании складываются при чтении — mail.manual_events). Существующие
-строки и комментарии не трогаются. После записи файл проверяется tomllib; если что-то пошло не так,
-он возвращается как был.
+The same file you keep by hand: the event is appended at the end as a separate [[application]] block
+(several blocks of one company are merged on reading — mail.manual_events). Existing
+lines and comments are not touched. After writing, the file is checked with tomllib; if something went wrong,
+it is restored as it was.
 """
 from __future__ import annotations
 
@@ -13,44 +13,44 @@ from datetime import datetime
 
 from . import config
 
-KINDS = {"applied": "Отклик", "interview": "Этап / собеседование", "rejected": "Отказ", "declined": "Отказался сам",
-         "offer": "Оффер", "other": "Заметка"}
+KINDS = {"applied": "Applied", "interview": "Stage / interview", "rejected": "Rejected", "declined": "Declined",
+         "offer": "Offer", "other": "Note"}
 
 
 def _toml_str(value: str) -> str:
-    """Строка TOML: экранирование JSON подходит (\\", \\\\, \\n, \\uXXXX)."""
+    """A TOML string: JSON escaping fits (\\", \\\\, \\n, \\uXXXX)."""
     return json.dumps(value, ensure_ascii=False)
 
 
 def add_event(company: str, kind: str, note: str = "", url: str = "", source: str = "",
               when: datetime | None = None) -> dict:
-    """Дописывает событие отклика.
+    """Appends an application event.
 
     Args:
-        company: компания (как в отчёте — по ней событие склеится с письмами).
+        company: company (as in the report — the event is merged with letters by it).
         kind: applied / interview / rejected / declined / offer / other.
-        note: что произошло, своими словами.
-        url: ссылка на вакансию — в отчётах она будет помечена «🔁 уже откликался».
-        source: откуда отклик (сайт компании, LinkedIn, Telegram…).
-        when: время события; по умолчанию сейчас.
+        note: what happened, in your own words.
+        url: link to the vacancy — reports will mark it "🔁 already applied".
+        source: where the application went (company site, LinkedIn, Telegram…).
+        when: event time; now by default.
 
     Returns:
-        Записанное событие.
+        The written event.
 
     Raises:
-        ValueError: неизвестный kind или пустая компания.
+        ValueError: unknown kind or empty company.
     """
     company = company.strip()
     if not company:
-        raise ValueError("Нужна компания")
+        raise ValueError("A company is required")
     if kind not in KINDS:
-        raise ValueError(f"kind — один из {', '.join(KINDS)}")
+        raise ValueError(f"kind must be one of {', '.join(KINDS)}")
     when = (when or datetime.now()).replace(microsecond=0, tzinfo=None)
     fields = [f"date = {when.isoformat()}", f"kind = {_toml_str(kind)}", f"note = {_toml_str(note.strip())}"]
     if url.strip():
         fields.append(f"url = {_toml_str(url.strip())}")
     block = (f"\n[[application]]\ncompany = {_toml_str(company)}\n"
-             f"source = {_toml_str(source.strip() or 'веб-интерфейс')}\n"
+             f"source = {_toml_str(source.strip() or 'web UI')}\n"
              f"events = [\n  {{ {', '.join(fields)} }},\n]\n")
     path = config.MANUAL_APPLICATIONS_FILE
     before = path.read_text(encoding="utf-8") if path.exists() else ""
@@ -64,7 +64,7 @@ def add_event(company: str, kind: str, note: str = "", url: str = "", source: st
 
 
 def companies() -> list[str]:
-    """Компании из applications_manual.toml и кэша писем — подсказки в форме (веб-интерфейс кэширует)."""
+    """Companies from applications_manual.toml and the mail cache — hints in the form (the web UI caches them)."""
     from . import mail
 
     names = set()
@@ -74,6 +74,6 @@ def companies() -> list[str]:
     try:
         apps, _ = mail.summarize(mail.cached_messages())
         names |= {a.company for a in apps}
-    except Exception:  # кэша писем нет — подсказки только из файла
+    except Exception:  # no mail cache — hints come only from the file
         pass
     return sorted(names, key=str.lower)
