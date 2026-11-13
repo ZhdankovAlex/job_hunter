@@ -1,4 +1,4 @@
-﻿# An example CV base. Copy to cv/base.toml (it is in .gitignore) and replace it with your own facts;
+# An example CV base. Copy to cv/base.toml (it is in .gitignore) and replace it with your own facts;
 # until cv/base.toml exists, the CV generator and the interview prep read this file.
 # The generator invents nothing — it only selects and reorders what is written here.
 #
