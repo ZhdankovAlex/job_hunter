@@ -4,6 +4,23 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-18
 
+### mypy in CI: type check on every PR, HttpClient protocol for sources (#2)
+
+- mypy in requirements-dev.txt and [tool.mypy] in pyproject.toml: jobhunter, web, main.py, cvgen.py, tests/conftest.py, check_untyped_defs, pydantic plugin; a "Types (mypy)" step in ci.yml
+- http: Response / HttpClient / HttpPostClient protocols (read-only properties, so requests.Response fits); sources take HttpClient, Workday takes HttpPostClient; FakeHttp is checked against the protocol
+- cvgen.render: overloads, with pdf=True the PDF path is never None
+- web: Runner.start takes a Sequence; CREATE_NEW_PROCESS_GROUP behind an if sys.platform check, so mypy --platform linux passes
+- annotations for empty collections; a few real None and shadowing issues (salary bounds, the "market" variable in main.py, the bullets_rest limit in cvgen)
+- docs/testing.md: mypy in CI and locally, the HttpClient protocol
+
+<sub>6434636</sub>
+
+### Applications: a typo date before 1970 no longer breaks the page (#1)
+
+- mail.manual_events: datetime.astimezone() for 0001-01-01 raises OSError on Windows (no time zone data before 1970) and ValueError on Linux (shifts into year 0); the event now falls back to the current local offset instead of failing the whole report
+
+<sub>132819e</sub>
+
 ### Skip unreachable hosts, no-cache reports, release notes from git history
 
 - http: a host that times out or drops the connection on 2 requests in a row (Http.UNREACHABLE_AFTER) is skipped until the end of the run; after the first failure there are no more 40 s retries
