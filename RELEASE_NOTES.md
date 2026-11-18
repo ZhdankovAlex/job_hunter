@@ -4,6 +4,15 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-18
 
+### Docs: run speed, how web pages are built (#6)
+
+- docs/pipeline.md: "Run speed" — parallel hosts with a per-host limit, skipping unreachable hosts, not re-searching missing boards, caches between runs, the quadratic regexes that were fixed and the rule to test regexes on 50–100 KB without spaces
+- docs/web-ui.md: "How pages are built" — the same data for the template and the API, filters as URL parameters, cached heavy computations, links to the response/error section
+- docs/architecture.md: server-rendered pages, rows for a slow run/page and the API check
+- README: doc map rows for web-ui, pipeline and testing
+
+<sub>10e18c0</sub>
+
 ### Web API: schemathesis checks, response models, fixes for malformed input (#5)
 
 - tests/test_api_schema.py: schemathesis over /openapi.json through ASGI. Reads: every GET except the SSE stream, /api/companies included. Writes: POST/PUT/DELETE in positive and negative modes; everything the endpoints write (profile_overrides.json, applications_manual.toml, reports/, cv_out/, last_run.log, progress.*, web_cache.json) goes to tmp; runs start no processes, vacancy lookup and PDF build are stubbed
