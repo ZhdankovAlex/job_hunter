@@ -112,6 +112,11 @@ name = "Testing (pytest)"
 weight = 1
 pattern = 'pytest|unit tests?|test coverage|\btdd\b'
 
+[[skills]]
+name = "Static typing (mypy)"
+weight = 1
+pattern = '\bmypy\b|pyright|type hints|type annotations|static typing|type checking'
+
 # --- Tools --------------------------------------------------------------------------
 [[skills]]
 name = "Docker"
