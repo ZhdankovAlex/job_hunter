@@ -1,0 +1,39 @@
+# RELEASE_NOTES.md from the git history: rebuilt after a push to main and committed back if it changed.
+# A commit made with GITHUB_TOKEN does not trigger other workflows (this one included) — no loop.
+# Locally, run git pull --rebase before the next push.
+name: Release notes
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-notes
+  cancel-in-progress: false
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the whole history is needed, not just the last commit
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build RELEASE_NOTES.md
+        run: python -m jobhunter.release_notes
+      - name: Commit if changed
+        run: |
+          git add RELEASE_NOTES.md
+          if git diff --cached --quiet; then
+            echo "RELEASE_NOTES.md unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git commit -m "RELEASE_NOTES.md: update"
+          git push

@@ -78,6 +78,10 @@ class _Robots:
 
 
 class Http:
+    # this many requests in a row ended with a timeout / network error — the host is down; a dead
+    # host with 3 retries x 40 s per company can stretch a run to hours, so stop calling it
+    UNREACHABLE_AFTER = 2
+
     def __init__(self, min_interval=config.MIN_INTERVAL):
         self.min_interval = min_interval
         self._local = threading.local()
@@ -86,6 +90,7 @@ class Http:
         self._next_slot = {}
         self._robots = {}
         self._rate_limited = {}  # host -> how many requests in a row ended with 429
+        self._unreachable: dict[str, int] = {}  # host -> how many requests in a row hit a network error
 
     def _session(self):
         if not hasattr(self._local, "session"):
@@ -165,7 +170,10 @@ class Http:
         if self._rate_limited.get(host, 0) >= 3:
             # the host keeps answering 429 — leave it alone until the end of the run
             raise FetchError(f"{url}: host turned off until the next run (429)")
+        if self._unreachable.get(host, 0) >= self.UNREACHABLE_AFTER:
+            raise FetchError(f"{url}: host is not responding — skipped until the end of the run")
         last = None
+        network_error = False
         for attempt in range(3):
             if cancel.is_set():
                 raise Cancelled(url)
@@ -173,8 +181,11 @@ class Http:
             try:
                 r = self._session().request(method, url, json=json, timeout=timeout, headers=headers)
             except requests.RequestException as e:
-                last = str(e)
+                last, network_error = str(e), True
+                if self._unreachable.get(host, 0):
+                    break  # the host already failed — 40 s retries only stretch the run
                 continue
+            network_error = False
             if r.status_code == 429 or r.status_code >= 500:
                 last = f"HTTP {r.status_code}"
                 retry_after = r.headers.get("Retry-After", "")
@@ -183,7 +194,15 @@ class Http:
                     raise Cancelled(url)
                 continue
             self._rate_limited[host] = 0
+            self._unreachable[host] = 0
             return r
         if last == "HTTP 429":
             self._rate_limited[host] = self._rate_limited.get(host, 0) + 1
+        if network_error:
+            with self._guard:
+                self._unreachable[host] = self._unreachable.get(host, 0) + 1
+                down = self._unreachable[host] == self.UNREACHABLE_AFTER
+            if down:
+                log.warning("%s is not responding (%d requests in a row with a timeout or network error) — "
+                            "requests to it are skipped until the end of the run", host, self.UNREACHABLE_AFTER)
         raise FetchError(f"{url}: {last}")

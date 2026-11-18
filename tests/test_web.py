@@ -41,3 +41,10 @@ def test_skills_counts_are_cached_per_pattern(client):
     assert python["pattern"] in cached
     assert http.get("/api/skills").json() == first  # the second time — from the cache, the same answer
     assert json.loads(web.WEB_CACHE_FILE.read_text(encoding="utf-8"))["skills"]["value"]["relevant"] == 2
+
+
+def test_reports_are_not_cached_by_browser(client):
+    """Reports are rebuilt under the same name: the browser must check with the server every time."""
+    http, _, _ = client
+    assert http.get("/files/reports/no-such-report.html").headers["cache-control"] == "no-cache"
+    assert "cache-control" not in http.get("/pipeline").headers

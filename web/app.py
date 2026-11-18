@@ -47,6 +47,19 @@ REPORTS.mkdir(exist_ok=True)
 app.mount("/files/reports", StaticFiles(directory=REPORTS), name="reports")
 app.mount("/files/cv_out", StaticFiles(directory=ROOT / "cv_out"), name="cv_out")
 
+
+@app.middleware("http")
+async def no_cache_reports(request: Request, call_next):
+    """Reports are rebuilt under the same name (applications.html after every letter).
+
+    Without Cache-Control the browser decides how long to keep a copy, and the "Applications" iframe
+    showed a stale page. no-cache means an ETag check every time: an unchanged file is a short 304.
+    """
+    response = await call_next(request)
+    if request.url.path.startswith("/files/reports/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 # (key, label, icon) — the icon is visible in the collapsed left panel too
 # (address, label, emoji icon; the same icons as the report buttons: 📬 applications, 📄 CV, 🎤 prep)
 NAV = [("pipeline", "Pipeline", "⚙️"), ("reports", "Reports", "📋"), ("applications", "Applications", "📬"),

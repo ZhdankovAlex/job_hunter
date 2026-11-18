@@ -600,13 +600,16 @@ def manual_jobs(http: Http) -> Iterator[Job]:
     """Single vacancies from settings.toml [manual_jobs].urls — found by hand, opened on every run.
 
     Data: JSON-LD JobPosting, otherwise Next.js data (pageProps.position), otherwise
-    <title> and the page text. The company comes from JSON-LD or from the domain (example.com -> Example).
+    <title> and the page text. The company comes from JSON-LD or from the domain (example.com -> Example). If the domain
+    does not match the company (a job on an agency site), the entry is { url = "...", company = "..." }:
+    the application status is matched by that company. location = "Remote" — when the page has none.
     """
     from urllib.parse import urlsplit
 
     from . import geo
 
-    for url in geo.S.get("manual_jobs", {}).get("urls", []):
+    for entry in geo.S.get("manual_jobs", {}).get("urls", []):
+        url, forced = (entry, "") if isinstance(entry, str) else (entry.get("url", ""), entry.get("company", ""))
         try:
             page = _get(http, url)
         except FetchError as e:
@@ -645,8 +648,15 @@ def manual_jobs(http: Http) -> Iterator[Job]:
             else:
                 t = re.search(r"<title>(.*?)</title>", page, re.S)
                 title = html.unescape(t.group(1)).split("|")[0].strip() if t else url
+                # "Lead Engineer - Acme" on acme.example: the tail is the site name, not part of the title
+                head, sep, tail = title.rpartition(" - ")
+                if sep and tail.strip().lower() in ".".join(domain).lower():
+                    title = head.strip()
                 text = _page_text(page)
-        yield Job(company=company, title=title, location=location, url=url, description=text[:20000],
+        # location from the entry — when the page has none (otherwise the filter drops the job as not remote)
+        location = location or ("" if isinstance(entry, str) else entry.get("location", ""))
+        remote = remote or (bool(re.search(r"remote", location, re.I)) or None)
+        yield Job(company=forced or company, title=title, location=location, url=url, description=text[:20000],
                   remote=remote, source="manual")
 
 

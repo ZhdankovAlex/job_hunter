@@ -29,7 +29,7 @@ temporary folder.
 | `tests/test_mail.py` | Letter type: application, stage, rejection, offer. Conditional phrases and caveats ("If your profile fits…", "may not be the right fit"), typographic apostrophes, quoted old letters, speed on a long letter, company from the sender and the subject, `[mail.sender_company]` |
 | `tests/test_applications_report.py` | Application status and the funnel: a new application after a rejection, cancelled meetings, "declined", rejection after silence, events in the future |
 | `tests/test_cv_match.py` | Fit %: key and nice-to-have skills, "Python, Go or Java", years of experience, new terms; the combined technology pattern answers the same as the separate ones |
-| `tests/test_sources.py` | Parsing fin.dev (JSON-LD), career pages (the `links` setting, the title from `aria-label`), Teamtailor RSS — on saved pages from `tests/fixtures/` |
+| `tests/test_sources.py` | Parsing fin.dev (JSON-LD), career pages (the `links` setting, the title from `aria-label`), Teamtailor RSS — on saved pages from `tests/fixtures/`; `[manual_jobs]` entries with `company` / `location` |
 | `tests/test_filters.py` | Selection by role, employment type and the presence of a link |
 | `tests/test_verify.py` | Full-text checks: on-site, country binding, JVM, Russia-only remote, AI trainer; 7+ and 8+ years are a penalty, not hiding; manual check |
 | `tests/test_geo_salary.py` | Relocation and remote within a country (Georgia the country vs the US state, excluded countries, residents only, "remote from anywhere"); salary ranges ("4.5–5.5k EUR", yearly, hourly); grade |
@@ -37,7 +37,9 @@ temporary folder.
 | `tests/test_freehire.py` | API record → vacancy (utm, salary, preview), prefilter (role, experience, `part_time`), relocation from freehire's markup |
 | `tests/test_telegram.py` | Posts of every channel format (markup as on t.me), telegra.ph, reading a channel page, labels and filtering |
 | `tests/test_cvgen_report.py` | A CV for a vacancy (headline for the title, one-page version, HTML); the report: sections and staffing in the appendix |
-| `tests/test_web.py` | Web UI pages open on empty data; the "Skills" cache |
+| `tests/test_web.py` | Web UI pages open on empty data; the "Skills" cache; reports are served with `Cache-Control: no-cache` |
+| `tests/test_http.py` | A host that does not respond is skipped until the end of the run; success resets the counter |
+| `tests/test_release_notes.py` | `RELEASE_NOTES.md` from the git history: grouping by day, bot commits are skipped |
 
 Letters and pages in the tests are made up, but they repeat wordings the program once got wrong. Found a new
 bug — first add an example that shows it, then fix it.
@@ -55,6 +57,9 @@ bug — first add an example that shows it, then fix it.
 `.github/workflows/ci.yml`: on every pull request and push to `main` GitHub Actions installs the dependencies and
 runs `ruff check .` and `pytest`. Ruff checks only what catches real bugs (syntax, pyflakes, bugbear), not style:
 the settings are in `pyproject.toml`.
+
+`.github/workflows/release-notes.yml`: after a push to `main` rebuilds `RELEASE_NOTES.md` from the git history
+and commits it back if it changed (title `RELEASE_NOTES.md: update`) — run `git pull --rebase` before the next push.
 
 ## Environment variables
 

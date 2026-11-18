@@ -16,6 +16,8 @@
 
 | File | What is inside |
 |---|---|
+| `.github/workflows/` | CI (`ci.yml`) and rebuilding `RELEASE_NOTES.md` after a push to main (`release-notes.yml`) |
+| `RELEASE_NOTES.md` | What changed and when — built automatically, not edited by hand |
 | `settings.toml` | Almost everything: home country, locations and relocation, freehire queries, sources, Telegram, `[manual_jobs]`, mail company aliases, career pages, thresholds |
 | `companies.txt` | Companies to check: `Company \| priority 0–3 \| note` |
 | `profile.toml` | Profile for the relevance score: skills with weights and patterns, adjustments |
@@ -73,6 +75,7 @@ All keys are commented in `settings.example.toml`.
 | `config.py` | Paths, home country, keywords, location and language regexes, Telegram settings |
 | `geo.py` | Reads `settings.toml`, location and relocation rules |
 | `http.py` | HTTP client: 1 request/s per host, robots.txt check |
+| `release_notes.py` | `RELEASE_NOTES.md` from the git history (`python -m jobhunter.release_notes`) |
 | `progress.py` | Run stages, `state/progress.json`, the terminal progress line, pipeline viewer |
 | `companies.py` | Company list and ATS slug candidates |
 | `ats.py` | Public JSON APIs of ATS boards (Greenhouse, Lever, Ashby, Workable, …) and slug discovery |

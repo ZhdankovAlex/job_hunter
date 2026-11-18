@@ -81,7 +81,7 @@ More: [pipeline.md](pipeline.md) · [configuration.md](configuration.md) · [doc
 Modules in `jobhunter/` by purpose:
 
 - **Basics:** `http` (requests to sites with limits), `models` (vacancy and company), `config`, `keys`
-  (normalised URLs and company names), `progress` (run progress).
+  (normalised URLs and company names), `progress` (run progress), `release_notes` (RELEASE_NOTES.md from the git history).
 - **Vacancy sources:** `ats` (public ATS APIs and board discovery), `freehire`, `aggregators`, `sites` (job boards
   and career pages), `bigtech` (Workday, Oracle, Microsoft, Amazon), `telegram`.
 - **Selection:** `filters` (title, location, employment), `verify` (full-text checks), `language`, `staffing`,
@@ -243,7 +243,8 @@ no other way.
   standard module does not understand `*` and `$`. Disallowed pages are not requested. If robots.txt cannot be
   opened or returns an error, the whole site is skipped.
 - **At most one request per second per site** (or less often, if `Crawl-delay` asks). On 429 or 5xx the request
-  is repeated after a pause.
+  is repeated after a pause. A host that times out or drops the connection on `Http.UNREACHABLE_AFTER` (2)
+  requests in a row is skipped until the end of the run.
 - **Bot protection is not bypassed.** Sites that load vacancies with scripts or close them in robots.txt are not
   connected.
 - **Nothing is sent.** No applications, no messages. LinkedIn is not read.

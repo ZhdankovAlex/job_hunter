@@ -97,7 +97,9 @@ vacancies in `relocation_hubs` countries go to 🌍 as "relocation (unconfirmed)
   appendix. Pages that build the list with scripts cannot be read this way.
 - `[manual_jobs].urls`: vacancies you found by hand. They are opened every run and go to the report with the
   same filters, Fit and application status; the source is "manual". Data comes from JSON-LD
-  `JobPosting`, else Next.js page data, else `<title>` and the page text.
+  `JobPosting`, else Next.js page data, else `<title>` and the page text. An entry can be a table instead of a
+  URL: `{ url = "...", company = "Acme", location = "Remote" }` — `company` for a job on an agency site (the
+  application status is matched by it), `location` when the page has none.
 
 ## Telegram channels (optional)
 
