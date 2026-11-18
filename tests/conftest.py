@@ -8,8 +8,12 @@ import os
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import pytest
+
+if TYPE_CHECKING:
+    from jobhunter.http import HttpClient
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -54,7 +58,7 @@ class FakeResponse:
     def __init__(self, text: str, status_code: int = 200, url: str = ""):
         self.text, self.status_code, self.url = text, status_code, url
 
-    def json(self):
+    def json(self) -> Any:
         import json
 
         return json.loads(self.text)
@@ -64,13 +68,19 @@ class FakeHttp:
     """Instead of jobhunter.http.Http: address -> response text; requests are recorded in .calls. No network."""
 
     def __init__(self, pages: dict[str, str]):
-        self.pages, self.calls = pages, []
+        self.pages = pages
+        self.calls: list[str] = []
 
-    def get(self, url, **kwargs):
+    def get(self, url: str, params: dict | None = None, timeout: float = 40,
+            headers: dict | None = None) -> FakeResponse:
         self.calls.append(url)
         if url not in self.pages:
             return FakeResponse("", 404, url)
         return FakeResponse(self.pages[url], 200, url)
+
+
+if TYPE_CHECKING:  # mypy checks the fake against the sources' protocol: a diverging signature fails CI
+    _fake_is_client: HttpClient = FakeHttp({})
 
 
 @pytest.fixture

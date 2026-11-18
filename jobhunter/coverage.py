@@ -44,7 +44,8 @@ def _read_json(path: Path, default):
 def matched_companies(jobs_dir: Path = JOBS_DIR, days: int = MATCH_DAYS) -> tuple[set[str], int]:
     """Companies (company_key) with at least one vacancy in a report within `days` days; and the number of reports."""
     cutoff = (date.today() - timedelta(days=days)).isoformat()
-    keys, reports = set(), 0
+    keys: set[str] = set()
+    reports = 0
     for path in sorted(jobs_dir.glob("*.json")):
         if path.stem < cutoff:
             continue

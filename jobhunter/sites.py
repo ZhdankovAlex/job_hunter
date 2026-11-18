@@ -13,7 +13,7 @@ from collections.abc import Iterator
 
 from . import config as c
 from . import filters
-from .http import FetchError, Http
+from .http import FetchError, HttpClient
 from .models import Job, html_to_text, parse_date
 
 log = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ _NOISE_RX = re.compile(r"<(script|style|svg|nav|header|footer|noscript)\b.*?</\1
 _HTML = {"Accept": "text/html,*/*;q=0.8"}  # some sites answer 404 to Accept: application/json
 
 
-def _get(http: Http, url: str) -> str:
+def _get(http: HttpClient, url: str) -> str:
     """Page HTML; any non-200 answer is a FetchError."""
     r = http.get(url, headers=_HTML)
     if r.status_code != 200:
@@ -51,7 +51,7 @@ def _jsonld(page: str, kind: str) -> dict:
     return {}
 
 
-def findev(http: Http) -> Iterator[Job]:
+def findev(http: HttpClient) -> Iterator[Job]:
     """fin.dev: the list is a JSON-LD ItemList, a vacancy is a JSON-LD JobPosting."""
     listing = _get(http, "https://fin.dev/career/open-positions/")
     urls = [e.get("url") for e in _jsonld(listing, "ItemList").get("itemListElement", [])]
@@ -75,7 +75,7 @@ def findev(http: Http) -> Iterator[Job]:
         )
 
 
-def gurtam(http: Http) -> Iterator[Job]:
+def gurtam(http: HttpClient) -> Iterator[Job]:
     """Gurtam: vacancy cards on /career, the text comes from the vacancy page."""
     listing = _get(http, "https://gurtam.com/career")
     cards = re.findall(r'<a\s+href="(/career/[^"#?]+)"([^>]*vacancy-card[^>]*)>(.*?)</a>', listing, re.S)
@@ -94,7 +94,7 @@ def gurtam(http: Http) -> Iterator[Job]:
         )
 
 
-def bolt(http: Http) -> Iterator[Job]:
+def bolt(http: HttpClient) -> Iterator[Job]:
     """Bolt: a paged list; the vacancy page is read only for fitting titles."""
     seen: set[str] = set()
     for page_no in range(1, 16):
@@ -157,7 +157,7 @@ def _turbo_stream(raw: str):
     return node(0)
 
 
-def aiven(http: Http) -> Iterator[Job]:
+def aiven(http: HttpClient) -> Iterator[Job]:
     """Aiven: the site draws vacancies with a script, but the page data comes from the loader /careers/job.data
     (the public Greenhouse boards under their slug are closed). Text — from the page careers.aiven.io/openings/<id>
     (its /api/ is closed in robots.txt, vacancy pages are not); opened only for fitting titles."""
@@ -186,7 +186,7 @@ def aiven(http: Http) -> Iterator[Job]:
         )
 
 
-def paychex(http: Http) -> Iterator[Job]:
+def paychex(http: HttpClient) -> Iterator[Job]:
     """Paychex: a career site on iCIMS Jibe, an open JSON /api/jobs with the vacancy text (robots.txt: crawl-delay 5).
     There are few vacancies (~60, mostly sales in the US) — all are read, the filters drop role and location."""
     seen, page = 0, 1
@@ -228,7 +228,7 @@ def enabled_sources() -> list[str]:
     return [name for name in SOURCES if name.lower() not in disabled]
 
 
-def fetch(name: str, http: Http) -> list[Job]:
+def fetch(name: str, http: HttpClient) -> list[Job]:
     """Collects what it can; on an error returns what it already has and writes to errors.log."""
     jobs: list[Job] = []
     try:
@@ -272,7 +272,7 @@ def _array_after(payload: str, marker: str) -> list:
         return []
 
 
-def remoterocketship(http: Http) -> Iterator[Job]:
+def remoterocketship(http: HttpClient) -> Iterator[Job]:
     """Remote Rocketship: vacancies are in __NEXT_DATA__ of the search page; url is the original in the ATS."""
     cfg = _boards()
     base = cfg.get("remoterocketship_url", "")
@@ -312,7 +312,7 @@ def remoterocketship(http: Http) -> Iterator[Job]:
             )
 
 
-def brenxor(http: Http) -> Iterator[Job]:
+def brenxor(http: HttpClient) -> Iterator[Job]:
     """Brenxor: the list is cards, the full text is a JSON-LD JobPosting on the vacancy page."""
     cfg = _boards()
     base = cfg.get("brenxor_url", "")
@@ -359,7 +359,7 @@ def brenxor(http: Http) -> Iterator[Job]:
             break
 
 
-def justjoin(http: Http) -> Iterator[Job]:
+def justjoin(http: HttpClient) -> Iterator[Job]:
     """justjoin.it: vacancies are in the data stream of the list page (no text — only title and skills)."""
     url = _boards().get("justjoin_url", "")
     if not url:
@@ -386,7 +386,7 @@ def justjoin(http: Http) -> Iterator[Job]:
         )
 
 
-def remotecom(http: Http) -> Iterator[Job]:
+def remotecom(http: HttpClient) -> Iterator[Job]:
     """remote.com/jobs: search by query; the list has the title, company and hiring countries."""
     cfg = _boards()
     query = cfg.get("remotecom_query", "")
@@ -417,7 +417,7 @@ def remotecom(http: Http) -> Iterator[Job]:
             )
 
 
-def cryptocurrencyjobs(http: Http) -> Iterator[Job]:
+def cryptocurrencyjobs(http: HttpClient) -> Iterator[Job]:
     """Cryptocurrency Jobs: a common RSS feed (latest vacancies of all categories)."""
     import xml.etree.ElementTree as ET
     from email.utils import parsedate_to_datetime
@@ -454,7 +454,7 @@ def cryptocurrencyjobs(http: Http) -> Iterator[Job]:
 
 
 
-def rivian(http: Http) -> Iterator[Job]:
+def rivian(http: HttpClient) -> Iterator[Job]:
     """Rivian: a career site on iCIMS/Jibe returns vacancies as JSON (/api/jobs), the text is in the response."""
     seen = 0
     for page_no in range(1, 11):
@@ -490,7 +490,7 @@ HABR_PYTHON_SKILL = 446  # skills[]=446 — Python
 HABR_MAX_PAGES = 6
 
 
-def habr_career(http: Http) -> Iterator[Job]:
+def habr_career(http: HttpClient) -> Iterator[Job]:
     """Habr Career (career.habr.com): remote vacancies with the Python skill, freshest first (data — the page SSR JSON)."""
     for page_no in range(1, HABR_MAX_PAGES + 1):
         page = _get(http, f"{_HABR}/vacancies?skills[]={HABR_PYTHON_SKILL}&remote=true&type=all"
@@ -536,7 +536,7 @@ _ZERO_ONE_ID_RX = re.compile(r'"([a-z0-9]{24})"')
 _ZERO_ONE_FORMAT_RX = re.compile(r"\b(Remote|Hybrid|On site)\b")
 
 
-def zero_one_tech(http: Http) -> Iterator[Job]:
+def zero_one_tech(http: HttpClient) -> Iterator[Job]:
     """01.tech (iGaming): the list loads with a "Load more" button, but the ids of all vacancies are in the page data.
 
     Each one is opened by id; the title comes from <title>, the format (Remote / Hybrid / On site) from the header.
@@ -569,7 +569,7 @@ _RELOCATE_LINK_RX = re.compile(r'<a[^>]*href="(/([a-z-]+)/([a-z-]+)/([a-z0-9-]+)
 RELOCATE_ME_PAGES = 5
 
 
-def relocate_me(http: Http) -> Iterator[Job]:
+def relocate_me(http: HttpClient) -> Iterator[Job]:
     """relocate.me: vacancies with relocation and visa support; search for "python", link = /country/city/company/…"""
     seen = set()
     for page_no in range(1, RELOCATE_ME_PAGES + 1):
@@ -596,7 +596,7 @@ def relocate_me(http: Http) -> Iterator[Job]:
             )
 
 
-def manual_jobs(http: Http) -> Iterator[Job]:
+def manual_jobs(http: HttpClient) -> Iterator[Job]:
     """Single vacancies from settings.toml [manual_jobs].urls — found by hand, opened on every run.
 
     Data: JSON-LD JobPosting, otherwise Next.js data (pageProps.position), otherwise
@@ -633,7 +633,7 @@ def manual_jobs(http: Http) -> Iterator[Job]:
             text = html_to_text(html.unescape(ld.get("description") or ""))
         else:
             m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', page, re.S)
-            position = {}
+            position: dict = {}
             if m:
                 try:
                     position = (json.loads(m.group(1)).get("props", {}).get("pageProps", {}).get("position") or {})
@@ -664,12 +664,12 @@ _HIREHI = "https://hirehi.ru"
 HIREHI_SECTIONS = ("/vacancies/python", "/vacancies/backend")
 
 
-def hirehi(http: Http) -> Iterator[Job]:
+def hirehi(http: HttpClient) -> Iterator[Job]:
     """HireHi: the section list is a JSON-LD ItemList on the page, a vacancy is a JSON-LD JobPosting (API closed in robots.txt)."""
     seen = set()
     for section in HIREHI_SECTIONS:
         page = _get(http, _HIREHI + section)
-        items = []
+        items: list = []
         for raw in _JSONLD_RX.findall(page):
             try:
                 data = json.loads(raw)
@@ -734,7 +734,7 @@ _GENERIC_LINK_RX = re.compile(r"^(?:apply(?: now)?|learn more|read more|details|
 _JOB_SLUG_RX = re.compile(r"/(?:jobs?|careers?|positions?|vacanc(?:y|ies)|openings?)/([a-z0-9][a-z0-9_-]{3,90})/?(?:[?#]|$)", re.I)
 
 
-def career_page(http: Http, company, url: str, location: str = "", links: str = "") -> list[Job]:
+def career_page(http: HttpClient, company, url: str, location: str = "", links: str = "") -> list[Job]:
     """Finds links to vacancies of fitting roles on a career page and reads their text.
 
     Works only for pages that serve the vacancy list in HTML; if the list

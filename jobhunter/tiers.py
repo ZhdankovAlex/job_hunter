@@ -29,7 +29,8 @@ def tier(job) -> int:
     """Vacancy category by the title, the text (verify penalties) and matching against the CV."""
     title = job.title
     missing = set(getattr(job, "cv_missing", []))
-    if _FULLSTACK_RX.search(title) or (missing & FOREIGN_STACK) or getattr(job, "mismatch_lang", ""):
+    mismatch_lang: str = getattr(job, "mismatch_lang", "")
+    if _FULLSTACK_RX.search(title) or (missing & FOREIGN_STACK) or mismatch_lang:
         return OTHER
     if _BACKEND_TITLE_RX.search(title):
         return BACKEND  # "Backend Platform Engineer", "Python Developer (AI)" — still backend

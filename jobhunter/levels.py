@@ -17,7 +17,7 @@ import re
 from datetime import date
 
 from . import config, progress, salary
-from .http import FetchError, Http
+from .http import FetchError, HttpClient
 
 log = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ def parse(md: str) -> dict | None:
 class Levels:
     """Cache of levels.fyi pages by country and the line for the report."""
 
-    def __init__(self, http: Http | None = None):
+    def __init__(self, http: HttpClient | None = None):
         self.http = http
         try:
             self.cache: dict = json.loads(CACHE_FILE.read_text(encoding="utf-8"))

@@ -154,7 +154,7 @@ def language_mismatch_text(title, desc):
     if required:
         return required
     counts = {name: len(rx.findall(desc)) for name, rx in c.OTHER_LANGS.items()}
-    top = max(counts, key=counts.get)
+    top = max(counts, key=counts.__getitem__)
     n = counts[top]
     if n == 0:
         return ""

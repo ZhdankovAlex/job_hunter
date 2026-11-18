@@ -83,10 +83,11 @@ TABLE_HEAD = ["| Company | Vacancy | Location | Date | Link | Marks |", "|---|--
 def _table(jobs, overflow, max_rows=None):
     """A table with a per-company limit (and a row limit); the rest goes to overflow[company]."""
     jobs = sorted(jobs, key=section_key)
-    by_company = {}
+    by_company: dict = {}
     for j in jobs:
         by_company.setdefault(j.company, []).append(j)
-    shown, extra = set(), {}
+    shown: set = set()
+    extra: dict = {}
     for company, items in by_company.items():
         newest = sorted(items, key=lambda j: -(j.posted.timestamp() if j.posted else 0))
         shown.update(id(j) for j in newest[:PER_COMPANY_LIMIT])
@@ -132,8 +133,8 @@ def _relocation_section(reloc, overflow):
             "| Company | Vacancy | Country / city | Kind | Relocation marker | Salary | Link | Marks |",
             "|---|---|---|---|---|---|---|---|",
         ]
-        per_company = Counter()
-        hidden = Counter()
+        per_company: Counter[str] = Counter()
+        hidden: Counter[str] = Counter()
         for j in group:
             per_company[j.company] += 1
             if per_company[j.company] > PER_COMPANY_LIMIT:
@@ -183,7 +184,8 @@ def skill_gaps(jobs, tg_jobs) -> dict:
     -> {"total": N, "core": [(skill, how many vacancies)], "nice": [...]}: over your vacancies, not the whole market.
     """
     pool = [j for j in [*jobs, *tg_jobs] if j.tier in (tiers.BACKEND, tiers.ML)]
-    core, nice = Counter(), Counter()
+    core: Counter[str] = Counter()
+    nice: Counter[str] = Counter()
     for j in pool:
         core.update(set(j.cv_core_missing))
         nice.update(set(j.cv_nice_missing) - set(j.cv_core_missing))
@@ -301,7 +303,8 @@ def _top_section(jobs, tg_jobs):
     """🎯 Top-N by relevance to the CV (profile.toml), at most top_per_company per company."""
     limit = int(geo.S.get("top_limit", 100))
     per_company_limit = int(geo.S.get("top_per_company", 3))
-    picked, per_company = [], Counter()
+    picked = []
+    per_company: Counter[str] = Counter()
     for row in _ranked(jobs, tg_jobs):
         key = company_key(row[0].company) or row[0].company
         if per_company[key] >= per_company_limit:
@@ -360,7 +363,8 @@ def pick_review(jobs, tg_jobs):
             and (j.reloc_type == geo.RELOCATION or (not j.location_check and not j.reloc_type))]
     rows += [(j, j.url or j.post_url) for j in tg_jobs if eligible(j) and j.label.startswith("✅")]
     rows.sort(key=lambda r: tiers.sort_key(r[0]))
-    picked, per_company = [], Counter()
+    picked = []
+    per_company: Counter[str] = Counter()
     for job, link in rows:
         key = company_key(job.company) or job.company
         if per_company[key] >= 2:
@@ -446,7 +450,7 @@ def _previously_rejected_section(jobs, tg_jobs, filtered):
         "| Company | Vacancy | Location | Date | Link | Applications | Filters |",
         "|---|---|---|---|---|---|---|",
     ]
-    per_company = Counter()
+    per_company: Counter[str] = Counter()
     for j, link, reason in rows:
         per_company[j.company] += 1
         if per_company[j.company] > REFUSED_PER_COMPANY:
@@ -474,7 +478,8 @@ def pick_rejected(rejected):
         return job.reject.startswith(("location by the source label", "older than"))
 
     # rejected are already sorted by the raw score; rules by the text are shown first
-    bulk_rows, bulk = [], Counter()
+    bulk_rows = []
+    bulk: Counter[str] = Counter()
     for j in filter(is_bulk, rejected):
         if bulk[j.reject] < REJECTED_PER_BULK_REASON:
             bulk[j.reject] += 1
@@ -572,7 +577,7 @@ def render(day, jobs, stats, tg_jobs=None):
     reloc = [j for j in jobs if j.reloc_type]
     priority = [j for j in jobs if not j.location_check and not j.reloc_type and not j.manual_check]
     rest = [j for j in jobs if j.location_check and not j.reloc_type]
-    overflow = {}
+    overflow: dict = {}
 
     lines = [f"# Vacancies for {day.isoformat()}", ""]
     if not jobs:
@@ -611,7 +616,7 @@ def render(day, jobs, stats, tg_jobs=None):
         lines += _compact_appendix("Appendix: remaining vacancies by company", overflow, lambda j: j.url)
 
     if staffing:
-        groups = {}
+        groups: dict = {}
         for j in staffing:
             groups.setdefault(j.company, []).append(j)
         lines += _compact_appendix(

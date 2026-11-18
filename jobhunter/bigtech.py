@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import config as c
 from . import filters, geo
-from .http import FetchError, Http
+from .http import FetchError, HttpClient, HttpPostClient
 from .models import Job, html_to_text, parse_date
 
 log = logging.getLogger(__name__)
@@ -50,8 +50,8 @@ def _pick(cards: dict) -> list:
 _MS = "https://apply.careers.microsoft.com"
 
 
-def microsoft(http: Http) -> Iterator[Job]:
-    cards = {}
+def microsoft(http: HttpClient) -> Iterator[Job]:
+    cards: dict = {}
     searches = [(q, "") for q in QUERIES] + ([("", c.HOME_COUNTRY)] if c.HOME_COUNTRY else [])
     for query, location in searches:
         for page in range(PAGES):
@@ -106,8 +106,8 @@ def workday(company: str, host: str, tenant: str, site: str):
     base = f"https://{host}.myworkdayjobs.com"
     api = f"{base}/wday/cxs/{tenant}/{site}"
 
-    def fetch(http: Http) -> Iterator[Job]:
-        cards = {}
+    def fetch(http: HttpPostClient) -> Iterator[Job]:
+        cards: dict = {}
         for query in QUERIES:
             for page in range(PAGES):
                 r = http.post(f"{api}/jobs", json={
@@ -150,8 +150,8 @@ _ORACLE = "https://eeho.fa.us2.oraclecloud.com/hcmRestApi/resources/latest"
 _ORACLE_SITE = "CX_45001"
 
 
-def oracle(http: Http) -> Iterator[Job]:
-    cards = {}
+def oracle(http: HttpClient) -> Iterator[Job]:
+    cards: dict = {}
     for query in QUERIES:
         for page in range(PAGES):
             r = http.get(f"{_ORACLE}/recruitingCEJobRequisitions", params={
@@ -195,7 +195,7 @@ def oracle(http: Http) -> Iterator[Job]:
 
 # --- Amazon: amazon.jobs/en/search.json — the full text comes right in the search response ---------
 
-def amazon(http: Http) -> Iterator[Job]:
+def amazon(http: HttpClient) -> Iterator[Job]:
     seen = set()
     for query in QUERIES:
         for page in range(PAGES):

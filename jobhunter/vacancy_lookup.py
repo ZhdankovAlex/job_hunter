@@ -10,7 +10,7 @@ import json
 import re
 
 from . import config
-from .http import FetchError, Http
+from .http import FetchError, Http, HttpClient
 from .models import html_to_text
 from .keys import norm_url
 
@@ -60,7 +60,7 @@ def _job_posting(raw: str) -> dict | None:
     return None
 
 
-def fetch(url: str, http: Http | None = None) -> dict:
+def fetch(url: str, http: HttpClient | None = None) -> dict:
     """A vacancy from the page: {url, company, title, text}. Company and title come from JobPosting or <title>.
 
     Raises:

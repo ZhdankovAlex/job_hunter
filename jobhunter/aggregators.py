@@ -2,13 +2,13 @@
 import logging
 
 from . import config
-from .http import FetchError
+from .http import FetchError, HttpClient
 from .models import Job, html_to_text, parse_date
 
 log = logging.getLogger(__name__)
 
 
-def _json(http, url, params=None):
+def _json(http: HttpClient, url, params=None):
     r = http.get(url, params=params)
     if r.status_code != 200:
         raise FetchError(f"{url}: HTTP {r.status_code}")
@@ -18,7 +18,7 @@ def _json(http, url, params=None):
         raise FetchError(f"{url}: not JSON ({e})")
 
 
-def arbeitnow(http):
+def arbeitnow(http: HttpClient):
     for page in range(1, config.ARBEITNOW_PAGES + 1):
         data = _json(http, "https://www.arbeitnow.com/api/job-board-api", {"page": page})
         for j in data.get("data", []):
@@ -37,7 +37,7 @@ def arbeitnow(http):
             break
 
 
-def remoteok(http):
+def remoteok(http: HttpClient):
     data = _json(http, "https://remoteok.com/api")
     for j in data:
         if not isinstance(j, dict) or "position" not in j:
@@ -62,7 +62,7 @@ def _himalayas_salary(j):
     return f"{j.get('currency') or ''} {amount} / {j.get('salaryPeriod') or 'year'}".strip()
 
 
-def himalayas(http):
+def himalayas(http: HttpClient):
     for params in config.HIMALAYAS_QUERIES:
         data = _json(http, "https://himalayas.app/jobs/api/search", {**params, "sort": "recent"})
         for j in data.get("jobs", []):
@@ -84,7 +84,7 @@ def himalayas(http):
 SOURCES = {"arbeitnow": arbeitnow, "remoteok": remoteok, "himalayas": himalayas}
 
 
-def fetch(name, http):
+def fetch(name, http: HttpClient):
     """Collects what it can; on an error returns what it already has."""
     jobs = []
     try:

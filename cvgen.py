@@ -9,6 +9,7 @@ The result is cv_out/<date>/<company>_<vacancy>.md (a draft to check) and a .pdf
 The same from the web UI: the "📄 CV" button in the report or the CV page.
 """
 import argparse
+import io
 import json
 import sys
 from pathlib import Path
@@ -37,7 +38,8 @@ def find_job(query: str) -> dict:
 
 
 def main() -> None:
-    sys.stdout.reconfigure(encoding="utf-8")
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("query", nargs="?", help="link to the vacancy or part of a company / role name")
     p.add_argument("--text", type=Path, help="file with the vacancy text (if it is not in the report)")

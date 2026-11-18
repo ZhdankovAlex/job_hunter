@@ -125,7 +125,7 @@ def analyze(day: str = "") -> dict:
     pdf_text, base_text, pdfs = _cv_texts()
     profile = cv_match.CvProfile(geo.S.get("cv", {}))
 
-    core = Counter()
+    core: Counter[str] = Counter()
     fits = []
     for job in relevant:
         holder = type("Job", (), {"title": job["title"], "company": job["company"], "mismatch_lang": ""})()
@@ -146,8 +146,8 @@ def analyze(day: str = "") -> dict:
     keywords = [{"name": name, "count": c, "share": round(100 * c / n), "in_cv": where(name),
                  "partial": cv_match.PARTIAL.get(name, "")}  # AWS: S3 only — present, but with a caveat
                 for name, c in core.most_common(TOP_KEYWORDS)]
-    titles = Counter()
-    levels = Counter()
+    titles: Counter[str] = Counter()
+    levels: Counter[str] = Counter()
     for job in relevant:
         for phrase, rx in TITLE_PHRASES.items():
             if re.search(rx, job["title"], re.I):

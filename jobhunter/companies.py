@@ -7,7 +7,7 @@ _GENERIC_SUFFIXES = {"labs", "ai", "com", "io", "org", "group", "technologies", 
 
 
 def load_companies(path=config.COMPANIES_FILE):
-    companies = {}
+    companies: dict = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):

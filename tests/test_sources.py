@@ -77,3 +77,17 @@ def test_manual_jobs_company_override(monkeypatch):
     assert jobs[1].title == "Lead Engineer"  # " - Agency" is the site name, cut off
     assert (jobs[1].location, jobs[1].remote, jobs[1].source) == ("Remote", True, "manual")
     assert jobs[0].location == ""  # no location in the entry — as before
+
+
+def test_fake_and_real_http_satisfy_protocol():
+    """HttpClient is a structural type: both Http and FakeHttp fit, though neither inherits from it.
+
+    isinstance with runtime_checkable only checks that the methods exist; mypy compares signatures (conftest.py).
+    """
+    from jobhunter.http import Http, HttpClient
+
+    assert isinstance(Http(), HttpClient)
+    assert isinstance(FakeHttp({}), HttpClient)
+    assert not isinstance(object(), HttpClient)
+    assert not issubclass(FakeHttp, Http)
+    assert hasattr(Http, "post") and not hasattr(FakeHttp, "post")  # the Workday source needs HttpPostClient
