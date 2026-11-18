@@ -4,6 +4,13 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-18
 
+### Release notes bot: two merges in a row no longer fail the run (#3)
+
+- release-notes.yml: cancel-in-progress, the newest push supersedes the older run; a push rejected because main moved on exits cleanly, the run for the newer push rebuilds the notes from the whole history
+- docs/testing.md: how the bot handles merges in a row
+
+<sub>19b807f</sub>
+
 ### mypy in CI: type check on every PR, HttpClient protocol for sources (#2)
 
 - mypy in requirements-dev.txt and [tool.mypy] in pyproject.toml: jobhunter, web, main.py, cvgen.py, tests/conftest.py, check_untyped_defs, pydantic plugin; a "Types (mypy)" step in ci.yml
