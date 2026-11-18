@@ -12,7 +12,8 @@ permissions:
 
 concurrency:
   group: release-notes
-  cancel-in-progress: false
+  # the notes are rebuilt from the whole history, so only the run for the newest push matters
+  cancel-in-progress: true
 
 jobs:
   notes:
@@ -36,4 +37,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
           git commit -m "RELEASE_NOTES.md: update"
-          git push
+          # Two merges in a row: by the time this run pushes, main may already have a newer commit.
+          # Then the run for that push rebuilds the notes from the whole history, nothing is lost.
+          if ! git push; then
+            git fetch origin main
+            if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+              echo "main moved on: the run for the newer push rebuilds RELEASE_NOTES.md"
+              exit 0
+            fi
+            exit 1
+          fi

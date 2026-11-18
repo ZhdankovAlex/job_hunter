@@ -76,6 +76,8 @@ protocol: if the fake drifts from the real client, the type check fails, not a r
 
 `.github/workflows/release-notes.yml`: after a push to `main` rebuilds `RELEASE_NOTES.md` from the git history
 and commits it back if it changed (title `RELEASE_NOTES.md: update`) — run `git pull --rebase` before the next push.
+Two merges in a row do not fail it: a newer push cancels the older run, and a run whose push is rejected because
+`main` moved on exits cleanly — the run for the newer push rebuilds the notes from the whole history.
 
 ## Environment variables
 
