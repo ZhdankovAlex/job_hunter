@@ -4,6 +4,22 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-18
 
+### CV: a Projects section for pet projects, only for ATS and scraping vacancies (#15)
+
+- cvgen: a [[projects]] section in the base; in the CV it goes after experience and only when the vacancy has a topic from the project's requires. New topic scraping: ATS, scrapers, crawlers, job boards. Other CVs, AI roles and the base CVs have no pet project, so it does not mix with work experience. The one-page variant keeps one project bullet
+- cvgen: the AI thesis line is optional: without thesis_ai in the base an AI vacancy broke the build
+- cv/base.example.toml: an example project; docs/cv.md: how the section is chosen
+- tests/test_cvgen_report.py: when the section is there and when not; topic regexes stay linear on 100 KB
+
+<sub>1ada2d6</sub>
+
+### Report: numeric column headers sit above their numbers (#14)
+
+- in the HTML report numbers in cells are right-aligned while headers were left-aligned: in the wide "Most missing skills" table the key-skill counts stood under the Nice-to-have header, and the "Key (not in the CV)" column looked empty. Headers of numeric columns are right-aligned now; the same for "Score" and "Raw score"
+- tests/test_cvgen_report.py: in every report table a numeric column has a header with the same alignment
+
+<sub>0bb11e5</sub>
+
 ### Bump the python group with 14 updates (#13)
 
 Updates the requirements on [requests](https://github.com/psf/requests), [google-auth](https://github.com/googleapis/google-cloud-python), [pypdf](https://github.com/py-pdf/pypdf), [google-auth-oauthlib](https://github.com/googleapis/google-cloud-python), [fastapi](https://github.com/fastapi/fastapi), [uvicorn](https://github.com/Kludex/uvicorn), [jinja2](https://github.com/pallets/jinja), [pytest](https://github.com/pytest-dev/pytest), [pytest-cov](https://github.com/pytest-dev/pytest-cov), [pre-commit](https://github.com/pre-commit/pre-commit), [httpx](https://github.com/encode/httpx), [ruff](https://github.com/astral-sh/ruff), [mypy](https://github.com/python/mypy) and [schemathesis](https://github.com/schemathesis/schemathesis) to permit the latest version.
