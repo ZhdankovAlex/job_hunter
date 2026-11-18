@@ -4,6 +4,15 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-18
 
+### Refactoring after the code review: web/app.py split into modules, main.run into stages, no import cycles (#9)
+
+- web/app.py (1154 → 672 lines): Pydantic models moved to web/models.py, starting runs and the daily schedule to web/runner.py, the cache of slow pages to web/cache.py. Runner takes the project folder, the log and on_finish in its constructor, so a test swaps the log without patching a module global; "Skills" writes its cache through cache.put instead of by hand. The OpenAPI schema is unchanged (compared byte for byte before and after)
+- main.run (cyclomatic complexity 119) is split into stage functions over a shared RunContext; the order of progress stages and the behaviour stay the same. New tests/test_main_run.py runs the whole pipeline without network (FakeHttp, one company on Greenhouse): stage order, reports and the vacancies JSON, any write outside tmp fails the test
+- the "main language of the stack" check moved from filters to jobhunter/stack.py: the filters ↔ verify import cycle (worked around with a local import) is gone
+- docs: architecture.md — web/ modules, stack, main.py stages; web-ui.md — files in web/; testing.md — the new run test
+
+<sub>4eb1a8c</sub>
+
 ### Tests for the vacancy score: relevance coverage from 39% to 99% (#8)
 
 - tests/test_relevance.py: Profile.score and location_points on a small profile.toml of its own with "telling" weights — the total shows which adjustment fired. Skills and their order by weight, title-only adjustments, outsourcing, Russian language (share of Cyrillic or a mark), Go vs "Python not primary" (they do not add up), JVM and 8+ years, language marks, CV gaps with the cv_missing_cap floor, a freehire EUR range from 60k (year / month / hour), company priority, every location branch, base_score without penalties, skill edits from the UI, a broken pattern and a broken overrides file
