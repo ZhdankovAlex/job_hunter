@@ -68,8 +68,8 @@ def data(tmp_path, monkeypatch):
     monkeypatch.setattr(web, "REPORTS", reports)
     monkeypatch.setattr(web, "SOURCES_FILE", tmp_path / "sources_latest.json")
     monkeypatch.setattr(web, "FREEHIRE_FILE", tmp_path / "freehire_latest.json")
-    monkeypatch.setattr(web, "WEB_CACHE_FILE", tmp_path / "web_cache.json")  # /api/companies, /api/skills… cache
-    monkeypatch.setattr(web, "_memory_cache", {})
+    monkeypatch.setattr(web.cache, "WEB_CACHE_FILE", tmp_path / "web_cache.json")  # /api/companies, /api/skills… cache
+    monkeypatch.setattr(web.cache, "_memory_cache", {})
 
 
 @pytest.fixture(autouse=True)
@@ -84,8 +84,7 @@ def writes(data, tmp_path, monkeypatch):
     monkeypatch.setattr(levels, "CACHE_FILE", tmp_path / "levels_cache.json")
     monkeypatch.setattr(cv_match, "CACHE_FILE", tmp_path / "cv_text.json")  # CV PDF text cache
     monkeypatch.setattr(cvgen, "OUT_DIR", tmp_path / "cv_out")  # cover letters too: cover_letter.save puts them there
-    monkeypatch.setattr(web, "RUN_LOG", tmp_path / "last_run.log")
-    runner = web.Runner()
+    runner = web.Runner(web.ROOT, tmp_path / "last_run.log")  # the log is in tmp
     monkeypatch.setattr(runner, "_run", lambda commands: None)  # the queue is accepted, scripts do not start
     monkeypatch.setattr(web, "runner", runner)
 
@@ -150,7 +149,7 @@ def test_runs_without_processes():
     web.runner.thread.join(1)
     assert client.post("/api/runs/current/stop").status_code == 409
     assert client.post("/api/runs/current/skip", json={"stage": "ats"}).status_code == 409
-    assert web.RUN_LOG.parent != config.ROOT  # the log is in tmp too
+    assert web.runner.log.parent != config.ROOT  # the log is in tmp too
 
 
 def test_bad_text_does_not_wipe_files():

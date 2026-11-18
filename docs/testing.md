@@ -44,6 +44,7 @@ after `pytest`, `git status` is clean.
 | `tests/test_telegram.py` | Posts of every channel format (markup as on t.me), telegra.ph, reading a channel page, labels and filtering |
 | `tests/test_cvgen_report.py` | A CV for a vacancy (headline for the title, one-page version, HTML); the report: sections and staffing in the appendix |
 | `tests/test_api_schema.py` | The whole web API against its OpenAPI schema (schemathesis): no 500s, responses and codes as in the schema, invalid input is rejected — see below |
+| `tests/test_main_run.py` | The whole `main.run` without network: one company on Greenhouse via `FakeHttp`, the order of stages, reports and the vacancies JSON; a write outside `tmp_path` fails the test |
 | `tests/test_web.py` | Web UI pages open on empty data; the "Skills" cache; reports are served with `Cache-Control: no-cache` |
 | `tests/test_http.py` | A host that does not respond is skipped until the end of the run; success resets the counter |
 | `tests/test_release_notes.py` | `RELEASE_NOTES.md` from the git history: grouping by day, bot commits are skipped |

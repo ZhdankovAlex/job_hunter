@@ -7,6 +7,7 @@ import re
 import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from datetime import date, timedelta, timezone
 
 from jobhunter import (aggregators, applied, config, filters, freehire, geo, html_report, industry, keys, report, sites,
@@ -331,53 +332,119 @@ def main():
     pipeline.finish()
 
 
-def run(args):
-    """The whole run: collection, filters, Telegram, matching against the CV, reports."""
-    today = date.today()
+@dataclass
+class RunContext:
+    """State of one run: the stages of run() read and extend it in turn.
 
+    Fields with field(init=False) appear at their stage — reading one earlier gives AttributeError, not None.
+    """
+
+    args: argparse.Namespace
+    today: date
+    http: Http = field(init=False)
+    ats: AtsClient = field(init=False)
+    fh: freehire.Freehire = field(init=False)
+    fh_settings: dict = field(default_factory=dict)
+    companies: list = field(default_factory=list)
+    scores: dict = field(default_factory=dict)  # norm_name -> Company: score and note for aggregator vacancies
+    career_pages: list[tuple] = field(default_factory=list)
+    fetched: list = field(default_factory=list)
+    fh_jobs: list = field(default_factory=list)
+    seen: dict[str, str] = field(default_factory=dict)
+    max_age_days: int = 30
+    matched: list = field(default_factory=list)
+    rejected: list = field(default_factory=list)
+    stale: int = 0
+    fh_candidates: list = field(default_factory=list)
+    fh_added: int = 0
+    fh_twins: int = 0
+    fh_described: int = 0
+    fh_dropped: int = 0
+    apps: applied.Applications | None = None
+    app_index: StatusIndex | None = None
+    blacklist: Blacklist = field(init=False)
+    fresh: list = field(default_factory=list)
+    unmerged: int = 0
+    tg_jobs: list | None = None  # None — Telegram is off (no section in the report), [] — on, but nothing found
+    tg_failed: list = field(default_factory=list)
+    tg_enriched: int = 0
+    profile: Profile = field(init=False)
+    salaries: SalaryBase = field(init=False)
+
+    @property
+    def reported(self) -> list:
+        """Vacancies of the report: new ones from ATS/sites and Telegram posts that passed the checks."""
+        return [*self.fresh, *(self.tg_jobs or [])]
+
+
+def run(args: argparse.Namespace) -> None:
+    """The whole run: collection, filters, Telegram, matching against the CV, reports — stages in progress order."""
+    ctx = RunContext(args, date.today())
+    _stage_companies(ctx)
+    ctx.http = Http()
+    _stage_freehire(ctx)
+    _career_pages(ctx)
+    progress.start("sources")
+    ctx.fetched = collect(args, ctx.companies, ctx.http, ctx.ats, ctx.career_pages)
+    progress.count(fetched=len(ctx.fetched))
+    _stage_filter(ctx)
+    _stage_freehire_texts(ctx)
+    _stage_sheets(ctx)
+    _stage_telegram(ctx)
+    mark_first_seen(ctx.fresh, ctx.tg_jobs or [], ctx.today, ctx.seen)
+    _stage_scoring(ctx)
+    _stage_salaries(ctx)
+    _score_rejected(ctx)
+    _stage_reports(ctx, _stats(ctx))
+
+
+def _stage_companies(ctx: RunContext) -> None:
+    """The company list; --only / --limit narrow the crawl, but not the score table."""
     progress.start("companies")
-    companies = load_companies()
-    scores = {norm_name(c.name): c for c in companies}
-    if args.only:
-        wanted = {norm_name(n) for n in args.only.split(",")}
-        companies = [c for c in companies if norm_name(c.name) in wanted]
-    if args.limit:
-        companies = companies[: args.limit]
+    ctx.companies = load_companies()
+    ctx.scores = {norm_name(c.name): c for c in ctx.companies}
+    if ctx.args.only:
+        wanted = {norm_name(n) for n in ctx.args.only.split(",")}
+        ctx.companies = [c for c in ctx.companies if norm_name(c.name) in wanted]
+    if ctx.args.limit:
+        ctx.companies = ctx.companies[: ctx.args.limit]
 
-    http = Http()
-    fh_settings = geo.S.get("freehire", {})
-    fh = freehire.Freehire(http, fh_settings)
-    fh_jobs = []
-    if fh_settings.get("enabled", True) and not args.no_freehire:
+
+def _stage_freehire(ctx: RunContext) -> None:
+    ctx.fh_settings = geo.S.get("freehire", {})
+    ctx.fh = freehire.Freehire(ctx.http, ctx.fh_settings)
+    if ctx.fh_settings.get("enabled", True) and not ctx.args.no_freehire:
         progress.start("freehire")
         try:  # the main source goes first; a parameter dropped by the API stops the run
-            fh_jobs = fh.collect()
+            ctx.fh_jobs = ctx.fh.collect()
         except freehire.IgnoredParamsError as e:
             log.error("%s", e)
             sys.exit(2)
-        save_freehire_queries(fh, fh_settings, fh_jobs)
+        save_freehire_queries(ctx.fh, ctx.fh_settings, ctx.fh_jobs)
     else:
         progress.skip("freehire", "turned off")
-    ats = AtsClient(http)
-    log.info("Companies to check: %d", len(companies))
-    by_name = {c.name: c for c in companies}
-    career_pages = []
+
+
+def _career_pages(ctx: RunContext) -> None:
+    ctx.ats = AtsClient(ctx.http)
+    log.info("Companies to check: %d", len(ctx.companies))
+    by_name = {c.name: c for c in ctx.companies}
     # pages from settings.toml [career_pages]: company = link or { url, location, links }. They were picked by hand,
     # so they are read even for outsourcing companies — such vacancies go to the "Staffing/outsourcing" appendix
     for name, page in geo.S.get("career_pages", {}).items():
         if name in by_name:
             page = page if isinstance(page, dict) else {"url": page}
-            career_pages.append((by_name[name], page["url"], page.get("location", ""), page.get("links", "")))
-    progress.start("sources")
-    fetched = collect(args, companies, http, ats, career_pages)
-    progress.count(fetched=len(fetched))
-    progress.start("filter", total=len(fetched))
+            ctx.career_pages.append((by_name[name], page["url"], page.get("location", ""), page.get("links", "")))
 
-    seen = load_seen()
-    max_age_days = int(geo.S.get("max_age_days", 30))
-    matched, rejected, seen_urls, stale = [], [], set(), 0
-    for job in fetched:
-        known = scores.get(norm_name(job.company))
+
+def _stage_filter(ctx: RunContext) -> None:
+    """Filters for every collected vacancy: duplicates, role and rules (filters.apply), freshness."""
+    progress.start("filter", total=len(ctx.fetched))
+    ctx.seen = load_seen()
+    ctx.max_age_days = int(geo.S.get("max_age_days", 30))
+    seen_urls: set[str] = set()
+    for job in ctx.fetched:
+        known = ctx.scores.get(norm_name(job.company))
         if known and not job.score:  # a vacancy from an aggregator, the company is in our list
             job.score, job.note = known.score, known.note
         key = keys.norm_url(job.url) if job.url else ""
@@ -388,7 +455,7 @@ def run(args):
         if not filters.apply(job):
             if job.reject:  # the role fits, but another rule fired — show it in "Rejected"
                 seen_urls.add(key)
-                rejected.append(job)
+                ctx.rejected.append(job)
                 progress.tally("rejects", _reason_group(job.reject))
                 progress.event("reject", f"{job.company} — {job.title}: {job.reject}")
             else:
@@ -396,71 +463,82 @@ def run(args):
             continue
         seen_urls.add(key)
         priority = keys.company_key(job.company) in geo.PRIORITY_COMPANIES
-        if not priority and not is_fresh(job, seen, today, max_age_days):
-            stale += 1
-            job.reject = f"older than {max_age_days} days"
-            rejected.append(job)
+        if not priority and not is_fresh(job, ctx.seen, ctx.today, ctx.max_age_days):
+            ctx.stale += 1
+            job.reject = f"older than {ctx.max_age_days} days"
+            ctx.rejected.append(job)
             progress.tally("rejects", "old")
             continue
-        matched.append(job)
+        ctx.matched.append(job)
         progress.tally("rejects", "passed")
         progress.event("found", f"{job.company} — {job.title} ({job.location or 'remote'})")
 
-    # freehire: those matching already found ones (by URL or company+title) are only marked;
-    # for the rest the full text is requested and checked
-    progress.count(matched=len(matched))
+
+def _stage_freehire_texts(ctx: RunContext) -> None:
+    """freehire: the full text for candidates and a check by it; at the end blocked_urls are dropped."""
+    progress.count(matched=len(ctx.matched))
     progress.start("freehire_texts")
-    by_url = {keys.norm_url(j.url): j for j in matched}
-    by_title = {(keys.company_key(j.company), norm_name(j.title)): j for j in matched}
-    max_experience = int(fh_settings.get("max_experience_years", 7))
-    fh_added = fh_twins = 0
-    fh_candidates = []
-    for job in fh_jobs:
+    candidates = ctx.fh_candidates = _freehire_candidates(ctx)[: int(ctx.fh_settings.get("descriptions_top", 200))]
+    missing_text = [j for j in candidates if not j.extra.get("full_description")]
+    if missing_text:  # the search already gives the full text; an extra request is only for rare exceptions
+        ctx.fh.fill_descriptions(missing_text)
+    ctx.fh_described = sum(bool(j.extra.get("full_description")) for j in candidates)
+    for job in candidates:
+        if freehire.prepare(job):
+            ctx.fh_added += 1
+            ctx.matched.append(job)
+            progress.tally("rejects", "passed")
+            progress.event("found", f"{job.company} — {job.title} (freehire)")
+        else:
+            ctx.rejected.append(job)
+            progress.tally("rejects", _reason_group(job.reject or "wrong role"))
+    ctx.fh_dropped = len(candidates) - ctx.fh_added
+    ctx.fh.diagnose_empty()
+
+    blocked_urls = {keys.norm_url(u) for u in geo.S.get("blocked_urls", [])}
+    ctx.matched = [j for j in ctx.matched if keys.norm_url(j.url) not in blocked_urls]
+
+
+def _freehire_candidates(ctx: RunContext) -> list:
+    """freehire vacancies without a twin among the found ones that pass the prefilter; twins only get the source.
+
+    A twin is matched by URL or by company + title.
+    """
+    by_url = {keys.norm_url(j.url): j for j in ctx.matched}
+    by_title = {(keys.company_key(j.company), norm_name(j.title)): j for j in ctx.matched}
+    max_experience = int(ctx.fh_settings.get("max_experience_years", 7))
+    candidates = []
+    for job in ctx.fh_jobs:
         url_key, title_key = keys.norm_url(job.url), (keys.company_key(job.company), norm_name(job.title))
         twin = by_url.get(url_key) or by_title.get(title_key)
         if twin is not None:
             if not twin.extra:
-                fh_twins += 1
+                ctx.fh_twins += 1
                 twin.extra = job.extra
                 twin.sources = ["freehire", *(twin.sources or [twin.source])]
             continue
-        known = scores.get(norm_name(job.company))
+        known = ctx.scores.get(norm_name(job.company))
         if known:
             job.score, job.note = known.score, known.note
         if freehire.prefilter(job, max_experience):
-            fh_candidates.append(job)
+            candidates.append(job)
         elif job.reject:
-            rejected.append(job)
+            ctx.rejected.append(job)
             progress.tally("rejects", _reason_group(job.reject))
-    fh_candidates = fh_candidates[: int(fh_settings.get("descriptions_top", 200))]
-    missing_text = [j for j in fh_candidates if not j.extra.get("full_description")]
-    if missing_text:  # the search already gives the full text; an extra request is only for rare exceptions
-        fh.fill_descriptions(missing_text)
-    fh_described = sum(bool(j.extra.get("full_description")) for j in fh_candidates)
-    for job in fh_candidates:
-        if freehire.prepare(job):
-            fh_added += 1
-            matched.append(job)
-            progress.tally("rejects", "passed")
-            progress.event("found", f"{job.company} — {job.title} (freehire)")
-        else:
-            rejected.append(job)
-            progress.tally("rejects", _reason_group(job.reject or "wrong role"))
-    fh_dropped = len(fh_candidates) - fh_added
-    fh.diagnose_empty()
+    return candidates
 
-    blocked_urls = {keys.norm_url(u) for u in geo.S.get("blocked_urls", [])}
-    matched = [j for j in matched if keys.norm_url(j.url) not in blocked_urls]
 
+def _stage_sheets(ctx: RunContext) -> None:
+    """Check against applications (mail, applications_manual.toml); merge duplicates; staffing and referral marks."""
     progress.start("sheets")
-    apps = None if args.no_applied else applied.load_applications()
+    apps = ctx.apps = None if ctx.args.no_applied else applied.load_applications()
     try:  # application statuses from mail (local cache) and applications_manual.toml
-        app_index = StatusIndex(apps)
+        ctx.app_index = StatusIndex(apps)
     except Exception:
         log.exception("Could not read application statuses — there will be no \"📬\" marks")
-        app_index = None
+        ctx.app_index = None
     fresh = []
-    for job in matched:
+    for job in ctx.matched:
         if apps and apps.has_job(job):
             continue
         if apps:
@@ -469,143 +547,167 @@ def run(args):
             if status is not None:
                 job.history_marks.append(f"🔁 already applied to this vacancy: {status or 'no status'}")
         fresh.append(job)
-    unmerged = len(fresh)
-    fresh = merge_duplicates(fresh)
-    blacklist = Blacklist()
-    for job in fresh:
-        job.staffing = blacklist.reason(job.company, job.title, job.description)
-        job.app_status = app_index.lookup(job.company) if app_index else ""
+    ctx.unmerged = len(fresh)
+    ctx.fresh = merge_duplicates(fresh)
+    ctx.blacklist = Blacklist()
+    for job in ctx.fresh:
+        job.staffing = ctx.blacklist.reason(job.company, job.title, job.description)
+        job.app_status = ctx.app_index.lookup(job.company) if ctx.app_index else ""
         job.referral = keys.company_key(job.company) in geo.REFERRAL_COMPANIES
 
-    use_telegram = config.TELEGRAM_ENABLED and config.TELEGRAM_CHANNELS and not args.no_telegram
+
+def _stage_telegram(ctx: RunContext) -> None:
+    """Telegram: collect the channels and run the same text checks."""
+    use_telegram = config.TELEGRAM_ENABLED and config.TELEGRAM_CHANNELS and not ctx.args.no_telegram
     if not use_telegram:
-        why = "--no-telegram" if args.no_telegram else "turned off in settings.toml [telegram]"
+        why = "--no-telegram" if ctx.args.no_telegram else "turned off in settings.toml [telegram]"
         progress.skip("telegram", why)
         progress.skip("telegram_check", why)
-    else:
-        progress.start("telegram", total=len(config.TELEGRAM_CHANNELS))
-    tg_all, tg_failed = telegram.collect(http) if use_telegram else (None, [])
-    tg_jobs: list | None = None if tg_all is None else []
-    if tg_all is not None:
-        progress.start("telegram_check", total=len(tg_all))
-    tg_enriched = enrich_from_ats(tg_all or [], ats)
+        ctx.tg_enriched = enrich_from_ats([], ctx.ats)
+        return
+    progress.start("telegram", total=len(config.TELEGRAM_CHANNELS))
+    tg_all, ctx.tg_failed = telegram.collect(ctx.http)
+    if tg_all is None:
+        ctx.tg_enriched = enrich_from_ats([], ctx.ats)
+        return
+    progress.start("telegram_check", total=len(tg_all))
+    tg_jobs: list = []
+    ctx.tg_jobs = tg_jobs
+    ctx.tg_enriched = enrich_from_ats(tg_all, ctx.ats)
     lookups = {"new": 0}  # how many new companies were already looked up on ATS in this run (limit TG_BOARD_LOOKUPS)
-    for job in tg_all or []:  # Telegram: the same text checks
-        assert tg_jobs is not None  # the loop runs only when tg_all is not None, and then tg_jobs is a list
+    for job in tg_all:
         progress.step(f"@{job.channel}: {job.title}")
         verify.check(job, job.text, job.full_text)
         # the post passed on a short text (a digest with a link to wantapply etc.) — take the full text from
         # the company board and check again: requirements like office or language are only there
-        if not job.reject and not job.full_text and _enrich_from_company_boards([job], ats, lookups):
-            tg_enriched += 1
+        if not job.reject and not job.full_text and _enrich_from_company_boards([job], ctx.ats, lookups):
+            ctx.tg_enriched += 1
             verify.check(job, job.text, job.full_text)
         if job.reject:
-            rejected.append(job)
+            ctx.rejected.append(job)
             progress.tally("rejects", _reason_group(job.reject))
             progress.event("reject", f"@{job.channel}: {job.company} — {job.title}: {job.reject}")
             continue
         progress.tally("rejects", "passed")
         progress.event("found", f"@{job.channel}: {job.company} — {job.title}")
-        if apps:
-            job.applied_status = apps.company_statuses(job.company)
-        job.staffing = blacklist.reason(job.company, job.title, job.text)
-        job.app_status = app_index.lookup(job.company) if app_index else ""
+        if ctx.apps:
+            job.applied_status = ctx.apps.company_statuses(job.company)
+        job.staffing = ctx.blacklist.reason(job.company, job.title, job.text)
+        job.app_status = ctx.app_index.lookup(job.company) if ctx.app_index else ""
         if job.app_status:
             job.marks.append(f"📬 {job.app_status}")
         tg_jobs.append(job)
-    mark_first_seen(fresh, tg_jobs or [], today, seen)
 
-    progress.count(new=len(fresh), telegram=len(tg_jobs or []))
+
+def _stage_scoring(ctx: RunContext) -> None:
+    """CV Fit, tier, industry and the relevance score."""
+    tg_jobs = ctx.tg_jobs or []
+    progress.count(new=len(ctx.fresh), telegram=len(tg_jobs))
     progress.start("scoring")
     cv = CvProfile(geo.S.get("cv", {}))
-    for job in fresh:
+    for job in ctx.fresh:
         cv.analyze(job, job.description)
-    for job in tg_jobs or []:
+    for job in tg_jobs:
         cv.analyze(job, job.text)
-    for job in [*fresh, *(tg_jobs or [])]:
+    for job in ctx.reported:
         job.tier = tiers.tier(job)
         job.industries = industry.classify(job.company, job.title, getattr(job, "description", "") or job.text)
 
-    profile = Profile()
-    for job in fresh:
+    profile = ctx.profile = Profile()
+    for job in ctx.fresh:
         job.relevance, job.matched_skills = profile.score(
             job, job.description, job.lang_marks, profile.location_points(job)
         )
-    for job in tg_jobs or []:
+    for job in tg_jobs:
         job.relevance, job.matched_skills = profile.score(
             job, job.text, job.marks, profile.tg_location_points(job)
         )
-    # salaries: add to the base of salary ranges and label every vacancy (stated range or estimate)
-    salaries = SalaryBase()
+
+
+def _stage_salaries(ctx: RunContext) -> None:
+    """Adds to the base of salary ranges and labels every vacancy: stated range or estimate; median by country."""
+    today = ctx.today
+    salaries = ctx.salaries = SalaryBase()
     for job in telegram.SALARY_POSTS:
         region = "cis" if job.channel in config.TELEGRAM_CIS_CHANNELS else "global"
         salaries.add(f"tg:{job.post_url}:{norm_name(job.title)}", job.title, job.salary, region,
                      f"@{job.channel}", (job.posted or today).isoformat()[:10])
-    for job in [*fetched, *fh_jobs]:
+    for job in [*ctx.fetched, *ctx.fh_jobs]:
         if job.salary:
             salaries.add(keys.norm_url(job.url), job.title, job.salary, "global", job.source,
                          (job.posted.date() if job.posted else today).isoformat())
     salaries.save()
-    for job in [*fresh, *(tg_jobs or [])]:
+    for job in ctx.reported:
         job.grade = salary_rules.grade(job.title, getattr(job, "description", "") or getattr(job, "text", ""))
         job.salary_note = salaries.describe(job.title, job.salary, job.grade)
     # median for the vacancy country from levels.fyi (cached for a week — a few requests per run)
-    market = levels.Levels(http)
-    for job in [*fresh, *(tg_jobs or [])]:
+    market = levels.Levels(ctx.http)
+    for job in ctx.reported:
         job.levels_note, job.levels_url = market.describe(job.location, getattr(job, "reloc_country", ""))
     market.save()
 
-    # the "raw score" of rejected ones — only skills and title, without location adjustments
+
+def _score_rejected(ctx: RunContext) -> None:
+    """The "raw score" of rejected ones — only skills and title, without location adjustments; no repeats."""
     unique_rejected: dict = {}
-    for job in rejected:
+    for job in ctx.rejected:
         text = getattr(job, "description", "") or getattr(job, "text", "")
-        job.relevance, job.matched_skills = profile.base_score(job, text)
+        job.relevance, job.matched_skills = ctx.profile.base_score(job, text)
         key = (keys.company_key(job.company), norm_name(job.title))
         if key not in unique_rejected or job.relevance > unique_rejected[key].relevance:
             unique_rejected[key] = job
-    rejected = sorted(unique_rejected.values(), key=lambda j: -j.relevance)
-    for job in rejected:
-        if apps:
-            job.applied_status = apps.company_statuses(job.company)
+    ctx.rejected = sorted(unique_rejected.values(), key=lambda j: -j.relevance)
+    for job in ctx.rejected:
+        if ctx.apps:
+            job.applied_status = ctx.apps.company_statuses(job.company)
     rejected_file = config.ROOT / "state" / "rejected_latest.tsv"
     rejected_file.write_text(
         "score\tcompany\ttitle\treason\tquote\turl\n" + "\n".join(
             "\t".join(str(x).replace("\t", " ").replace("\n", " ") for x in (
                 j.relevance, j.company, j.title, j.reject, j.reject_quote, j.url or getattr(j, "post_url", "")))
-            for j in rejected),
+            for j in ctx.rejected),
         encoding="utf-8",
     )
 
-    stats = {
-        "fetched": len(fetched),
-        "matched": len(matched),
-        "in_applied": len(matched) - unmerged,
+
+def _stats(ctx: RunContext) -> dict:
+    """Run summary for the reports (report.render, html_report.render)."""
+    mapping, companies, fh = ctx.ats.mapping, ctx.companies, ctx.fh
+    return {
+        "fetched": len(ctx.fetched),
+        "matched": len(ctx.matched),
+        "in_applied": len(ctx.matched) - ctx.unmerged,
         "companies": len(companies),
-        "mapped": sum(1 for c in companies if (ats.mapping.get(c.name) or {}).get("platform")),
-        "tg_failed": tg_failed,
-        "merged": unmerged - len(fresh),
-        "stale": stale,
-        "salary": {"samples": len(salaries.samples), "summary": salaries.summary()},
-        "tg_enriched": tg_enriched,
+        "mapped": sum(1 for c in companies if (mapping.get(c.name) or {}).get("platform")),
+        "tg_failed": ctx.tg_failed,
+        "merged": ctx.unmerged - len(ctx.fresh),
+        "stale": ctx.stale,
+        "salary": {"samples": len(ctx.salaries.samples), "summary": ctx.salaries.summary()},
+        "tg_enriched": ctx.tg_enriched,
         "freehire": {
-            "enabled": bool(fh_jobs) or fh.requests > 0 or fh.cache_hits > 0,
-            "fetched": len(fh_jobs), "added": fh_added, "twins": fh_twins,
+            "enabled": bool(ctx.fh_jobs) or fh.requests > 0 or fh.cache_hits > 0,
+            "fetched": len(ctx.fh_jobs), "added": ctx.fh_added, "twins": ctx.fh_twins,
             "requests": fh.requests, "cache_hits": fh.cache_hits, "totals": fh.totals,
-            "described": fh_described, "dropped": fh_dropped,
-            "diagnosis": fh.diagnosis, "candidates": len(fh_candidates),
+            "described": ctx.fh_described, "dropped": ctx.fh_dropped,
+            "diagnosis": fh.diagnosis, "candidates": len(ctx.fh_candidates),
         },
-        "rejected": rejected,
-        "applications": app_index.digest() if app_index else None,
-        "max_age_days": max_age_days,
-        "referral": [(n, bool((ats.mapping.get(n) or {}).get("platform")))
+        "rejected": ctx.rejected,
+        "applications": ctx.app_index.digest() if ctx.app_index else None,
+        "max_age_days": ctx.max_age_days,
+        "referral": [(n, bool((mapping.get(n) or {}).get("platform")))
                      for n in geo.S.get("referral_companies", [])],
-        "must_report": must_report(ats, fetched, matched),
+        "must_report": must_report(ctx.ats, ctx.fetched, ctx.matched),
     }
+
+
+def _stage_reports(ctx: RunContext, stats: dict) -> None:
+    """CV auto-build (the cv stage), MD/HTML reports and the vacancies JSON (the reports stage)."""
+    today, fresh, tg_jobs = ctx.today, ctx.fresh, ctx.tg_jobs
     config.REPORTS_DIR.mkdir(exist_ok=True)
     # CVs for new vacancies with a high Fit — the "📄 CV" link in the HTML report
     if cvgen.AUTO_MAX > 0:
         progress.start("cv")
-        cvgen.auto_build([*fresh, *(tg_jobs or [])], today)
+        cvgen.auto_build(ctx.reported, today)
     else:
         progress.skip("cv", "auto-build turned off: CVs are built with the button in the report")
     progress.start("reports")
@@ -622,13 +724,13 @@ def run(args):
          "location": j.location, "text": getattr(j, "description", "") or getattr(j, "text", ""), "fit": j.cv_fit,
          # for the Companies page: industry, remote, salary (industry.market_by_industry)
          "industries": j.industries, "remote": getattr(j, "remote", None), "salary": getattr(j, "salary", "")}
-        for j in [*fresh, *(tg_jobs or [])]
+        for j in ctx.reported
     ], ensure_ascii=False)
     (config.ROOT / "state" / "jobs_latest.json").write_text(jobs_json, encoding="utf-8")
     config.JOBS_ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
     (config.JOBS_ARCHIVE_DIR / f"{today.isoformat()}.json").write_text(jobs_json, encoding="utf-8")
-    progress.count(rejected=len(rejected), new_today=sum(j.is_new_today for j in [*fresh, *(tg_jobs or [])]))
-    log.info("Done: %d new of %d matching -> %s and %s", len(fresh), len(matched), out, html_out)
+    progress.count(rejected=len(ctx.rejected), new_today=sum(j.is_new_today for j in ctx.reported))
+    log.info("Done: %d new of %d matching -> %s and %s", len(fresh), len(ctx.matched), out, html_out)
 
 
 if __name__ == "__main__":

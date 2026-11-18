@@ -15,8 +15,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "JOBS_ARCHIVE_DIR", jobs)
     monkeypatch.setattr(config, "MAIL_CACHE_FILE", tmp_path / "mail_cache.json")
     monkeypatch.setattr(config, "MANUAL_APPLICATIONS_FILE", tmp_path / "applications_manual.toml")
-    monkeypatch.setattr(web, "WEB_CACHE_FILE", tmp_path / "web_cache.json")
-    monkeypatch.setattr(web, "_memory_cache", {})
+    monkeypatch.setattr(web.cache, "WEB_CACHE_FILE", tmp_path / "web_cache.json")
+    monkeypatch.setattr(web.cache, "_memory_cache", {})
     return TestClient(web.app), web, jobs
 
 
@@ -37,10 +37,10 @@ def test_skills_counts_are_cached_per_pattern(client):
     assert first["relevant"] == 2
     python = next(s for s in first["skills"] if s["name"] == "Python")
     assert python["matches"] == 2 and python["share"] == 100
-    cached = web._memory_cache["skills"]["value"]["matches"]
+    cached = web.cache._memory_cache["skills"]["value"]["matches"]
     assert python["pattern"] in cached
     assert http.get("/api/skills").json() == first  # the second time — from the cache, the same answer
-    assert json.loads(web.WEB_CACHE_FILE.read_text(encoding="utf-8"))["skills"]["value"]["relevant"] == 2
+    assert json.loads(web.cache.WEB_CACHE_FILE.read_text(encoding="utf-8"))["skills"]["value"]["relevant"] == 2
 
 
 def test_reports_are_not_cached_by_browser(client):

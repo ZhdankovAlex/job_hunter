@@ -14,7 +14,8 @@ from __future__ import annotations
 import re
 
 from . import config as c
-from . import filters, geo
+from . import geo
+from .stack import language_mismatch_text
 
 MIN_TEXT_CHARS = 400  # shorter — we assume there is no vacancy text
 ONSITE_REASON = f"on-site outside {c.HOME_COUNTRY}" if c.HOME_COUNTRY else "on-site"
@@ -270,7 +271,7 @@ def check(job, text: str, full_text: bool) -> None:
         job.penalties.append("experience_7")
 
     # --- stack
-    lang = filters.language_mismatch_text(title, body)
+    lang = language_mismatch_text(title, body)
     if lang in HIDE_LANGUAGES:
         rx = c.TITLE_LANGS.get(lang) or c.OTHER_LANGS.get(lang)
         m = rx.search(f"{title}\n{body}") if rx else None
