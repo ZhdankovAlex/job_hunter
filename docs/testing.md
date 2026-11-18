@@ -111,8 +111,20 @@ Reads go the same way: `-k "read_only and companies"`.
 ## CI
 
 `.github/workflows/ci.yml`: on every pull request and push to `main` GitHub Actions installs the dependencies and
-runs `ruff check .`, `mypy` and `pytest`. Ruff checks only what catches real bugs (syntax, pyflakes, bugbear), not
+runs `ruff check .`, `mypy` and `pytest --cov`. Ruff checks only what catches real bugs (syntax, pyflakes, bugbear), not
 style: the settings are in `pyproject.toml`.
+
+Coverage is measured for `jobhunter` and `web` (`[tool.coverage]` in `pyproject.toml`); the run fails below
+`fail_under` (68%, just under the current total of 70%). Raise the floor when tests are added. Locally, with the
+list of uncovered lines:
+
+```bash
+.venv\Scripts\python.exe -m pytest --cov
+```
+
+`.pre-commit-config.yaml` runs ruff, mypy and basic file checks (TOML/YAML syntax, merge markers, trailing spaces)
+before every commit; enable it once with `pre-commit install`. `.github/dependabot.yml` opens a weekly PR with
+updated Python dependencies and a monthly one for GitHub Actions; CI checks each of them.
 
 mypy checks `jobhunter`, `web`, `main.py`, `cvgen.py` and `tests/conftest.py`, including the bodies of unannotated
 functions (`check_untyped_defs`); the settings are in `[tool.mypy]` in `pyproject.toml`. CI runs on Linux, so

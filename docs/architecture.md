@@ -19,6 +19,7 @@ documents in `docs/`, linked at the end of each section. What the tool can do is
 - [Applications from mail](#applications-from-mail)
 - [Web UI and run control](#web-ui-and-run-control)
 - [How we treat other people's sites](#how-we-treat-other-peoples-sites)
+- [Design decisions and trade-offs](#design-decisions-and-trade-offs)
 - [Where to look next](#where-to-look-next)
 
 ## The big picture
@@ -254,6 +255,56 @@ no other way.
 - **Nothing is sent.** No applications, no messages. LinkedIn is not read.
 
 More: [sources.md](sources.md#rules-for-every-source)
+
+## Design decisions and trade-offs
+
+The project is sized for one user on one machine. The principles below are applied where they pay off, and
+skipped on purpose where they would only add layers.
+
+**What the code relies on**
+
+- **Dependency inversion, small interfaces.** Sources do not depend on the `Http` class but on the
+  `HttpClient` protocol (`jobhunter/http.py`): `get()` plus a read-only `Response`. Only Workday needs POST, so it
+  takes the wider `HttpPostClient`. The test double `FakeHttp` (`tests/conftest.py`) inherits from nothing; mypy
+  checks it against the protocol, so a fake that drifts from the real client fails CI.
+- **Open for extension.** A new site is a function plus an entry in the `sites.SOURCES` registry (22 sites); a new
+  ATS is an entry in `ats.PLATFORMS` (9 platforms). The run itself does not change.
+- **Anti-corruption layer.** Adapters translate foreign formats (ATS JSON, JSON-LD, RSS, Telegram posts) into one
+  `Job` (`jobhunter/models.py`). Filters, scoring and reports never know where a vacancy came from. `models`
+  imports nothing from the project: it is the shared kernel every other module may depend on.
+- **Validation at the boundary.** Every web endpoint declares `response_model` and its error codes
+  (`errors(...)` in `web/models.py`); request bodies inherit `ApiModel`, which rejects broken input with 422.
+  schemathesis checks the whole API against that contract ([testing.md](testing.md#property-based-api-check-schemathesis)).
+- **One responsibility per module.** The web app keeps routes in `web/app.py`, Pydantic models in `web/models.py`,
+  run control in `web/runner.py` and the page cache in `web/cache.py`. `main.run()` is a list of stage functions
+  over one `RunContext`, not one long function. `jobhunter` never imports `web`, and there are no import cycles.
+
+**What is left out on purpose (KISS)**
+
+- **No database, queue or frontend build.** State is JSON and TOML files, pages are Jinja2, slow pages are cached
+  in memory with the files' mtimes as the key. For one user this is the right size, and there is nothing to operate.
+- **No full DDD.** The modules are already split by meaning: sourcing → screening and scoring → applications →
+  documents → reporting. Aggregates, repositories and domain events pay off when many pieces of data change
+  together and must stay consistent. Nothing like that happens here: a vacancy is collected, filtered and lands
+  in a report, and that is all.
+- **Global config instead of injected paths.** File paths are module constants in `jobhunter/config.py`; tests
+  replace them with `monkeypatch` on `tmp_path`. The downside: a function's signature does not show that it writes
+  a file. Passing a `Paths` object everywhere would fix that, but it means changing almost every function for a
+  small gain.
+
+**How it is tested**
+
+- **A test with every fix.** Every bug found gets a test that shows it, in the same change; fixtures repeat what
+  sites and mail really returned. New features are not written strictly test-first.
+- **Checks on every PR:** ruff, mypy (`check_untyped_defs`), pytest with a coverage floor, and property-based
+  tests of the API. See [testing.md](testing.md).
+
+**Known debt**
+
+- `report.render` and `html_report.render` are long functions with a branch per report section (cyclomatic
+  complexity 86 and 58): the next candidates to split, the way `main.run` was.
+- `sites` (30%) and `progress` (26%) have the lowest test coverage; ATS responses are read through `dict.get`
+  chains, not typed models.
 
 ## Where to look next
 
