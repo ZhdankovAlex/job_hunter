@@ -17,12 +17,14 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from jobhunter import config, cover_letter, coverage, cvgen, industry, interview_prep, manual_apps, market_check, progress, relevance, vacancy_lookup
 from jobhunter.models import norm_name
@@ -42,6 +44,85 @@ app = FastAPI(
     version="1.0",
 )
 templates = Jinja2Templates(directory=WEB / "templates")
+
+
+class ErrorDetail(BaseModel):
+    detail: str
+
+
+class ValidationIssue(BaseModel):
+    loc: list[str | int]
+    msg: str
+    type: str
+
+
+class Unprocessable(BaseModel):
+    detail: list[ValidationIssue] | str = Field(
+        description="A list of pydantic errors (the body does not match the schema) or a text to show in the UI "
+                    "(bad regex, neither a link nor a vacancy text…)")
+
+
+ERROR_TEXT = {400: "The request body could not be parsed (not JSON / not UTF-8)", 404: "Not found",
+              409: "Conflicts with the current state: a run is / is not going on, the name is taken", 422: "Invalid data"}
+
+
+def errors(*codes: int) -> dict[int | str, dict[str, Any]]:
+    """Endpoint error codes for OpenAPI: FastAPI itself describes only 422 and only as a list of pydantic errors,
+    but endpoints also return their own 422 as a string (the UI shows it) — schemathesis checks both."""
+    return {c: {"model": Unprocessable if c == 422 else ErrorDetail, "description": ERROR_TEXT[c]} for c in codes}
+
+
+class SafeJSONResponse(JSONResponse):
+    """JSON that does not fail on lone surrogates: a normal response goes as is (readable non-ASCII text),
+    and if a string cannot be encoded to UTF-8 — the same data with \\uXXXX escaping."""
+
+    def render(self, content: Any) -> bytes:
+        try:
+            return super().render(content)
+        except UnicodeEncodeError:
+            return json.dumps(content, ensure_ascii=True, separators=(",", ":")).encode("ascii")
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """422 like FastAPI's, but the errors echo the input: "\\ud800" in the body gave a 500 on serializing the response."""
+    return SafeJSONResponse({"detail": jsonable_encoder(exc.errors())}, status_code=422)
+
+
+def _has_surrogate(value: object) -> bool:
+    if isinstance(value, str):
+        return any("\ud800" <= ch <= "\udfff" for ch in value)
+    if isinstance(value, dict):
+        return any(_has_surrogate(k) or _has_surrogate(v) for k, v in value.items())
+    if isinstance(value, list):
+        return any(_has_surrogate(v) for v in value)
+    return False
+
+
+class ApiModel(BaseModel):
+    """A request body. JSON allows "\\ud800", a lone surrogate: a string with it cannot be encoded to UTF-8, and
+    writing it to a file failed (500) or, worse, truncated the file. Rejected on input: 422, like any bad input."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def no_surrogates(cls, data: object) -> object:
+        if _has_surrogate(data):
+            raise ValueError("the text has broken characters (lone UTF-16 surrogates)")
+        return data
+
+
+@app.exception_handler(405)
+async def method_not_allowed(request: Request, exc: Exception) -> JSONResponse:
+    """405 with the full Allow. Starlette takes Allow from the first route with this path, and on /api/cv and
+    /api/skills GET and POST are different routes: OPTIONS /api/cv answered "Allow: POST" though GET exists
+    (found by schemathesis)."""
+    from starlette.routing import Match, Route
+
+    methods = sorted({m for r in app.routes if isinstance(r, Route) and r.methods
+                      and r.matches(request.scope)[0] != Match.NONE for m in r.methods})
+    return JSONResponse({"detail": "Method Not Allowed"}, status_code=405, headers={"Allow": ", ".join(methods)})
+
+
 app.mount("/static", StaticFiles(directory=WEB / "static"), name="static")
 REPORTS.mkdir(exist_ok=True)
 (ROOT / "cv_out").mkdir(exist_ok=True)
@@ -201,7 +282,7 @@ if os.environ.get("JOBHUNTER_DAILY_AT"):
     threading.Thread(target=_daily_scheduler, args=(os.environ["JOBHUNTER_DAILY_AT"],), daemon=True).start()
 
 
-class RunRequest(BaseModel):
+class RunRequest(ApiModel):
     """What to run."""
     kind: str = Field("all", description="all — mail, then vacancies (like run_daily.bat); main — only "
                                           "vacancies; applications — only mail", pattern="^(all|main|applications)$")
@@ -214,7 +295,157 @@ class RunStarted(BaseModel):
     scripts: list[str] = Field(description="Commands in start order")
 
 
-class SkipRequest(BaseModel):
+class Report(BaseModel):
+    date: str = Field(description="YYYY-MM-DD")
+    file: str = Field(description="File name: open /files/reports/<file>")
+    size_kb: int
+    built: str = Field(description="Build time, HH:MM")
+    md: bool = Field(description="A Markdown version sits next to it")
+
+
+class BuiltCv(BaseModel):
+    name: str = Field(description="\"Company — Role\" from the first line of the .md, otherwise the file name")
+    vacancy: str = Field(description="Link to the vacancy or ''")
+    pdf: str
+    md: str = Field(description="Link to the Markdown draft or ''")
+    one_page: bool
+    mtime: float
+    built: str = Field(description="DD.MM HH:MM")
+
+
+class Skill(BaseModel):
+    name: str
+    pattern: str = Field(description="Regular expression (case-insensitive)")
+    base_weight: int = Field(description="Weight from profile.toml")
+    weight: int = Field(description="Weight with the edit from profile_overrides.json")
+    disabled: bool
+    added: bool = Field(description="Your own skill, added from the UI")
+    matches: int = Field(description="Fitting vacancies of the last report that mention the skill")
+    share: int = Field(description="% of fitting vacancies")
+    invalid: bool = Field(False, description="The pattern does not compile")
+
+
+class SkillsReport(BaseModel):
+    skills: list[Skill]
+    relevant: int = Field(description="Fitting vacancies in the last report")
+    day: str = Field(description="Day of the last report or ''")
+
+
+class MarketFit(BaseModel):
+    median: int | None = Field(description="Median CV-to-vacancy match, %; null — not measured")
+    share80: int = Field(description="% of vacancies with a match of 80% or more")
+
+
+class MarketKeyword(BaseModel):
+    name: str
+    count: int
+    share: int = Field(description="% of fitting vacancies where the technology is a key one")
+    in_cv: Literal["pdf", "base", ""] = Field(description="pdf — in the PDF CV, base — only in the base, '' — nowhere")
+    partial: str = Field(description="A caveat: present, but partly (AWS: only S3) or ''")
+
+
+class MarketTitle(BaseModel):
+    name: str
+    count: int
+    share: int
+    in_headline: bool = Field(description="The phrase is in the CV headline")
+
+
+class MarketLevel(BaseModel):
+    name: str
+    count: int
+    share: int
+
+
+class MarketHygiene(BaseModel):
+    stop_words: list[str] = Field(description="Filler words in experience bullets")
+    numbers_by_job: dict[str, int] = Field(description="Company -> bullets with numbers")
+    pages: dict[str, int] = Field(description="PDF -> pages")
+    bullets: int
+    with_numbers: int
+    with_verb: int = Field(description="Bullets starting with an action verb")
+    long: list[str] = Field(description="Too long bullets (the beginning)")
+    avg_words: int
+    no_numbers: list[str] = Field(description="Bullets without numbers (the beginning)")
+    contacts: dict[str, bool] = Field(description="Contact -> found in the PDF")
+
+
+class MarketReport(BaseModel):
+    """Without vacancies in the archive — only day='', total=0, relevant=0 and advice."""
+    day: str
+    total: int = Field(description="Vacancies of the day")
+    relevant: int = Field(description="Fitting by title and with a text")
+    fit: MarketFit | None = None
+    keywords: list[MarketKeyword] = []
+    titles: list[MarketTitle] = []
+    seniority: list[MarketLevel] = []
+    headline: str = Field("", description="CV headlines joined with \" / \"")
+    hygiene: MarketHygiene | None = None
+    days: list[str] = Field([], description="Archive days, newest first")
+    advice: list[str] = Field(description="Conclusions: what to fix in the CV")
+
+
+class Source(BaseModel):
+    """Common fields; the rest comes from state/sources_latest.json and ats_mapping.json as is (ATS: platform, slug…)."""
+    model_config = ConfigDict(extra="allow")
+
+    name: str
+    kind: str = Field(description="ats / aggregator / site / career_page / …")
+    jobs: int = Field(description="Vacancies the source gave")
+    error: str = Field(description="Error or ''")
+    reason: str = Field(description="Why there are no vacancies in the report (a gaps.groups key) or ''")
+    detail: str
+    checked: str = Field(description="When the board was checked, if it matters for the reason, or ''")
+    platform: str | None = Field(None, description="ATS platform; null — board not found")
+    slug: str | None = None
+
+
+class SourceKind(BaseModel):
+    sources: int
+    jobs: int
+    empty: int = Field(description="No vacancies and no error")
+    errors: int
+
+
+class FreehireQuery(BaseModel):
+    name: str
+    title: str
+    params: dict[str, Any]
+    total: int | None = Field(description="Vacancies on the site; null — before the first run")
+    fetched: int | None = Field(description="Fetched; null — before the first run")
+    skipped: bool = Field(description="The query is off (relocation, for example)")
+
+
+class GapGroup(BaseModel):
+    key: str
+    title: str
+    hint: str
+    count: int
+
+
+class GapRow(BaseModel):
+    name: str
+    reason: str
+    detail: str
+    checked: str
+
+
+class Gaps(BaseModel):
+    groups: list[GapGroup]
+    rows: list[GapRow]
+    reports: int | None = Field(description="Reports the companies were looked up in")
+
+
+class SourcesReport(BaseModel):
+    built: str = Field(description="Run time DD.MM HH:MM or ''")
+    rows: list[Source]
+    kinds: dict[str, SourceKind]
+    telegram: list[str]
+    freehire: list[FreehireQuery]
+    gaps: Gaps
+
+
+class SkipRequest(ApiModel):
     """Which stage of the running run to skip."""
     stage: str = Field(description="Stage key from /api/progress (stages[].key); the stage must be running and skippable")
 
@@ -471,7 +702,7 @@ def market_page(request: Request, day: str = ""):
     return page(request, "market", r=market_report(day))
 
 
-@app.get("/api/market", summary="CV vs market",
+@app.get("/api/market", response_model=MarketReport, summary="CV vs market",
          description="A local ATS checker: over the fitting vacancies of a report (state/jobs/<date>.json) — which "
                      "technologies are required and where they are in the CV (pdf / base only / nowhere), what the "
                      "vacancies are called and whether the CV headline matches, experience bullet hygiene and conclusions.")
@@ -546,6 +777,8 @@ def sources_page(request: Request):
                      "errors; plus eta_total (seconds to the end based on past runs) and busy. "
                      "If there were no runs yet — null.")
 def api_progress():
+    # no response_model: progress.json is written by another process (the run), its fields change together with
+    # the stages — a strict schema would give false failures (in schemathesis, and a 500 instead of data)
     return progress_payload()
 
 
@@ -565,14 +798,14 @@ async def api_progress_stream(request: Request):
     return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
 
-@app.post("/api/runs", response_model=RunStarted, status_code=202, summary="Start a run",
+@app.post("/api/runs", responses=errors(400, 409, 422), response_model=RunStarted, status_code=202, summary="Start a run",
           description="Starts the scripts in the background (output goes to last_run.log). 409 if a run is already going on, "
                       "including one started from a terminal or the Task Scheduler.")
 def api_run(body: RunRequest):
     return RunStarted(scripts=runner.start(body.kind, body.skip))
 
 
-@app.post("/api/runs/current/skip", status_code=202, summary="Skip a stage of the running run",
+@app.post("/api/runs/current/skip", responses=errors(400, 409), status_code=202, summary="Skip a stage of the running run",
           description="Asks the run to stop the current stage: its loop checks the request between steps "
                       "(usually within a second or two), what was collected so far goes on. 409 — no run, "
                       "the stage is no longer running or cannot be skipped.")
@@ -589,20 +822,20 @@ def api_skip(body: SkipRequest):
     return {"stage": body.stage}
 
 
-@app.post("/api/runs/current/stop", status_code=202, summary="Stop the whole run",
+@app.post("/api/runs/current/stop", responses=errors(409), status_code=202, summary="Stop the whole run",
           description="Ends the running script and does not start the next ones in the queue (the \"everything\" run: mail, then "
                       "vacancies). What this run collected is lost — the reports stay from the previous one. 409 — no run.")
 def api_stop():
     return {"pid": runner.stop()}
 
 
-@app.get("/api/reports", summary="Report list",
+@app.get("/api/reports", response_model=list[Report], summary="Report list",
          description="Reports reports/jobs_YYYY-MM-DD.html, newest first. Open: /files/reports/<file>.")
 def api_reports():
     return report_list()
 
 
-@app.get("/api/sources", summary="Sources of the last run",
+@app.get("/api/sources", response_model=SourcesReport, summary="Sources of the last run",
          description="For every source: kind (ats / aggregator / site / career_page), how many vacancies "
                      "it gave, error; for ATS — platform and slug. Plus Telegram channels, freehire queries "
                      "and `gaps` — companies without vacancies in the report, with the reason (board not found, empty, none matching…).")
@@ -612,7 +845,7 @@ def api_sources():
 
 # --- a CV for a vacancy -------------------------------------------------------------------------
 
-class CvRequest(BaseModel):
+class CvRequest(ApiModel):
     """Which vacancy to build a CV for: a link from a report, any link, or pasted text."""
     url: str = Field("", description="Link to the vacancy. First looked up in saved reports (state/jobs/), "
                                      "otherwise the page is read (robots.txt, 1 request/s)")
@@ -620,7 +853,7 @@ class CvRequest(BaseModel):
     text: str = Field("", description="Vacancy text; if set, the link is not read")
     company: str = Field("", description="Company (refines or replaces the one found)")
     title: str = Field("", description="Vacancy title (refines or replaces the one found)")
-    one_page: bool = Field(False, description="One-page variant: shrinks until it fits")
+    one_page: bool = Field(False, strict=True, description="One-page variant: shrinks until it fits")
 
 
 class CvPick(BaseModel):
@@ -663,7 +896,7 @@ def resolve_job(body) -> dict:
     return job
 
 
-@app.post("/api/cv", response_model=CvResult, summary="Build a CV for a vacancy",
+@app.post("/api/cv", responses=errors(400, 404, 422), response_model=CvResult, summary="Build a CV for a vacancy",
           description="Picks achievements, experience bullets and skills from cv/base.toml for the vacancy text "
                       "(technologies, topics, text similarity) and builds a PDF in cv_out/<date>/. "
                       "Invents nothing — only selects and reorders. 404 — the vacancy was not found.")
@@ -684,7 +917,7 @@ class CoverRequest(CvRequest):
     style: Literal["short", "full"] = Field("short", description="short — bulleted, full — in paragraphs")
 
 
-@app.post("/api/cover", summary="Cover letter for a vacancy",
+@app.post("/api/cover", responses=errors(400, 404, 422), summary="Cover letter for a vacancy",
           description="From cv/base.toml ([summary] — achievements, [cover] — template and soft skills) for the vacancy text; "
                       "invents nothing. Saved to cv_out/<date>/…_cover_<style>.txt. "
                       "The vacancy is given as for /api/cv (link or text).")
@@ -696,7 +929,7 @@ def api_cover(body: CoverRequest):
     return {**result, "source": job.get("found_in", ""), "file": f"/files/{path.relative_to(ROOT).as_posix()}"}
 
 
-@app.get("/api/cv", summary="Built CVs", description="PDFs from cv_out/, newest first (up to 40).")
+@app.get("/api/cv", response_model=list[BuiltCv], summary="Built CVs", description="PDFs from cv_out/, newest first (up to 40).")
 def api_cv_list():
     return recent_cvs()
 
@@ -748,17 +981,35 @@ def skills_payload() -> dict:
     return {"skills": rows, "relevant": relevant, "day": files[-1].stem if files else ""}
 
 
-class SkillChange(BaseModel):
+class SkillChange(ApiModel):
     """A skill edit: weight and / or turning off. Applies from the next run."""
     weight: int | None = Field(None, ge=-30, le=30, description="New weight; negative is a penalty for the skill in a vacancy")
-    disabled: bool | None = Field(None, description="true — the skill does not count in the score")
+    disabled: bool | None = Field(None, strict=True, description="true — the skill does not count in the score")
+
+    @field_validator("weight", mode="before")
+    @classmethod
+    def weight_not_bool(cls, value: object) -> object:
+        return _not_bool(value)
 
 
-class NewSkill(BaseModel):
+def _not_bool(value: object) -> object:
+    """A weight is a number. Pydantic in lax mode would take true as 1, and strict=True would reject 3.0 too (an
+    integer by JSON Schema) — so only bool is cut off."""
+    if isinstance(value, bool):
+        raise ValueError("the weight is an integer, not true/false")
+    return value
+
+
+class NewSkill(ApiModel):
     """Your own skill: name, regular expression (case-insensitive) and weight."""
     name: str = Field(min_length=1, max_length=60)
     pattern: str = Field(min_length=1, description="Regular expression, searched in the vacancy title and text")
     weight: int = Field(2, ge=-30, le=30)
+
+    @field_validator("weight", mode="before")
+    @classmethod
+    def weight_not_bool(cls, value: object) -> object:
+        return _not_bool(value)
 
 
 @app.get("/skills", response_class=HTMLResponse, include_in_schema=False)
@@ -766,14 +1017,14 @@ def skills_page(request: Request):
     return page(request, "skills", **skills_payload())
 
 
-@app.get("/api/skills", summary="Profile skills",
+@app.get("/api/skills", response_model=SkillsReport, summary="Profile skills",
          description="Skills from profile.toml with edits from profile_overrides.json and the share of fitting vacancies "
                      "of the last report where the skill appears.")
 def api_skills():
     return skills_payload()
 
 
-@app.put("/api/skills/{name}", summary="Change a skill",
+@app.put("/api/skills/{name}", responses=errors(400, 404), summary="Change a skill",
          description="Weight and / or turning off. Written to profile_overrides.json (profile.toml does not change); "
                      "vacancy scores are recomputed on the next run.")
 def api_skill_change(name: str, body: SkillChange):
@@ -789,9 +1040,9 @@ def api_skill_change(name: str, body: SkillChange):
     return next(r for r in relevance.skill_table() if r["name"] == name)
 
 
-@app.post("/api/skills", status_code=201, summary="Add your own skill",
+@app.post("/api/skills", responses=errors(400, 409, 422), status_code=201, summary="Add your own skill",
           description="A new skill with a regular expression and a weight (in profile_overrides.json). 422 — an invalid "
-                      "regex or the name already exists.")
+                      "regex, 409 — the name already exists.")
 def api_skill_add(body: NewSkill):
     import re as _re
     try:
@@ -799,7 +1050,7 @@ def api_skill_add(body: NewSkill):
     except _re.error as e:
         raise HTTPException(422, f"Invalid regular expression: {e}")
     if any(r["name"].lower() == body.name.lower() for r in relevance.skill_table()):
-        raise HTTPException(422, "A skill with this name already exists")
+        raise HTTPException(409, "A skill with this name already exists")
     over = relevance.read_overrides()
     over["added"].append(body.model_dump())
     relevance.write_overrides(over)
@@ -818,7 +1069,7 @@ def api_skill_reset(name: str):
 
 # --- application events ------------------------------------------------------------------------
 
-class ApplicationEvent(BaseModel):
+class ApplicationEvent(ApiModel):
     """An application event: written to applications_manual.toml, the applications page is rebuilt from the letter cache."""
     company: str = Field(min_length=1, description="Company — as in the report, the event is merged with letters by it")
     kind: Literal["applied", "interview", "rejected", "declined", "offer", "other"] = Field(
@@ -829,8 +1080,16 @@ class ApplicationEvent(BaseModel):
     source: str = Field("", description="Where: company site, LinkedIn, Telegram…")
     date: datetime | None = Field(None, description="Event time; now by default")
 
+    @field_validator("date", mode="before")
+    @classmethod
+    def iso_date(cls, value: object) -> object:
+        """Only an ISO string, as in the schema: pydantic would also take a number (Unix seconds) — "0" would become 1970."""
+        if value is not None and not isinstance(value, str | datetime):
+            raise ValueError("the date is an ISO 8601 string, e.g. 2026-11-18T10:00")
+        return value
 
-@app.post("/api/applications/events", status_code=201, summary="Add an application event",
+
+@app.post("/api/applications/events", responses=errors(400, 422), status_code=201, summary="Add an application event",
           description="Appends a block to applications_manual.toml and "
                       "rebuilds reports/applications.html from the letter cache — without requests to Gmail.")
 def api_application_event(body: ApplicationEvent):
@@ -879,7 +1138,7 @@ async def prep_page_text(request: Request):
     return page(request, "prep", r=result, error=error, url="", form=form)
 
 
-@app.post("/api/prep", summary="Interview prep",
+@app.post("/api/prep", responses=errors(400, 404, 422), summary="Interview prep",
           description="From the facts in cv/base.toml for the vacancy: which requirements you meet and how to prove it, what is missing, "
                       "a tell-me-about-yourself draft (EN), stories for behavioural questions, an HR checklist, questions to "
                       "the company, the levels.fyi median. The vacancy is given as for /api/cv (link or text).")

@@ -48,4 +48,14 @@ recompute, a new skill is counted alone. `JOBHUNTER_NO_WARM=1` turns the backgro
 Code: `web/app.py` (FastAPI: pages and API), `web/templates/` (Jinja2), `web/static/` (CSS and JS without a build).
 API: `GET /api/progress`, `GET /api/progress/stream` (SSE), `POST /api/runs`, `POST /api/runs/current/skip`,
 `POST /api/runs/current/stop`, `GET /api/reports`, `GET /api/sources`, `POST /api/cv`, `GET /api/cv`, `POST /api/cover`,
-`GET /api/market`, `GET /api/companies`, `GET|POST /api/skills`, `POST /api/applications/events`, `POST /api/prep` — described in `/docs`.
+`GET /api/market`, `GET /api/companies`, `GET|POST /api/skills`, `PUT|DELETE /api/skills/{name}`, `POST /api/applications/events`, `POST /api/prep` — described in `/docs`.
+
+**Responses.** Read endpoints have a `response_model` (Pydantic): the structure is visible in `/docs`, and
+schemathesis checks real responses against it ([testing.md](testing.md#property-based-api-check-schemathesis)).
+`/api/progress` has no model on purpose: `progress.json` is written by another process, and its fields change
+together with the stages. Error codes are in the schema too: 400 — the body could not be parsed, 404 — not found
+(a vacancy, a skill), 409 — conflicts with the current state (a run is already / is not going on, a skill with
+this name exists), 405 — with the full `Allow` header. In a 422 `detail` is either a list of Pydantic errors (the
+body does not match the schema) or a string the UI shows as is (bad regex, neither a link nor a vacancy text).
+Input types are strict: a bool is only `true`/`false`, a weight is an integer, an event date is an ISO string.
+Strings with broken characters (lone UTF-16 surrogates) are rejected on input: they cannot be written to a file.

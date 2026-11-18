@@ -57,7 +57,8 @@ def read_overrides() -> dict:
 
 def write_overrides(data: dict) -> None:
     import json
-    OVERRIDES_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    # encode before opening the file: on UnicodeEncodeError write_text would leave it empty and lose the edits
+    OVERRIDES_FILE.write_bytes(json.dumps(data, ensure_ascii=False, indent=1).encode("utf-8"))
 
 
 def skill_table(path=config.PROFILE_FILE) -> list[dict]:
