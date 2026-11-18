@@ -20,11 +20,12 @@
 .venv\Scripts\python.exe -m pytest
 ```
 
-The tests take about a second. No network and no personal files are needed: before any module is imported,
+The tests take 10–20 seconds, almost all of it is schemathesis (see below). No network and no personal files are needed: before any module is imported,
 `tests/conftest.py` points the program at the examples — `settings.example.toml` with a few test values (a
 fictional home country, relocation countries), `profile.example.toml` and `cv/base.example.toml` — so the result
-is the same on your machine and in CI. Tests do not touch `state/`: paths to data files are redirected to a
-temporary folder.
+is the same on your machine and in CI. Tests do not change project files: paths to `state/`, `reports/`,
+`cv_out/`, `profile_overrides.json`, `applications_manual.toml` are redirected to a temporary folder. To check:
+after `pytest`, `git status` is clean.
 
 ## What is checked
 
@@ -41,12 +42,57 @@ temporary folder.
 | `tests/test_freehire.py` | API record → vacancy (utm, salary, preview), prefilter (role, experience, `part_time`), relocation from freehire's markup |
 | `tests/test_telegram.py` | Posts of every channel format (markup as on t.me), telegra.ph, reading a channel page, labels and filtering |
 | `tests/test_cvgen_report.py` | A CV for a vacancy (headline for the title, one-page version, HTML); the report: sections and staffing in the appendix |
+| `tests/test_api_schema.py` | The whole web API against its OpenAPI schema (schemathesis): no 500s, responses and codes as in the schema, invalid input is rejected — see below |
 | `tests/test_web.py` | Web UI pages open on empty data; the "Skills" cache; reports are served with `Cache-Control: no-cache` |
 | `tests/test_http.py` | A host that does not respond is skipped until the end of the run; success resets the counter |
 | `tests/test_release_notes.py` | `RELEASE_NOTES.md` from the git history: grouping by day, bot commits are skipped |
 
 Letters and pages in the tests are made up, but they repeat wordings the program once got wrong. Found a new
 bug — first add an example that shows it, then fix it.
+
+## Property-based API check (schemathesis)
+
+`tests/test_api_schema.py` does not list requests by hand. [schemathesis](https://github.com/schemathesis/schemathesis)
+(on top of hypothesis) reads `/openapi.json` and generates requests itself: empty and very long strings, unicode,
+extra fields, numbers at the `ge`/`le` bounds. The app is called directly through ASGI, no server is needed.
+It checks that the server gives no 500, the response body matches `response_model`, the status code is in the schema.
+
+- **Reads** (`test_read_only_api_matches_schema`): every GET except the endless SSE stream
+  `/api/progress/stream`, `/api/companies` included. Data — a small vacancy archive, a report and a CV in a
+  temp folder; the page cache `state/web_cache.json` is redirected there too.
+- **Writes** (`test_write_api_rejects_bad_input`): POST/PUT/DELETE in two modes. Positive — bodies by the schema,
+  the server must accept them. Negative — bodies against the schema (wrong type, out of bounds, an empty string
+  with `min_length`), the server must reject them with a 4xx. Everything these endpoints write lives in the temp
+  folder (the `writes` fixture). A run starts no scripts (`Runner._run` is a stub), and stop without a run
+  answers 409 and ends nothing. Reading a vacancy by link is stubbed (always 404), building a PDF too (it needs
+  Chrome, and CI has none).
+- Some rules cannot be expressed in the schema: "a link **or** a vacancy text", "a mail-only run without mail has
+  nothing to run", "pattern is a valid regex". For these POSTs the "a valid body is accepted" check is off, and the
+  rules are covered by ordinary tests next to it.
+- A new endpoint joins the check by itself. `test_*_endpoints_are_covered` make sure the important ones do not
+  drop out of the selection by accident.
+
+What schemathesis has already found (all fixed, each case has a test):
+
+- a lone surrogate `\ud800` (valid JSON) in an application note wiped `applications_manual.toml`:
+  `Path.write_text` truncates the file first and then fails on encoding. Now the text is checked before writing,
+  and such strings are rejected on input with a 422;
+- the same character turned a 422 into a 500: FastAPI echoes the invalid input in the response, and the response
+  could not be encoded to UTF-8;
+- `DEL` (`\x7f`) in a note gave invalid TOML: `json.dumps` does not escape this character;
+- a quadratic regex in `cv_match`: the link filter backtracked from every position of a long word without spaces
+  (65 KB — 9 s per vacancy); now it goes token by token;
+- lax input types: `true` was taken as a weight of 1, `"yes"` as a bool, the number `0` as an event date in 1970;
+- a 405 with an incomplete `Allow` header on paths where GET and POST are different routes (a Starlette quirk).
+
+If the test fails, schemathesis prints a `curl` that reproduces the error. Long bodies are cut in it, so it is
+easier to run one endpoint:
+
+```bash
+.venv\Scripts\python.exe -m pytest tests/test_api_schema.py -k "write_api and events"
+```
+
+Reads go the same way: `-k "read_only and companies"`.
 
 ## Writing a new test
 
@@ -55,6 +101,10 @@ bug — first add an example that shows it, then fix it.
   letters, recruiter names or addresses.
 - Time — the `now` and `at(days)` fixtures, not `datetime.now()`.
 - Data paths (`config.JOBS_ARCHIVE_DIR`, `config.MAIL_CACHE_FILE`, …) — through `monkeypatch` to `tmp_path`.
+- A new endpoint — with `response_model` and `responses=errors(...)` listing the codes it returns; schemathesis
+  picks it up. A new path constant an endpoint writes to — into the `writes` fixture in
+  `tests/test_api_schema.py` at once, otherwise schemathesis touches the real file.
+- A regex over long text — check it on 50–100 KB without spaces (there were O(n²) cases taking 9–13 s).
 
 ## CI
 

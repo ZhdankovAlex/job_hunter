@@ -138,6 +138,7 @@ _BOILERPLATE_RX = re.compile(
 )
 _MIDSENTENCE_TERM_RX = re.compile(r"(?<=[a-z0-9,;:(/] )([A-Z][A-Za-z0-9+#]{1,30}|[A-Z]{2,}[a-z]?)(?=[\s.,;:)/-]|$)")
 _TITLE_TERM_RX = re.compile(r"\b([A-Z][A-Za-z0-9+#]{1,30})\b")
+_LINK_TOKEN_RX = re.compile(r"\S\.(?:sh|com|io|ai|org|net|dev|app)|https?://")  # "odoo.sh", "github.com/…", links
 # words written with a capital letter that are neither technologies nor skills
 _GENERIC_TERMS = set("""
 software engineer engineers engineering developer developers development backend frontend fullstack senior junior
@@ -175,6 +176,7 @@ class CvProfile:
     def __init__(self, settings: dict) -> None:
         """settings — the [cv] section of settings.toml: files = [paths to PDFs], names = [labels]."""
         cache = json.loads(CACHE_FILE.read_text(encoding="utf-8")) if CACHE_FILE.exists() else {}
+        cached = len(cache)
         self.cvs: list[tuple[str, str]] = []
         names = settings.get("names") or []
         for i, raw in enumerate(settings.get("files") or []):
@@ -189,8 +191,9 @@ class CvProfile:
                     continue
                 cache[key] = _pdf_text(path)
             self.cvs.append((label, cache[key]))
-        CACHE_FILE.parent.mkdir(exist_ok=True)
-        CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+        if len(cache) != cached:  # entries are only added: write only when a new PDF was parsed
+            CACHE_FILE.parent.mkdir(exist_ok=True)
+            CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
         text = "\n".join(t for _, t in self.cvs)
         # the CV generator base (cv/base.toml) is also true about skills, even if they are not in the PDF yet
         base = config.CV_BASE_FILE
@@ -225,7 +228,9 @@ class CvProfile:
                     for m in _MIDSENTENCE_TERM_RX.findall(line)}
         title_terms = {_norm_term(m) for m in _TITLE_TERM_RX.findall(job.title)}
         # for the "is it ever written in lowercase" check — without links and domains ("odoo.sh", "github.com/…")
-        plain = re.sub(r"\S+\.(?:sh|com|io|ai|org|net|dev|app)\S*|https?://\S+", " ", text)
+        # token by token, not one regex: "\S+\.(?:com…)\S*" on a long word without spaces (base64, a 60 KB link)
+        # backtracked from every position — O(n²), 9 s per vacancy (found by schemathesis on /api/cover)
+        plain = re.sub(r"\S+", lambda m: " " if _LINK_TOKEN_RX.search(m.group()) else m.group(), text)
         found = {}
         for term in set(mid) | title_terms:
             low = term.lower()
