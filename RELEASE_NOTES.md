@@ -4,6 +4,16 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-18
 
+### Company industries and the Companies page (#4)
+
+- jobhunter/industry.py: a vacancy's industry from the company name, title and description (fintech, trading, iGaming, crypto, adtech, devtools, security, e-commerce, travel, edtech, healthtech, gamedev, AI, B2B SaaS, Big Tech, outsourcing, otherwise "other"); weighted patterns with word boundaries against false positives, all patterns of an industry in one regex. Known companies win over the text: a few built-in examples, your own in [industry_companies] (settings.toml, empty by default) or the 4th field of companies.txt; the 5th field — brands, a vacancy under a brand counts for its owner.
+- The run saves industries, remote and salary to the archive state/jobs/<date>.json; the HTML report shows the industry as a tag.
+- /companies and GET /api/companies: the market per industry (vacancies, remote share, median salary, top technologies) and companies over all archive days with vacancies, last day, application status and board; your own companies without vacancies — to search by hand. All industries by default, ?industry= and "with vacancies only" filters. Cached by the archive, lists and applications.
+- docs/industry.md, README (screenshot on demo data, docs table), web-ui, architecture, configuration.
+- tests/test_industry.py: positives, false positives, companies.txt marks and brands, summary, page.
+
+<sub>f42ecb9</sub>
+
 ### Release notes bot: two merges in a row no longer fail the run (#3)
 
 - release-notes.yml: cancel-in-progress, the newest push supersedes the older run; a push rejected because main moved on exits cleanly, the run for the newer push rebuilds the notes from the whole history
