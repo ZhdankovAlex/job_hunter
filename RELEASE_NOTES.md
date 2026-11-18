@@ -4,6 +4,20 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-18
 
+### Bump actions/setup-python from 5 to 7 (#12)
+
+Bumps [actions/setup-python](https://github.com/actions/setup-python) from 5 to 7.
+
+--- updated-dependencies:
+
+...
+
+- [Release notes](https://github.com/actions/setup-python/releases)
+- [Commits](https://github.com/actions/setup-python/compare/v5...v7)
+- dependency-name: actions/setup-python dependency-version: '7' dependency-type: direct:production update-type: version-update:semver-major
+
+<sub>486cf79</sub>
+
 ### Bump actions/checkout from 4 to 7 (#11)
 
 Bumps [actions/checkout](https://github.com/actions/checkout) from 4 to 7.
