@@ -189,6 +189,13 @@ urls = []
 [career_pages]
 # "Example Corp" = { url = "https://example.com/careers", location = "Remote" }
 
+# --- Your companies by industry (industry.py): {code = [company, …]} -----------------------
+# They win over the guess from vacancy texts; on the Companies page the ones without vacancies are
+# listed to search by hand. Codes: fintech, trading, igaming, crypto, adtech, devtools, security, ecommerce,
+# travel, edtech, healthtech, gamedev, ai, b2b-saas, bigtech, outsource. The same — 4th field of companies.txt.
+[industry_companies]
+# devtools = ["Example Corp"]
+
 # --- Telegram channels with vacancies (web preview t.me/s/<channel>) -------------------------
 # Off by default. Channels from PARSERS in jobhunter/telegram.py have their own post parser,
 # the rest are read by the generic parser. The list below is an example of Russian-language channels with Python vacancies.

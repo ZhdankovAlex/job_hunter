@@ -19,7 +19,7 @@
 | `.github/workflows/` | CI (`ci.yml`) and rebuilding `RELEASE_NOTES.md` after a push to main (`release-notes.yml`) |
 | `RELEASE_NOTES.md` | What changed and when — built automatically, not edited by hand |
 | `settings.toml` | Almost everything: home country, locations and relocation, freehire queries, sources, Telegram, `[manual_jobs]`, mail company aliases, career pages, thresholds |
-| `companies.txt` | Companies to check: `Company \| priority 0–3 \| note` |
+| `companies.txt` | Companies to check: `Company \| priority 0–3 \| note \| industries \| brands` ([industry.md](industry.md)) |
 | `profile.toml` | Profile for the relevance score: skills with weights and patterns, adjustments |
 | `cv/base.toml` | The CV base: experience, projects, skills, interview stories, cover letter template — every CV and letter is built from it |
 | `applications_manual.toml` | Applications not from mail (Telegram, LinkedIn, calls): events per company |

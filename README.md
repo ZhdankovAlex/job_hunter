@@ -50,8 +50,8 @@ Screenshots are taken on demo data: vacancies are public, applications and the C
 | Interview preparation | CV vs market |
 | ![Skills](docs/img/skills.png) | ![Sources](docs/img/sources.png) |
 | Profile skills and their weights | Sources of the last run |
-| ![Cover letter](docs/img/cover.png) | |
-| A cover letter for a vacancy and why each point was picked | |
+| ![Cover letter](docs/img/cover.png) | ![Companies](docs/img/companies.png) |
+| A cover letter for a vacancy and why each point was picked | Companies by industry: who is hiring, the market per industry |
 
 ## Quick start
 
@@ -138,6 +138,7 @@ Daily runs via Task Scheduler / cron or Docker: [docs/pipeline.md](docs/pipeline
 | [docs/outreach.md](docs/outreach.md) | Contacts at the company and message drafts |
 | [docs/interview-prep.md](docs/interview-prep.md) | Interview preparation for a vacancy |
 | [docs/market-check.md](docs/market-check.md) | CV vs market: a local ATS checker |
+| [docs/industry.md](docs/industry.md) | Company industries, the Companies page, industries and brands in `companies.txt` |
 | [docs/docker.md](docs/docker.md) | Running in Docker |
 | [docs/configuration.md](docs/configuration.md) | Where things are: settings, code, data, personal files and examples |
 | [docs/testing.md](docs/testing.md) | Tests, linter and CI |

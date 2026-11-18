@@ -86,7 +86,8 @@ Modules in `jobhunter/` by purpose:
   and career pages), `bigtech` (Workday, Oracle, Microsoft, Amazon), `telegram`.
 - **Selection:** `filters` (title, location, employment), `verify` (full-text checks), `language`, `staffing`,
   `geo`, `levels`.
-- **Scoring:** `relevance` (score), `cv_match` (Fit % and missing skills), `salary`, `tiers`.
+- **Scoring:** `relevance` (score), `cv_match` (Fit % and missing skills), `salary`, `tiers`, `industry`
+  (company industry; does not change the score).
 - **Results:** `report`, `html_report`, `cvgen`, `cover_letter`, `interview_prep`, `outreach`, `market_check`,
   `mail`, `applications_report`, `applied`, `manual_apps`, `vacancy_lookup`, `coverage` (why a source gave
   nothing).
@@ -258,6 +259,7 @@ More: [sources.md](sources.md#rules-for-every-source)
 | A new source or ATS | [sources.md](sources.md), `jobhunter/ats.py`, `jobhunter/sites.py` |
 | A wrongly found company board | [sources.md](sources.md#fixing-ats_mappingjson) |
 | Filters and full-text checks | [filters.md](filters.md), `jobhunter/verify.py` |
+| Company industries, the Companies page | [industry.md](industry.md), `jobhunter/industry.py` |
 | Vacancy order, score, Fit % | [scoring.md](scoring.md), `jobhunter/relevance.py`, `jobhunter/cv_match.py` |
 | CV, cover letter, interview prep | [cv.md](cv.md), [interview-prep.md](interview-prep.md), `cv/base.example.toml` |
 | Mail and application statuses | [applications.md](applications.md), `jobhunter/mail.py` |
