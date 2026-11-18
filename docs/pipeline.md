@@ -91,6 +91,51 @@ Redrawn every second while the run is going; `--once` prints one snapshot. Icons
 passed filters, new, rejected) and the last 5 warnings. A run whose process ended without finishing
 (window closed, process killed) is shown as "interrupted".
 
+## Run speed
+
+The network is slower than everything else, but we do not want to push it: at most 1 request per second per host
+(`apply.workable.com` — once in 6 s, `t.me` — once in 2 s, `config.HOST_INTERVALS`) and with a robots.txt check.
+So a run gets faster not by loading other people's sites harder, but by doing nothing extra and not waiting in vain.
+
+**Network**
+
+- *In parallel across hosts.* Sources (ATS boards, aggregators, career pages) are processed in 8 threads
+  (`config.WORKERS`, `main.py`). The limit is per host (`jobhunter/http.py`), so threads hit the limit of their own
+  host, not each other: while one waits for Greenhouse, another reads Lever.
+- *An unreachable host — once.* After 2 network errors in a row (`Http.UNREACHABLE_AFTER`) the host is skipped
+  until the end of the run; a successful response resets the counter. Twenty vacancies of one dead site do not
+  wait for the timeout twenty times.
+- *Do not look for what is not there.* If a company board is not found on any ATS, this is written to
+  `ats_mapping.json`, and the next search happens only after 30 days (`RECHECK_NOT_FOUND_DAYS`), not on every run.
+- *Caches between runs.* Mail: only new letters are downloaded, the rest come from `state/mail_cache.json`.
+  levels.fyi — once in 7 days per country (`levels.CACHE_DAYS`). The CV PDF text is parsed once and kept in
+  `state/cv_text.json` by path and modification time.
+
+**Text parsing**
+
+Vacancy and letter texts are parsed with regexes, and a few unlucky patterns ran in quadratic time: unnoticeable
+on normal text, seconds on a long one. What was found and how it was fixed:
+
+- *Letters* (`mail.py`). Patterns with `[^.!?]*` on both sides cut out conditional phrases and disclaimers and
+  re-scanned the sentence at every position. Now a letter is split into sentences first, and the pattern checks
+  each one separately: a few hundred letters — 0.4 s instead of ~13 s, the same result.
+- *CV matching* (`cv_match.py`, computed for every vacancy). Technologies are first searched with one combined
+  pattern of all of them, and only on a match — one by one. "The term is already in the CV / in the dictionary"
+  answers are cached: within one run the same terms appear thousands of times. Together this gave ×2.5 on vacancy
+  analysis with the same result.
+- *Links in a vacancy text* (`cv_match._unknown_terms`). The pattern `\S+\.(?:com|io|…)\S*` on a long word without
+  spaces (base64, a long link) backtracked from every position: 65 KB of text — 9 s. Now the text is split into
+  words, and each is checked with a short pattern. Found by schemathesis on `/api/cover`
+  ([testing.md](testing.md#property-based-api-check-schemathesis)).
+
+A rule for the future: a regex that walks a long text is checked on 50–100 KB without spaces and dots.
+`tests/test_mail.py` has a speed test on a long letter for this, `tests/test_api_schema.py` — on a long vacancy.
+
+**After a run**
+
+The web UI recomputes "CV vs market", "Companies" and "Skills" in the background right away (`warm_caches`), so
+after a run they open instantly ([web-ui.md](web-ui.md#how-pages-are-built)).
+
 ## How it works
 
 - A script creates `progress.Pipeline(name, stages)`; `progress.start(stage, total)` starts a stage

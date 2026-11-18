@@ -233,7 +233,9 @@ letters), so they open instantly.
 Remember: restarting the server during a run interrupts the run. Restart it when there is no running-run badge at
 the bottom of the left panel.
 
-More: [web-ui.md](web-ui.md) · [pipeline.md](pipeline.md#how-it-works)
+**Pages are built by the server** (Jinja2): the same data goes to the template and to the API.
+
+More: [web-ui.md](web-ui.md#how-pages-are-built) · [pipeline.md](pipeline.md#how-it-works)
 
 ## How we treat other people's sites
 
@@ -264,7 +266,8 @@ More: [sources.md](sources.md#rules-for-every-source)
 | CV, cover letter, interview prep | [cv.md](cv.md), [interview-prep.md](interview-prep.md), `cv/base.example.toml` |
 | Mail and application statuses | [applications.md](applications.md), `jobhunter/mail.py` |
 | Run stages and stopping | [pipeline.md](pipeline.md), `jobhunter/progress.py` |
+| A slow run or page | [pipeline.md](pipeline.md#run-speed), [web-ui.md](web-ui.md#how-pages-are-built) |
 | UI pages and the API | [web-ui.md](web-ui.md), `http://127.0.0.1:8765/docs` |
 | Settings and personal files | [configuration.md](configuration.md) |
-| Tests and CI | [testing.md](testing.md) |
+| Tests, CI and the API check | [testing.md](testing.md), `tests/test_api_schema.py` |
 | Running in Docker | [docker.md](docker.md) |

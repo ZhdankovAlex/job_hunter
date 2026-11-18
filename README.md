@@ -128,8 +128,8 @@ Daily runs via Task Scheduler / cron or Docker: [docs/pipeline.md](docs/pipeline
 | File | About |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | How the project works: the big picture and the reasons behind it |
-| [docs/web-ui.md](docs/web-ui.md) | Web UI pages, starting and skipping stages, API |
-| [docs/pipeline.md](docs/pipeline.md) | Run stages, progress, `main.py` flags, daily runs |
+| [docs/web-ui.md](docs/web-ui.md) | Web UI pages and how they are built (templates, cache), starting and skipping stages, API |
+| [docs/pipeline.md](docs/pipeline.md) | Run stages, progress, what makes a run fast, `main.py` flags, daily runs |
 | [docs/sources.md](docs/sources.md) | ATS boards, freehire, aggregators, career pages, Telegram, fixing `ats_mapping.json` |
 | [docs/filters.md](docs/filters.md) | Filters, full-text checks, home country and relocation, languages, staffing |
 | [docs/scoring.md](docs/scoring.md) | Report layout, categories, score and skills, Fit %, salaries and levels.fyi |
@@ -141,7 +141,7 @@ Daily runs via Task Scheduler / cron or Docker: [docs/pipeline.md](docs/pipeline
 | [docs/industry.md](docs/industry.md) | Company industries, the Companies page, industries and brands in `companies.txt` |
 | [docs/docker.md](docs/docker.md) | Running in Docker |
 | [docs/configuration.md](docs/configuration.md) | Where things are: settings, code, data, personal files and examples |
-| [docs/testing.md](docs/testing.md) | Tests, linter and CI |
+| [docs/testing.md](docs/testing.md) | Tests, property-based API check (schemathesis), linter, mypy and CI on every pull request |
 | [RELEASE_NOTES.md](RELEASE_NOTES.md) | What was added or fixed and when — built from the git history after every push to main |
 
 ## Development
