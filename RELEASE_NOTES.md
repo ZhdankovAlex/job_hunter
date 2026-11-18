@@ -4,6 +4,18 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-18
 
+### Design decisions in the docs, coverage floor in CI, pre-commit hooks and Dependabot (#10)
+
+- docs/architecture.md: new section "Design decisions and trade-offs" — the HttpClient protocol and the FakeHttp checked by mypy, registries of sites and ATS, adapters as an anti-corruption layer over one Job, validation at the API boundary, one responsibility per web module; what is left out on purpose (no DB, no full DDD, global config paths) and the known debt (report renderers, sites/progress coverage)
+- CI: pytest --cov; [tool.coverage] in pyproject.toml measures jobhunter and web, the run fails below 68% (now 69.8%)
+- .pre-commit-config.yaml: ruff, mypy from the project's environment, TOML/YAML syntax, merge markers, trailing spaces and end of files (settings.example.toml lost a trailing blank line); ats_mapping.json is left alone, the program rewrites it
+- .github/dependabot.yml: weekly grouped PR for pip, monthly for GitHub Actions
+- README: CI, Python, mypy, ruff and license badges; a link to the design decisions; pre-commit install
+- docs/testing.md: coverage, pre-commit and Dependabot; .gitignore: .coverage, htmlcov/
+- requirements-dev.txt: pytest-cov, pre-commit
+
+<sub>f554c5d</sub>
+
 ### Refactoring after the code review: web/app.py split into modules, main.run into stages, no import cycles (#9)
 
 - web/app.py (1154 → 672 lines): Pydantic models moved to web/models.py, starting runs and the daily schedule to web/runner.py, the cache of slow pages to web/cache.py. Runner takes the project folder, the log and on_finish in its constructor, so a test swaps the log without patching a module global; "Skills" writes its cache through cache.put instead of by hand. The OpenAPI schema is unchanged (compared byte for byte before and after)
