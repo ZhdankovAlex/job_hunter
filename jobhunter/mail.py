@@ -564,7 +564,12 @@ def manual_events() -> list[tuple[str, Event]]:
             if not isinstance(when, datetime):  # a date without time
                 when = datetime(when.year, when.month, when.day, 12)
             if when.tzinfo is None:  # time as in the chat — in this computer's time zone (or from the settings)
-                when = when.replace(tzinfo=_LOCAL_TZ) if _LOCAL_TZ else when.astimezone()
+                try:
+                    when = when.replace(tzinfo=_LOCAL_TZ) if _LOCAL_TZ else when.astimezone()
+                # a typo date (0001-01-01) used to break the page: Windows has no time zone data before 1970
+                # (OSError), Linux shifts 1 January of year 1 into year 0 (ValueError)
+                except (OSError, OverflowError, ValueError):
+                    when = when.replace(tzinfo=datetime.now().astimezone().tzinfo)
             kind = e.get("kind", OTHER)
             if kind not in (OFFER, REJECTED, INTERVIEW, APPLIED, OTHER, DECLINED):
                 log.warning("%s: unknown kind %r in %s", entry["company"], kind, config.MANUAL_APPLICATIONS_FILE.name)
