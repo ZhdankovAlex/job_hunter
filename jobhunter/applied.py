@@ -20,7 +20,10 @@ class Applications:
             return next((i for i, h in enumerate(header) if h.startswith(name)), default)
 
         ci, si, ui = col("company", 0), col("status", 1), col("vacancy", 2)
-        self.urls, self.ids, self.companies = {}, {}, {}  # link / vacancy id -> status
+        # link / vacancy id -> status
+        self.urls: dict = {}
+        self.ids: dict = {}
+        self.companies: dict = {}
         self.count = 0
         for row in rows[1:]:
             row = row + [""] * (max(ci, si, ui) + 1 - len(row))

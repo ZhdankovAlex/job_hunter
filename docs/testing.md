@@ -13,6 +13,10 @@
 ```
 
 ```bash
+.venv\Scripts\python.exe -m mypy
+```
+
+```bash
 .venv\Scripts\python.exe -m pytest
 ```
 
@@ -29,7 +33,7 @@ temporary folder.
 | `tests/test_mail.py` | Letter type: application, stage, rejection, offer. Conditional phrases and caveats ("If your profile fits…", "may not be the right fit"), typographic apostrophes, quoted old letters, speed on a long letter, company from the sender and the subject, `[mail.sender_company]` |
 | `tests/test_applications_report.py` | Application status and the funnel: a new application after a rejection, cancelled meetings, "declined", rejection after silence, events in the future |
 | `tests/test_cv_match.py` | Fit %: key and nice-to-have skills, "Python, Go or Java", years of experience, new terms; the combined technology pattern answers the same as the separate ones |
-| `tests/test_sources.py` | Parsing fin.dev (JSON-LD), career pages (the `links` setting, the title from `aria-label`), Teamtailor RSS — on saved pages from `tests/fixtures/`; `[manual_jobs]` entries with `company` / `location` |
+| `tests/test_sources.py` | Parsing fin.dev (JSON-LD), career pages (the `links` setting, the title from `aria-label`), Teamtailor RSS — on saved pages from `tests/fixtures/`; `[manual_jobs]` entries with `company` / `location`; `Http` and `FakeHttp` fit the `HttpClient` protocol |
 | `tests/test_filters.py` | Selection by role, employment type and the presence of a link |
 | `tests/test_verify.py` | Full-text checks: on-site, country binding, JVM, Russia-only remote, AI trainer; 7+ and 8+ years are a penalty, not hiding; manual check |
 | `tests/test_geo_salary.py` | Relocation and remote within a country (Georgia the country vs the US state, excluded countries, residents only, "remote from anywhere"); salary ranges ("4.5–5.5k EUR", yearly, hourly); grade |
@@ -55,8 +59,20 @@ bug — first add an example that shows it, then fix it.
 ## CI
 
 `.github/workflows/ci.yml`: on every pull request and push to `main` GitHub Actions installs the dependencies and
-runs `ruff check .` and `pytest`. Ruff checks only what catches real bugs (syntax, pyflakes, bugbear), not style:
-the settings are in `pyproject.toml`.
+runs `ruff check .`, `mypy` and `pytest`. Ruff checks only what catches real bugs (syntax, pyflakes, bugbear), not
+style: the settings are in `pyproject.toml`.
+
+mypy checks `jobhunter`, `web`, `main.py`, `cvgen.py` and `tests/conftest.py`, including the bodies of unannotated
+functions (`check_untyped_defs`); the settings are in `[tool.mypy]` in `pyproject.toml`. CI runs on Linux, so
+platform-dependent code (`subprocess.CREATE_NEW_PROCESS_GROUP` exists only on Windows) is checked locally with:
+
+```bash
+.venv\Scripts\python.exe -m mypy --platform linux
+```
+
+Sources take not a concrete `Http` but the `HttpClient` protocol (`jobhunter/http.py`): anything with a `get()` of
+the same signature fits. `FakeHttp` in `tests/conftest.py` does not inherit from it, but mypy checks it against the
+protocol: if the fake drifts from the real client, the type check fails, not a run in production.
 
 `.github/workflows/release-notes.yml`: after a push to `main` rebuilds `RELEASE_NOTES.md` from the git history
 and commits it back if it changed (title `RELEASE_NOTES.md: update`) — run `git pull --rebase` before the next push.

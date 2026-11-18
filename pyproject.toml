@@ -15,3 +15,13 @@ extend-exclude = ["cv_out", "reports", "state"]
 select = ["E9", "F", "B"]
 # raise without from and zip without strict are not bugs in this code
 ignore = ["B904", "B905"]
+
+[tool.mypy]
+# third-party packages without stubs do not fail the check
+python_version = "3.11"
+files = ["jobhunter", "web", "main.py", "cvgen.py", "tests/conftest.py"]
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+# bodies of unannotated functions are checked too (their parameters are Any)
+check_untyped_defs = true

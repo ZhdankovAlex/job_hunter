@@ -19,7 +19,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from . import config as c
 from . import filters, geo, language, progress
-from .http import FetchError, Http
+from .http import FetchError, HttpClient
 from .models import Job, html_to_text, parse_date
 
 log = logging.getLogger(__name__)
@@ -70,13 +70,14 @@ def to_job(raw: dict, query: str) -> Job:
     """API record -> Job; the raw freehire fields are kept in job.extra."""
     enrichment = raw.get("enrichment") or {}
     skills = raw.get("skills") or []
+    countries = [x.lower() for x in raw.get("countries") or []]
     extra = {
         "public_slug": raw.get("public_slug"),
         "title": raw.get("title"),
         "company": raw.get("company"),
         "company_slug": raw.get("company_slug"),
         "location": raw.get("location"),
-        "countries": [x.lower() for x in raw.get("countries") or []],
+        "countries": countries,
         "regions": raw.get("regions") or [],
         "work_mode": raw.get("work_mode"),
         "skills": skills,
@@ -89,7 +90,7 @@ def to_job(raw: dict, query: str) -> Job:
         "queries": [query],
         "full_description": len(raw.get("description") or "") > 1200,  # the search preview is cut to ~1000
     }
-    location = raw.get("location") or ", ".join(x.upper() for x in extra["countries"])
+    location = raw.get("location") or ", ".join(x.upper() for x in countries)
     if raw.get("work_mode") in ("remote", "hybrid") and raw["work_mode"] not in location.lower():
         location = f"{location} ({raw['work_mode']})"
     return Job(
@@ -163,7 +164,7 @@ def prepare(job: Job) -> bool:
 class Freehire:
     """freehire client with a disk cache and a per-run request limit."""
 
-    def __init__(self, http: Http, settings: dict) -> None:
+    def __init__(self, http: HttpClient, settings: dict) -> None:
         """settings — the [freehire] section of settings.toml."""
         self.http = http
         self.settings = settings

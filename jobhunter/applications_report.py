@@ -238,7 +238,8 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
         items.append((app, in_applied, status, why))
     # live ones on top: stages, waiting; rejections below; freshest first within each
     items.sort(key=lambda x: (order.index(x[2]), -x[0].last.when.timestamp()))
-    rows, counts, stages = [], {}, []
+    rows, stages = [], []
+    counts: dict[str, int] = {}
     stage_names = dict(FUNNEL) | {"applied": "applied"}
     for app, in_applied, status, why in items:
         stage = funnel_stage(app, in_applied)

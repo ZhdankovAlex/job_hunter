@@ -249,7 +249,10 @@ class CvProfile:
         from . import verify
 
         have, missing = set(), []
-        core_have, core_missing, nice_have, nice_missing = set(), set(), set(), set()
+        core_have: set[str] = set()
+        core_missing: set[str] = set()
+        nice_have: set[str] = set()
+        nice_missing: set[str] = set()
         for m in _SENTENCE_RX.finditer(f"{job.title}\n{text}"):
             sentence = m.group()
             if not _TECH_ANY_RX.search(sentence):  # most sentences have no technologies
@@ -269,7 +272,7 @@ class CvProfile:
                 pos = m.start() if m else 0
                 return next(i for i, (a, b) in enumerate(zip(cuts, cuts[1:])) if a <= pos < b)
 
-            by_clause = {}
+            by_clause: dict[int, list[str]] = {}
             for name in hits:
                 by_clause.setdefault(clause_of(name), []).append(name)
             for idx, names in by_clause.items():

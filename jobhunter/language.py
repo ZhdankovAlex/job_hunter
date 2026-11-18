@@ -7,7 +7,7 @@ NICE_MARK = "🗣️ local language is a plus"
 RUSSIAN_MARK = "🇷🇺 Russian — a plus/required"
 
 # Frequent function words — a simple detector of the text language
-_STOPWORDS = {
+_STOPWORD_LINES = {
     "en": "the and of to with for you we our is are will on as in",
     "de": "und der die das mit für wir ist nicht eine oder auch bei sowie deine unser werden sind",
     "fr": "les des vous nous pour dans une est avec votre notre sur et qui",
@@ -16,7 +16,7 @@ _STOPWORDS = {
     "pt": "os para com uma você nosso nossa que por não são em experiência do da",
     "it": "di il per con una che del della nostro sei gli nel sono",
 }
-_STOPWORDS = {lang: set(words.split()) for lang, words in _STOPWORDS.items()}
+_STOPWORDS = {lang: set(words.split()) for lang, words in _STOPWORD_LINES.items()}
 _GERMAN_TITLE_RX = re.compile(r"\((?:m/w/d|w/m/d|m/f/d|f/m/d|m/w/x|all genders)\)", re.I)
 
 _LANG = (
@@ -49,7 +49,7 @@ _SENTENCE_SPLIT_RX = re.compile(r"[\n.!?;•]+")
 
 def detect_language(text):
     """Language code of the text ('en', 'de', ...) by frequent words; '' if there is too little text."""
-    counts = Counter()
+    counts: Counter[str] = Counter()
     for word in re.findall(r"[a-zà-ÿ]+", text.lower()):
         for lang, words in _STOPWORDS.items():
             if word in words:

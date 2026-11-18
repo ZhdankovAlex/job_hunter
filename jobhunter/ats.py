@@ -4,12 +4,13 @@ import re
 import logging
 import threading
 import xml.etree.ElementTree as ET
+from collections.abc import Callable, Iterable
 from email.utils import parsedate_to_datetime
 from datetime import date
 
 from . import config, geo
 from .companies import slug_candidates
-from .http import FetchError
+from .http import FetchError, HttpClient
 from .models import Job, html_to_text, parse_date
 
 log = logging.getLogger(__name__)
@@ -205,7 +206,7 @@ def _rippling(data, company):
 
 
 # platform -> (url, params, parser)
-PLATFORMS = {
+PLATFORMS: dict[str, tuple[str, dict | None, Callable[..., Iterable[Job]]]] = {
     "greenhouse": ("https://boards-api.greenhouse.io/v1/boards/{slug}/jobs", {"content": "true"}, _greenhouse),
     "lever": ("https://api.lever.co/v0/postings/{slug}", {"mode": "json"}, _lever),
     "ashby": ("https://api.ashbyhq.com/posting-api/job-board/{slug}", None, _ashby),
@@ -227,12 +228,12 @@ _BOARD_CLOSED_RX = re.compile(r"HTTP (?:401|403|410)\b|(?:bamboohr|teamtailor)/\
 
 
 class AtsClient:
-    def __init__(self, http, mapping_path=config.MAPPING_FILE):
+    def __init__(self, http: HttpClient, mapping_path=config.MAPPING_FILE):
         self.http = http
         self.path = mapping_path
         self.lock = threading.Lock()
         self.mapping = {}
-        self.failures = {}  # company -> why there are no vacancies today
+        self.failures: dict[str, str] = {}  # company -> why there are no vacancies today
         if mapping_path.exists():
             self.mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
         self._loaded = json.loads(json.dumps(self.mapping))  # state at start — for saving by merge

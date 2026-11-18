@@ -1,4 +1,4 @@
-# Checks on every PR and push to main: linter, then tests.
+# Checks on every PR and push to main: linter, types, then tests.
 # Tests run without network and without personal files: settings — settings.example.toml, CV — cv/base.example.toml.
 name: CI
 
@@ -29,5 +29,7 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Linter (ruff)
         run: ruff check .
+      - name: Types (mypy)
+        run: mypy
       - name: Tests (pytest)
         run: pytest -q

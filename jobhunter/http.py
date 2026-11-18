@@ -3,6 +3,7 @@ import logging
 import re
 import threading
 import time
+from typing import Any, Protocol, runtime_checkable
 from urllib.parse import urlsplit
 
 import requests
@@ -35,7 +36,10 @@ class _Robots:
     def __init__(self, text, ua_token):
         self.rules = []  # (allow: bool, pattern: str)
         self.crawl_delay = 0.0
-        groups, agents, body, in_agents = {}, [], [], False
+        groups: dict = {}
+        agents: list = []
+        body: list = []
+        in_agents = False
         for raw in text.splitlines():
             line = raw.split("#", 1)[0].strip()
             if ":" not in line:
@@ -75,6 +79,43 @@ class _Robots:
             if self._matches(pattern, path):
                 best = max(best, (len(pattern), allow))
         return best[1]
+
+
+class Response(Protocol):
+    """What sources read from a response. Fits requests.Response and FakeResponse from the tests.
+
+    Fields are read-only properties: requests.Response computes text, and a plain "text: str" in the protocol
+    would require it to be assignable, so the real response would not fit the protocol.
+    """
+
+    @property
+    def status_code(self) -> int: ...
+
+    @property
+    def text(self) -> str: ...
+
+    @property
+    def url(self) -> str: ...
+
+    def json(self) -> Any: ...
+
+
+@runtime_checkable
+class HttpClient(Protocol):
+    """HTTP client for sources: GET only. A structural type, no need to inherit from it.
+
+    Anything with get() of this signature fits: Http below and FakeHttp in tests/conftest.py.
+    """
+
+    def get(self, url: str, params: dict | None = None, timeout: float = 40,
+            headers: dict | None = None) -> Response: ...
+
+
+class HttpPostClient(HttpClient, Protocol):
+    """A client that can POST too: for sites whose search is a POST request (Workday)."""
+
+    def post(self, url: str, json: Any = None, timeout: float = 40,
+             headers: dict | None = None) -> Response: ...
 
 
 class Http:
@@ -149,14 +190,16 @@ class Http:
         if robots is None or not robots.allowed(path):
             raise RobotsDisallowed(f"robots.txt disallows {url}")
 
-    def get(self, url, params=None, timeout=40, headers=None):
+    def get(self, url: str, params: dict | None = None, timeout: float = 40,
+            headers: dict | None = None) -> requests.Response:
         """GET with the limit and retries. Returns requests.Response (404 included).
 
         headers — extra headers (for example, Accept: text/html for sites that answer 404 to JSON).
         """
         return self._request("GET", url, params=params, timeout=timeout, headers=headers)
 
-    def post(self, url, json=None, timeout=40, headers=None):
+    def post(self, url: str, json: Any = None, timeout: float = 40,
+             headers: dict | None = None) -> requests.Response:
         """POST with a JSON body — a vacancy search the site makes with a POST request (Workday).
 
         Same robots.txt, rate limit and retries as get(); sends nothing but the search query.

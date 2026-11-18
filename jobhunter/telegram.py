@@ -4,11 +4,12 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from . import config as c
 from . import filters, geo, language, progress
 from .verify import ABROAD_OK_RX, HIDE_RUSSIA_ONLY, ru_only
-from .http import FetchError
+from .http import FetchError, HttpClient
 from .models import parse_date
 from .keys import company_key
 
@@ -68,7 +69,8 @@ def _short_place(text, limit=45):
 
 
 def _join_location(parts):
-    seen, out = set(), []
+    seen: set = set()
+    out = []
     for part in filter(None, parts):
         if part.lower() not in seen and not any(part.lower() in s for s in seen):
             seen.add(part.lower())
@@ -145,9 +147,10 @@ def _external_links(text):
     return [u for u in re.findall(r"⟦([^⟧]*)⟧", text) if u.startswith("http") and "//t.me/" not in u]
 
 
-def fetch_posts(http, channel, cutoff):
+def fetch_posts(http: HttpClient, channel, cutoff):
     """Channel posts not older than cutoff: [(post_id, datetime, html, forwarded)]."""
-    posts, before = [], None
+    posts: list[tuple[int, Any, Any, bool]] = []
+    before = None
     for _ in range(c.TELEGRAM_MAX_PAGES):
         r = http.get(f"https://t.me/s/{channel}", params={"before": before} if before else None)
         if r.status_code != 200:
@@ -249,7 +252,7 @@ def parse_af_job_board(channel, post_id, when, raw):
         block.append(line)
         if "👉" not in line or not _external_links(line):
             continue
-        fields = {}
+        fields: dict = {}
         title_idx = None
         for i, l in enumerate(block):
             p = _plain(l)
@@ -480,7 +483,7 @@ def _telegraph_text(node):
     return inner + "\n" if node.get("tag") in {"p", "li", "h3", "h4", "br", "blockquote"} else inner
 
 
-def fill_telegraph(http, job):
+def fill_telegraph(http: HttpClient, job):
     """Full vacancy text from a telegra.ph page (public getPage API); refines the location."""
     path = job.url.split("telegra.ph/", 1)[1].split("?")[0]
     try:
@@ -643,7 +646,7 @@ def classify(job):
     return True
 
 
-def _check_aggregator_link(http, job):
+def _check_aggregator_link(http: HttpClient, job):
     job.marks.append("⚠️ via an aggregator — check that the vacancy is still open")
     try:
         status = http.get(job.url).status_code
@@ -654,10 +657,11 @@ def _check_aggregator_link(http, job):
     job.marks.append("link opens" if status == 200 else f"❌ link does not open (HTTP {status})")
 
 
-def collect(http):
+def collect(http: HttpClient):
     """-> (vacancies, list of channels that could not be read)."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=c.TELEGRAM_MAX_AGE_DAYS)
-    jobs, failed = {}, []
+    jobs: dict = {}
+    failed = []
     for channel in c.TELEGRAM_CHANNELS:
         if progress.skip_requested():  # the "Skip" button: the channels already read go on
             break

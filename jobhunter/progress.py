@@ -13,6 +13,7 @@ without passing an object: if there is no run with progress, the calls do nothin
 """
 from __future__ import annotations
 
+import io
 import json
 import logging
 import os
@@ -21,7 +22,9 @@ import shutil
 import sys
 import threading
 import time
+from collections.abc import Collection
 from datetime import datetime
+from typing import Any
 
 from . import config
 
@@ -84,7 +87,7 @@ class Pipeline:
         errors: latest warnings and errors from the log.
     """
 
-    def __init__(self, script: str, stages: list[tuple[str, str]], skippable: set[str] = frozenset()):
+    def __init__(self, script: str, stages: list[tuple[str, str]], skippable: Collection[str] = frozenset()):
         """Declares the stages and makes this run the current one.
 
         Args:
@@ -96,7 +99,7 @@ class Pipeline:
         global _current
         self.script = script
         self.started = time.time()
-        self.stages = [{"key": k, "title": t, "status": PENDING, "done": 0, "total": 0,
+        self.stages: list[dict[str, Any]] = [{"key": k, "title": t, "status": PENDING, "done": 0, "total": 0,
                         "started": None, "finished": None, "note": "", "skippable": k in skippable}
                        for k, t in stages]
         self._skip_keys: set[str] = set()
@@ -551,7 +554,8 @@ def _alive(pid: int) -> bool:
 def watch(once: bool = False) -> None:
     """Redraws the pipeline from progress.json once a second until the run ends."""
     for stream in (sys.stdout, sys.stderr):
-        stream.reconfigure(encoding="utf-8", errors="replace")
+        if isinstance(stream, io.TextIOWrapper):  # under pytest or in a pipe the stream may be different
+            stream.reconfigure(encoding="utf-8", errors="replace")
     while True:
         data = read()
         if data is None:

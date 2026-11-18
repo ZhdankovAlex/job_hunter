@@ -12,6 +12,7 @@ import re
 import subprocess
 import sys
 import threading
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -19,7 +20,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -94,7 +95,7 @@ class Runner:
         data = progress.read()
         return bool(data and progress.is_alive(data))
 
-    def start(self, kind: str, skip: list[str]) -> list[str]:
+    def start(self, kind: str, skip: Sequence[str]) -> list[str]:
         """Starts the script queue; skip — stages turned off in advance. -> commands without the interpreter."""
         with self.lock:
             if self.busy():
@@ -120,7 +121,12 @@ class Runner:
                 # a separate process group: Ctrl+C in the server window does not interrupt the running run.
                 # DETACHED_PROCESS is not used: with it, runs started from some shells
                 # silently ended halfway. Restarting the server still interrupts the run — see docs/web-ui.md.
-                detached = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+                # if, not a conditional expression: mypy narrows sys.platform only in an if statement,
+                # and CREATE_NEW_PROCESS_GROUP exists only on Windows (CI checks under Linux)
+                if sys.platform == "win32":
+                    detached = subprocess.CREATE_NEW_PROCESS_GROUP
+                else:
+                    detached = 0
                 self.process = subprocess.Popen(
                     [str(python), *command], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
                     env={**os.environ, "PYTHONIOENCODING": "utf-8", **({progress.CONTINUE_RUN_ENV: "1"} if i else {})},
@@ -229,7 +235,7 @@ def progress_payload() -> dict | None:
 
 def report_list() -> list[dict]:
     """Reports by date, newest first: date, file, size, whether there is a Markdown version."""
-    rows = []
+    rows: list[dict[str, Any]] = []
     for path in REPORTS.glob("jobs_*.html"):
         m = _REPORT_RX.match(path.name)
         if m:
@@ -282,7 +288,7 @@ def freehire_queries(settings: dict) -> list[dict]:
 
 def recent_cvs(limit: int = 40) -> list[dict]:
     """Built CVs (PDFs in cv_out/), newest first."""
-    rows = []
+    rows: list[dict[str, Any]] = []
     for pdf in (ROOT / "cv_out").rglob("*.pdf"):
         stat = pdf.stat()
         rel = pdf.relative_to(ROOT).as_posix()

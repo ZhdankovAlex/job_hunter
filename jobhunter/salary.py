@@ -79,14 +79,14 @@ def below_min(job) -> bool:
     """
     limit = min_monthly()
     stated = parse(getattr(job, "salary", "") or "") if limit else None
-    return bool(stated) and stated[1] < limit
+    return stated is not None and stated[1] < limit
 
 
 def meets_min(job) -> bool:
     """The vacancy states a range, and its upper bound is not below min_monthly_eur. Without a range — False."""
     limit = min_monthly()
     stated = parse(getattr(job, "salary", "") or "") if limit else None
-    return bool(stated) and stated[1] >= limit
+    return stated is not None and stated[1] >= limit
 
 
 def family(title: str) -> str:

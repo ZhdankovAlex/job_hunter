@@ -12,6 +12,7 @@ import re
 import subprocess
 import sys
 import tomllib
+from typing import Literal, overload
 from pathlib import Path
 
 from . import config, cv_match, geo
@@ -289,7 +290,7 @@ class Limits:
             self.bullets[0] -= 1
         elif self.bullets.get(1, 0) > 1:
             self.bullets[1] -= 1
-        elif (self.bullets_rest or 0) > 1:
+        elif self.bullets_rest is not None and self.bullets_rest > 1:
             self.bullets_rest -= 1
         elif (self.achievements or 3) > 1:
             self.achievements = 1
@@ -452,7 +453,8 @@ def markdown_to_html(md: str, style: str = STYLE, compact: bool = False) -> str:
     classic = style != "harvard"
     md = re.sub(r"<!--.*?-->", "", md, flags=re.S)
     lines = md.splitlines()
-    out, ul, header, section = [], False, [], ""
+    out: list[str] = []
+    ul, header, section = False, [], ""
     i = 0
     while i < len(lines):
         raw = lines[i]
@@ -522,6 +524,17 @@ def markdown_to_html(md: str, style: str = STYLE, compact: bool = False) -> str:
     return (f"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>CV</title>"
             f"<style>{CLASSIC_CSS if classic else HARVARD_CSS}{COMPACT_CSS if compact else ''}</style></head>"
             f"<body>\n{body}\n</body></html>")
+
+
+# Overloads: with pdf=True (the default) the PDF always exists, so the caller needs no None check
+@overload
+def render(md_path: Path, pdf: Literal[True] = ..., style: str = ..., compact: bool | None = ...) -> tuple[Path, Path]:
+    ...
+
+
+@overload
+def render(md_path: Path, pdf: bool, style: str = ..., compact: bool | None = ...) -> tuple[Path, Path | None]:
+    ...
 
 
 def render(md_path: Path, pdf: bool = True, style: str = STYLE, compact: bool | None = None) -> tuple[Path, Path | None]:

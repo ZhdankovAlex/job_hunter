@@ -425,7 +425,8 @@ class Gmail:
 
 def _body_text(payload: dict) -> str:
     """Letter text: text/plain, and if there is none — text/html without markup."""
-    plain, html = [], []
+    plain: list[str] = []
+    html: list[str] = []
 
     def walk(part):
         data = part.get("body", {}).get("data")

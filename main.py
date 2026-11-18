@@ -1,5 +1,6 @@
 """Daily vacancy collection -> reports/jobs_YYYY-MM-DD.md. Sends nothing anywhere."""
 import argparse
+import io
 import json
 import logging
 import re
@@ -46,7 +47,8 @@ log = logging.getLogger("jobhunter")
 
 def setup_logging():
     for stream in (sys.stdout, sys.stderr):
-        stream.reconfigure(encoding="utf-8", errors="replace")
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%Y-%m-%d %H:%M:%S")
     console = progress.ConsoleHandler(sys.stdout)  # prints the log above the progress line
     console.setFormatter(fmt)
@@ -293,7 +295,7 @@ def _enrich_from_company_boards(tg_jobs, ats, lookups: dict | None = None) -> in
 
 def merge_duplicates(jobs):
     """One vacancy (company + title) in several locations -> one row."""
-    merged = {}
+    merged: dict = {}
     for job in jobs:
         key = (keys.company_key(job.company), norm_name(job.title))
         base = merged.get(key)
@@ -483,12 +485,13 @@ def run(args):
     else:
         progress.start("telegram", total=len(config.TELEGRAM_CHANNELS))
     tg_all, tg_failed = telegram.collect(http) if use_telegram else (None, [])
-    tg_jobs = None if tg_all is None else []
+    tg_jobs: list | None = None if tg_all is None else []
     if tg_all is not None:
         progress.start("telegram_check", total=len(tg_all))
     tg_enriched = enrich_from_ats(tg_all or [], ats)
     lookups = {"new": 0}  # how many new companies were already looked up on ATS in this run (limit TG_BOARD_LOOKUPS)
     for job in tg_all or []:  # Telegram: the same text checks
+        assert tg_jobs is not None  # the loop runs only when tg_all is not None, and then tg_jobs is a list
         progress.step(f"@{job.channel}: {job.title}")
         verify.check(job, job.text, job.full_text)
         # the post passed on a short text (a digest with a link to wantapply etc.) — take the full text from
@@ -534,8 +537,8 @@ def run(args):
     # salaries: add to the base of salary ranges and label every vacancy (stated range or estimate)
     salaries = SalaryBase()
     for job in telegram.SALARY_POSTS:
-        market = "cis" if job.channel in config.TELEGRAM_CIS_CHANNELS else "global"
-        salaries.add(f"tg:{job.post_url}:{norm_name(job.title)}", job.title, job.salary, market,
+        region = "cis" if job.channel in config.TELEGRAM_CIS_CHANNELS else "global"
+        salaries.add(f"tg:{job.post_url}:{norm_name(job.title)}", job.title, job.salary, region,
                      f"@{job.channel}", (job.posted or today).isoformat()[:10])
     for job in [*fetched, *fh_jobs]:
         if job.salary:
@@ -552,9 +555,9 @@ def run(args):
     market.save()
 
     # the "raw score" of rejected ones — only skills and title, without location adjustments
-    unique_rejected = {}
+    unique_rejected: dict = {}
     for job in rejected:
-        text = getattr(job, "description", None) or getattr(job, "text", "")
+        text = getattr(job, "description", "") or getattr(job, "text", "")
         job.relevance, job.matched_skills = profile.base_score(job, text)
         key = (keys.company_key(job.company), norm_name(job.title))
         if key not in unique_rejected or job.relevance > unique_rejected[key].relevance:
