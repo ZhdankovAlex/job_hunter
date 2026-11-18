@@ -4,6 +4,21 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-18
 
+### Bump actions/checkout from 4 to 7 (#11)
+
+Bumps [actions/checkout](https://github.com/actions/checkout) from 4 to 7.
+
+--- updated-dependencies:
+
+...
+
+- [Release notes](https://github.com/actions/checkout/releases)
+- [Changelog](https://github.com/actions/checkout/blob/main/CHANGELOG.md)
+- [Commits](https://github.com/actions/checkout/compare/v4...v7)
+- dependency-name: actions/checkout dependency-version: '7' dependency-type: direct:production update-type: version-update:semver-major
+
+<sub>fe1769c</sub>
+
 ### Design decisions in the docs, coverage floor in CI, pre-commit hooks and Dependabot (#10)
 
 - docs/architecture.md: new section "Design decisions and trade-offs" — the HttpClient protocol and the FakeHttp checked by mypy, registries of sites and ATS, adapters as an anti-corruption layer over one Job, validation at the API boundary, one responsibility per web module; what is left out on purpose (no DB, no full DDD, global config paths) and the known debt (report renderers, sites/progress coverage)
