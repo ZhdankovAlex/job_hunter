@@ -1,4 +1,5 @@
 """A CV for a vacancy (cvgen, base — cv/base.example.toml) and building the report (report, html_report)."""
+import re
 from datetime import date, datetime, timezone
 
 import pytest
@@ -77,3 +78,23 @@ def test_report_sections():
 def test_html_report_renders():
     page = html_report.render(date(2026, 11, 12), [job("Senior Python Developer")], dict(STATS))
     assert "<html" in page.lower() and "Senior Python Developer" in page
+
+
+def test_html_table_numeric_headers_align_with_cells():
+    """Numbers in cells are right-aligned (td.n). The header of that column must be th.n too, otherwise in a wide
+    table it sits on the left while the numbers sit on the right edge, under the next column's header (it happened in
+    "Most missing skills": key-skill counts read as Nice-to-have, and the "Key" column looked empty)."""
+    row = '<tr><td>Kafka</td><td class="n">5 (10%)</td><td class="n">—</td></tr>'
+    html = html_report._table(["Skill", "Key", "Nice-to-have"], [row], num=(1, 2))
+    assert '<th>Skill</th><th class="n">Key</th><th class="n">Nice-to-have</th>' in html
+    assert re.search(r"th\.n\b[^{]*\{[^}]*text-align:\s*right", html_report._CSS)
+
+    page = html_report.render(date(2026, 11, 12), [job("Senior Python Developer")], dict(STATS))
+    for table in re.findall(r"<table.*?</table>", page, re.S):
+        heads = re.findall(r"<th( class=\"n\")?>", table)
+        first = re.search(r"<tbody><tr>(.*?)</tr>", table, re.S)
+        if not first:
+            continue
+        cells = re.findall(r"<td( class=\"n\")?[ >]", first.group(1))
+        for i, cell in enumerate(cells[:len(heads)]):
+            assert bool(cell) == bool(heads[i]), f"column {i}: td.n and th.n differ"

@@ -47,6 +47,7 @@ th { cursor: pointer; user-select: none; white-space: nowrap; color: var(--muted
 th:hover { color: var(--fg); }
 tbody tr:hover { background: var(--row); }
 td.n { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+th.n { text-align: right; }
 td.small, .small { color: var(--muted); font-size: 12.5px; }
 a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
 .tag { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--chip); font-size: 12px;
@@ -234,8 +235,9 @@ def _fit_cell(job) -> str:
             f"<b>{fit}%</b></div></td>")
 
 
-def _table(headers: list[str], rows: list[str], table_id: str = "") -> str:
-    head = "".join(f"<th>{_e(h)}</th>" for h in headers)
+def _table(headers: list[str], rows: list[str], table_id: str = "", num: tuple[int, ...] = ()) -> str:
+    """num — indexes of numeric columns (td.n): their header is right-aligned, like the numbers."""
+    head = "".join(f'<th class="n">{_e(h)}</th>' if i in num else f"<th>{_e(h)}</th>" for i, h in enumerate(headers))
     attr = f' id="{table_id}"' if table_id else ""
     wrap = "wrap main-wrap" if table_id == "main" else "wrap"
     return f'<div class="{wrap}"><table{attr}><thead><tr>{head}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
@@ -368,7 +370,7 @@ def render(day: date, jobs: list, stats: dict, tg_jobs: list | None = None) -> s
         '<span class="count" id="count"></span></div>',
         _table(["Category", "Score", "Fit %", "Grade", "Company", "Vacancy", "Location", "Status", "Salary, EUR/month", "Date", "Source",
                 "Match with the CV", "Missing", "Marks"],
-               rows, "main"),
+               rows, "main", num=(1,)),
     ]
     if refused_rows:
         parts += [f"<details><summary><h2>Rejected before — {len(refused_rows)}</h2></summary>",
@@ -376,7 +378,7 @@ def render(day: date, jobs: list, stats: dict, tg_jobs: list | None = None) -> s
     if rejected_rows:
         parts += [f"<details><summary><h2>Rejected by filters — {len(rejected)} (shown {len(rejected_rows)})</h2></summary>",
                   '<div class="small">Full list — state/rejected_latest.tsv</div>',
-                  _table(["Raw score", "Company", "Vacancy", "Reason", "Quote", "Source"], rejected_rows), "</details>"]
+                  _table(["Raw score", "Company", "Vacancy", "Reason", "Quote", "Source"], rejected_rows, num=(0,)), "</details>"]
     gaps = report.skill_gaps(main, tg)
     if gaps["total"]:
         nice, total = dict(gaps["nice"]), gaps["total"]
@@ -388,7 +390,7 @@ def render(day: date, jobs: list, stats: dict, tg_jobs: list | None = None) -> s
                             f'<td class="n">{extra_cell}</td></tr>')
         parts += [f"<details><summary><h2>📊 Skills missing most often — over {gaps['total']} fitting "
                   "vacancies (Backend, ML / AI)</h2></summary>",
-                  _table(["Skill", "Key (not in the CV)", "Nice-to-have"], gap_rows), "</details>"]
+                  _table(["Skill", "Key (not in the CV)", "Nice-to-have"], gap_rows, num=(1, 2)), "</details>"]
     if staffing_rows:
         parts += [f"<details><summary><h2>Staffing / outsourcing — {len(staffing_rows)}</h2></summary>",
                   _table(["Company", "Vacancy", "Location", "Reason"], staffing_rows), "</details>"]
