@@ -45,6 +45,22 @@ run and kept in `state/web_cache.json` (keyed by the modification time of vacanc
 restart every tab opens in a fraction of a second. In "Skills" the cache is per pattern: changing a weight does not
 recompute, a new skill is counted alone. `JOBHUNTER_NO_WARM=1` turns the background computation off.
 
+## How pages are built
+
+Pages are built by the server, there is no separate frontend and no build step:
+
+- **The same data for the page and the API.** Every page has a function that prepares its data
+  (`companies_report`, `market_report`, `skills_payload`, `sources_payload`, `progress_payload`…). Its result goes
+  into a Jinja2 template (`web/templates/<page>.html`), and the API returns the same result (`GET /api/companies`
+  and so on). "The page says one thing, the API another" cannot happen.
+- **Filters are URL parameters.** On "Companies" the industry and "only with vacancies" are
+  `?industry=fintech&empty=0`. A click changes the address, the server returns an already filtered page, and the
+  link can be saved. JavaScript (`web/static/`, no build) is used only where there is no other way: run progress
+  over SSE, the CV, cover letter and event forms, skill edits, the collapsed panel.
+- **Heavy computations are cached** in `state/web_cache.json` (see "Speed" above). Board links are not part of the
+  key: a run rewrites `ats_mapping.json` all the time, so they are added on every request.
+- **Responses and errors** — see "Responses" below.
+
 Code: `web/app.py` (FastAPI: pages and API), `web/templates/` (Jinja2), `web/static/` (CSS and JS without a build).
 API: `GET /api/progress`, `GET /api/progress/stream` (SSE), `POST /api/runs`, `POST /api/runs/current/skip`,
 `POST /api/runs/current/stop`, `GET /api/reports`, `GET /api/sources`, `POST /api/cv`, `GET /api/cv`, `POST /api/cover`,
