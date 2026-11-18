@@ -68,3 +68,20 @@ def test_company_from_manual_sender_mapping(monkeypatch):
 
 def test_company_from_subject():
     assert mail.company_of("Hiring Team <no-reply@ashbyhq.com>", "Thank you for applying to Acme", "") == "Acme"
+
+
+def test_event_date_before_1970_does_not_break_page(tmp_path, monkeypatch):
+    """A typo date (0001-01-01) used to break the Applications page on every build: on Windows
+    datetime.astimezone() raises OSError before 1970, on Linux it shifts 1 January of year 1 into year 0
+    (ValueError)."""
+    from jobhunter import config
+
+    f = tmp_path / "applications_manual.toml"
+    f.write_text('[[application]]\ncompany = "Acme"\nevents = [{date = 0001-01-01T00:00:00, kind = "applied"}]\n',
+                 encoding="utf-8")
+    monkeypatch.setattr(config, "MANUAL_APPLICATIONS_FILE", f)
+    monkeypatch.setattr(mail, "_LOCAL_TZ", None)
+    [(company, event)] = mail.manual_events()
+    assert company == "Acme"
+    assert event.when.year == 1
+    assert event.when.tzinfo is not None
