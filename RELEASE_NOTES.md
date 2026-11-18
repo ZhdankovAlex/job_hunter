@@ -4,6 +4,98 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-18
 
+### Bump the python group with 14 updates (#13)
+
+Updates the requirements on [requests](https://github.com/psf/requests), [google-auth](https://github.com/googleapis/google-cloud-python), [pypdf](https://github.com/py-pdf/pypdf), [google-auth-oauthlib](https://github.com/googleapis/google-cloud-python), [fastapi](https://github.com/fastapi/fastapi), [uvicorn](https://github.com/Kludex/uvicorn), [jinja2](https://github.com/pallets/jinja), [pytest](https://github.com/pytest-dev/pytest), [pytest-cov](https://github.com/pytest-dev/pytest-cov), [pre-commit](https://github.com/pre-commit/pre-commit), [httpx](https://github.com/encode/httpx), [ruff](https://github.com/astral-sh/ruff), [mypy](https://github.com/python/mypy) and [schemathesis](https://github.com/schemathesis/schemathesis) to permit the latest version.
+
+Updates `requests` to 2.34.2
+
+Updates `google-auth` to 2.62.2
+
+Updates `pypdf` to 7.1.0
+
+Updates `google-auth-oauthlib` to 1.5.0
+
+Updates `fastapi` to 0.163.1
+
+Updates `uvicorn` to 0.54.0
+
+Updates `jinja2` to 3.1.6
+
+Updates `pytest` to 9.2.0
+
+Updates `pytest-cov` to 7.1.0
+
+Updates `pre-commit` to 4.7.0
+
+Updates `httpx` to 0.28.1
+
+Updates `ruff` to 0.17.5
+
+Updates `mypy` to 2.4.1
+
+Updates `schemathesis` to 4.33.4
+
+--- updated-dependencies:
+
+...
+
+- [Release notes](https://github.com/psf/requests/releases)
+- [Changelog](https://github.com/psf/requests/blob/main/HISTORY.md)
+- [Commits](https://github.com/psf/requests/compare/v2.31.0...v2.34.2)
+- [Release notes](https://github.com/googleapis/google-cloud-python/releases)
+- [Changelog](https://github.com/googleapis/google-cloud-python/blob/main/packages/google-cloud-documentai/CHANGELOG.md)
+- [Commits](https://github.com/googleapis/google-cloud-python/compare/google-auth-v2.48.0...google-auth-v2.62.2)
+- [Release notes](https://github.com/py-pdf/pypdf/releases)
+- [Changelog](https://github.com/py-pdf/pypdf/blob/main/CHANGELOG.md)
+- [Commits](https://github.com/py-pdf/pypdf/compare/4.0.0...7.1.0)
+- [Release notes](https://github.com/googleapis/google-cloud-python/releases)
+- [Changelog](https://github.com/googleapis/google-cloud-python/blob/main/packages/gcp-sphinx-docfx-yaml/CHANGELOG.md)
+- [Commits](https://github.com/googleapis/google-cloud-python/compare/google-auth-oauthlib-v1.2.4...google-auth-oauthlib-v1.5.0)
+- [Release notes](https://github.com/fastapi/fastapi/releases)
+- [Commits](https://github.com/fastapi/fastapi/compare/0.115.0...0.163.1)
+- [Release notes](https://github.com/Kludex/uvicorn/releases)
+- [Changelog](https://github.com/Kludex/uvicorn/blob/main/docs/release-notes.md)
+- [Commits](https://github.com/Kludex/uvicorn/compare/0.32.0...0.54.0)
+- [Release notes](https://github.com/pallets/jinja/releases)
+- [Changelog](https://github.com/pallets/jinja/blob/main/CHANGES.rst)
+- [Commits](https://github.com/pallets/jinja/compare/3.1.0...3.1.6)
+- [Release notes](https://github.com/pytest-dev/pytest/releases)
+- [Changelog](https://github.com/pytest-dev/pytest/blob/main/CHANGELOG.rst)
+- [Commits](https://github.com/pytest-dev/pytest/compare/8.0.0...9.2.0)
+- [Changelog](https://github.com/pytest-dev/pytest-cov/blob/master/CHANGELOG.rst)
+- [Commits](https://github.com/pytest-dev/pytest-cov/compare/v5.0.0...v7.1.0)
+- [Release notes](https://github.com/pre-commit/pre-commit/releases)
+- [Changelog](https://github.com/pre-commit/pre-commit/blob/main/CHANGELOG.md)
+- [Commits](https://github.com/pre-commit/pre-commit/compare/v3.7.0...v4.7.0)
+- [Release notes](https://github.com/encode/httpx/releases)
+- [Changelog](https://github.com/encode/httpx/blob/master/CHANGELOG.md)
+- [Commits](https://github.com/encode/httpx/compare/0.27.0...0.28.1)
+- [Release notes](https://github.com/astral-sh/ruff/releases)
+- [Changelog](https://github.com/astral-sh/ruff/blob/main/CHANGELOG.md)
+- [Commits](https://github.com/astral-sh/ruff/compare/0.6.0...0.17.5)
+- [Changelog](https://github.com/python/mypy/blob/master/CHANGELOG.md)
+- [Commits](https://github.com/python/mypy/compare/v1.11...v2.4.1)
+- [Release notes](https://github.com/schemathesis/schemathesis/releases)
+- [Changelog](https://github.com/schemathesis/schemathesis/blob/master/CHANGELOG.md)
+- [Commits](https://github.com/schemathesis/schemathesis/compare/v4.0.0...v4.33.4)
+- dependency-name: requests dependency-version: 2.34.2 dependency-type: direct:production dependency-group: python
+- dependency-name: google-auth dependency-version: 2.62.2 dependency-type: direct:production dependency-group: python
+- dependency-name: pypdf dependency-version: 7.1.0 dependency-type: direct:production dependency-group: python
+- dependency-name: google-auth-oauthlib dependency-version: 1.5.0 dependency-type: direct:production dependency-group: python
+- dependency-name: fastapi dependency-version: 0.163.1 dependency-type: direct:production dependency-group: python
+- dependency-name: uvicorn dependency-version: 0.54.0 dependency-type: direct:production dependency-group: python
+- dependency-name: jinja2 dependency-version: 3.1.6 dependency-type: direct:production dependency-group: python
+- dependency-name: pytest dependency-version: 9.2.0 dependency-type: direct:development dependency-group: python
+- dependency-name: pytest-cov dependency-version: 7.1.0 dependency-type: direct:development dependency-group: python
+- dependency-name: pre-commit dependency-version: 4.7.0 dependency-type: direct:development dependency-group: python
+- dependency-name: httpx dependency-version: 0.28.1 dependency-type: direct:development dependency-group: python
+- dependency-name: ruff dependency-version: 0.17.5 dependency-type: direct:development dependency-group: python
+- dependency-name: mypy dependency-version: 2.4.1 dependency-type: direct:development dependency-group: python
+- dependency-name: schemathesis dependency-version: 4.33.4 dependency-type: direct:development dependency-group: python
+
+<sub>21f3529</sub>
+
 ### Bump actions/setup-python from 5 to 7 (#12)
 
 Bumps [actions/setup-python](https://github.com/actions/setup-python) from 5 to 7.
