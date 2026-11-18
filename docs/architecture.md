@@ -67,11 +67,11 @@ More: [pipeline.md](pipeline.md) · [configuration.md](configuration.md) · [doc
 
 | Where | What |
 |---|---|
-| `main.py` | Collecting vacancies: 11 stages from the company list to the reports |
+| `main.py` | Collecting vacancies: 11 stages from the company list to the reports; `run()` calls the stage functions in turn, the shared state is a `RunContext` |
 | `applications.py` | Mail: new letters → application statuses → the applications page |
 | `cvgen.py` | The CV generator from the command line (the generator itself is `jobhunter/cvgen.py`) |
 | `jobhunter/` | The main code, one module per task (see below) |
-| `web/` | Web UI: a FastAPI server (`app.py`), page templates, CSS and JS |
+| `web/` | Web UI: a FastAPI server (`app.py` — pages and API, `models.py` — Pydantic models, `runner.py` — starting runs, `cache.py` — page cache), templates, CSS and JS |
 | `cv/base.toml` | **All facts about you**: CVs, cover letters and interview prep are built from it |
 | `settings.toml`, `profile.toml` | Run settings and skills with weights; edits from the UI go to `profile_overrides.json` |
 | `ats_mapping.json`, `companies.txt` | The company list and where their vacancies are — data, not code |
@@ -84,7 +84,8 @@ Modules in `jobhunter/` by purpose:
   (normalised URLs and company names), `progress` (run progress), `release_notes` (RELEASE_NOTES.md from the git history).
 - **Vacancy sources:** `ats` (public ATS APIs and board discovery), `freehire`, `aggregators`, `sites` (job boards
   and career pages), `bigtech` (Workday, Oracle, Microsoft, Amazon), `telegram`.
-- **Selection:** `filters` (title, location, employment), `verify` (full-text checks), `language`, `staffing`,
+- **Selection:** `filters` (title, location, employment), `verify` (full-text checks), `stack` (the main
+  language of the stack: Python or another one), `language`, `staffing`,
   `geo`, `levels`.
 - **Scoring:** `relevance` (score), `cv_match` (Fit % and missing skills), `salary`, `tiers`, `industry`
   (company industry; does not change the score).

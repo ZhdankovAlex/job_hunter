@@ -61,7 +61,8 @@ Pages are built by the server, there is no separate frontend and no build step:
   key: a run rewrites `ats_mapping.json` all the time, so they are added on every request.
 - **Responses and errors** — see "Responses" below.
 
-Code: `web/app.py` (FastAPI: pages and API), `web/templates/` (Jinja2), `web/static/` (CSS and JS without a build).
+Code: `web/app.py` (FastAPI: pages and API), `web/models.py` (Pydantic models of requests and responses),
+`web/runner.py` (starting runs and the schedule), `web/cache.py` (cache of slow pages), `web/templates/` (Jinja2), `web/static/` (CSS and JS without a build).
 API: `GET /api/progress`, `GET /api/progress/stream` (SSE), `POST /api/runs`, `POST /api/runs/current/skip`,
 `POST /api/runs/current/stop`, `GET /api/reports`, `GET /api/sources`, `POST /api/cv`, `GET /api/cv`, `POST /api/cover`,
 `GET /api/market`, `GET /api/companies`, `GET|POST /api/skills`, `PUT|DELETE /api/skills/{name}`, `POST /api/applications/events`, `POST /api/prep` — described in `/docs`.

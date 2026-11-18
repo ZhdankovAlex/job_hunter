@@ -9,10 +9,8 @@ import asyncio
 import json
 import os
 import re
-import subprocess
 import sys
 import threading
-from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -22,12 +20,31 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from typing import Any, Literal
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from jobhunter import config, cover_letter, coverage, cvgen, industry, interview_prep, manual_apps, market_check, progress, relevance, vacancy_lookup
 from jobhunter.models import norm_name
+from web import cache
+from web.models import (
+    ApplicationEvent,
+    BuiltCv,
+    CompaniesReport,
+    CoverRequest,
+    CvRequest,
+    CvResult,
+    errors,
+    MarketReport,
+    NewSkill,
+    Report,
+    RunRequest,
+    RunStarted,
+    SkillChange,
+    SkillsReport,
+    SkipRequest,
+    SourcesReport,
+)
+from web.runner import Runner, daily_scheduler
 
 ROOT = config.ROOT
 WEB = Path(__file__).parent
@@ -46,32 +63,6 @@ app = FastAPI(
 templates = Jinja2Templates(directory=WEB / "templates")
 
 
-class ErrorDetail(BaseModel):
-    detail: str
-
-
-class ValidationIssue(BaseModel):
-    loc: list[str | int]
-    msg: str
-    type: str
-
-
-class Unprocessable(BaseModel):
-    detail: list[ValidationIssue] | str = Field(
-        description="A list of pydantic errors (the body does not match the schema) or a text to show in the UI "
-                    "(bad regex, neither a link nor a vacancy text…)")
-
-
-ERROR_TEXT = {400: "The request body could not be parsed (not JSON / not UTF-8)", 404: "Not found",
-              409: "Conflicts with the current state: a run is / is not going on, the name is taken", 422: "Invalid data"}
-
-
-def errors(*codes: int) -> dict[int | str, dict[str, Any]]:
-    """Endpoint error codes for OpenAPI: FastAPI itself describes only 422 and only as a list of pydantic errors,
-    but endpoints also return their own 422 as a string (the UI shows it) — schemathesis checks both."""
-    return {c: {"model": Unprocessable if c == 422 else ErrorDetail, "description": ERROR_TEXT[c]} for c in codes}
-
-
 class SafeJSONResponse(JSONResponse):
     """JSON that does not fail on lone surrogates: a normal response goes as is (readable non-ASCII text),
     and if a string cannot be encoded to UTF-8 — the same data with \\uXXXX escaping."""
@@ -87,28 +78,6 @@ class SafeJSONResponse(JSONResponse):
 async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
     """422 like FastAPI's, but the errors echo the input: "\\ud800" in the body gave a 500 on serializing the response."""
     return SafeJSONResponse({"detail": jsonable_encoder(exc.errors())}, status_code=422)
-
-
-def _has_surrogate(value: object) -> bool:
-    if isinstance(value, str):
-        return any("\ud800" <= ch <= "\udfff" for ch in value)
-    if isinstance(value, dict):
-        return any(_has_surrogate(k) or _has_surrogate(v) for k, v in value.items())
-    if isinstance(value, list):
-        return any(_has_surrogate(v) for v in value)
-    return False
-
-
-class ApiModel(BaseModel):
-    """A request body. JSON allows "\\ud800", a lone surrogate: a string with it cannot be encoded to UTF-8, and
-    writing it to a file failed (500) or, worse, truncated the file. Rejected on input: 422, like any bad input."""
-
-    @model_validator(mode="before")
-    @classmethod
-    def no_surrogates(cls, data: object) -> object:
-        if _has_surrogate(data):
-            raise ValueError("the text has broken characters (lone UTF-16 surrogates)")
-        return data
 
 
 @app.exception_handler(405)
@@ -152,302 +121,14 @@ NAV = [("pipeline", "Pipeline", "⚙️"), ("reports", "Reports", "📋"), ("app
 
 # --- starting a run ---------------------------------------------------------------------------
 
-class Runner:
-    """One run at a time: scripts one after another in a background thread, output goes to last_run.log."""
-
-    SCRIPTS = {
-        "all": ["applications.py", "main.py"],  # like run_daily.bat: mail first, then vacancies
-        "main": ["main.py"],
-        "applications": ["applications.py"],
-    }
-    # what can be turned off in advance -> a main.py flag; "mail" removes applications.py from the queue
-    SKIP_FLAGS = {"telegram": "--no-telegram", "freehire": "--no-freehire", "aggregators": "--no-aggregators"}
-
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.process: subprocess.Popen | None = None
-        self.thread: threading.Thread | None = None
-        self.queue: list[str] = []
-        self.stopping = False
-
-    def busy(self) -> bool:
-        """Whether a run is going on: started from here or from a terminal / the Task Scheduler."""
-        if self.thread and self.thread.is_alive():
-            return True
-        data = progress.read()
-        return bool(data and progress.is_alive(data))
-
-    def start(self, kind: str, skip: Sequence[str]) -> list[str]:
-        """Starts the script queue; skip — stages turned off in advance. -> commands without the interpreter."""
-        with self.lock:
-            if self.busy():
-                raise HTTPException(409, "A run is already going on — wait for it to end")
-            scripts = [s for s in self.SCRIPTS[kind] if not ("mail" in skip and s == "applications.py")]
-            if not scripts:
-                raise HTTPException(422, "Nothing to run: mail is turned off and there are no other scripts in the queue")
-            flags = [self.SKIP_FLAGS[k] for k in skip if k in self.SKIP_FLAGS]
-            commands = [[s, *flags] if s == "main.py" else [s] for s in scripts]
-            self.queue = [" ".join(c) for c in commands]
-            self.stopping = False
-            self.thread = threading.Thread(target=self._run, args=(commands,), daemon=True)
-            self.thread.start()
-            return list(self.queue)
-
-    def _run(self, commands: list[list[str]]) -> None:
-        python = ROOT / ".venv" / "Scripts" / "python.exe"
-        python = python if python.exists() else Path(sys.executable)
-        with RUN_LOG.open("a", encoding="utf-8") as log:
-            for i, command in enumerate(commands):
-                log.write(f"\n=== {datetime.now():%Y-%m-%d %H:%M:%S} {' '.join(command)} (started from the web UI) ===\n")
-                log.flush()
-                # a separate process group: Ctrl+C in the server window does not interrupt the running run.
-                # DETACHED_PROCESS is not used: with it, runs started from some shells
-                # silently ended halfway. Restarting the server still interrupts the run — see docs/web-ui.md.
-                # if, not a conditional expression: mypy narrows sys.platform only in an if statement,
-                # and CREATE_NEW_PROCESS_GROUP exists only on Windows (CI checks under Linux)
-                if sys.platform == "win32":
-                    detached = subprocess.CREATE_NEW_PROCESS_GROUP
-                else:
-                    detached = 0
-                self.process = subprocess.Popen(
-                    [str(python), *command], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
-                    env={**os.environ, "PYTHONIOENCODING": "utf-8", **({progress.CONTINUE_RUN_ENV: "1"} if i else {})},
-                    creationflags=detached,
-                    start_new_session=sys.platform != "win32",
-                )
-                self.process.wait()
-                self.queue.pop(0)
-                if self.stopping:  # "Stop run": the next scripts of the queue are not started
-                    log.write(f"=== {datetime.now():%Y-%m-%d %H:%M:%S} stopped from the web UI ===\n")
-                    break
-        self.queue = []
-        self.process = None
-        warm_caches()  # a new report — recompute "Market" and "Skills" before anyone opens them
-
-    def stop(self) -> int:
-        """A full stop: the queue is cleared, the running script ends together with its child processes.
-
-        Works for a run from a terminal / the Task Scheduler too (pid from progress.json). -> pid of the stopped one.
-        What this run collected is not saved: the reports stay from the previous run.
-        """
-        with self.lock:
-            data = progress.read()
-            pid = self.process.pid if self.process and self.process.poll() is None else None
-            if pid is None and data and progress.is_alive(data):
-                pid = data["pid"]
-            if pid is None:
-                raise HTTPException(409, "No run is going on")
-            self.stopping = True
-            if sys.platform == "win32":
-                subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
-            else:
-                import signal
-                try:
-                    os.killpg(pid, signal.SIGTERM)  # start_new_session: group = pid
-                except OSError:
-                    os.kill(pid, signal.SIGTERM)
-            return pid
-
-
-runner = Runner()
+# after the queue — warm_caches: a new report, recompute "Market" and "Skills" before anyone opens them
+runner = Runner(ROOT, RUN_LOG, on_finish=lambda: warm_caches())
 
 SCHEDULER_FILE = ROOT / "state" / "scheduler.json"  # date of the last scheduled run
 
-
-def _daily_scheduler(at: str) -> None:
-    """Once a day at `at` (HH:MM, container time / TZ) — the "everything" run, like run_daily.bat.
-
-    Turned on with the JOBHUNTER_DAILY_AT variable (in docker-compose.yml); usually not needed on Windows —
-    there are the Task Scheduler and run_daily.bat. A missed time (the server was off) is caught up
-    if there was no scheduled run today yet; if a run is already going on, it waits for it to end.
-    """
-    import time
-
-    while True:
-        now = datetime.now()
-        try:
-            last = json.loads(SCHEDULER_FILE.read_text(encoding="utf-8")).get("last", "")
-        except (OSError, ValueError):
-            last = ""
-        if now.strftime("%H:%M") >= at and last != now.date().isoformat() and not runner.busy():
-            try:
-                runner.start("all", [])
-                SCHEDULER_FILE.write_text(json.dumps({"last": now.date().isoformat()}), encoding="utf-8")
-            except HTTPException:
-                pass  # a run is already going on — try again in a minute
-        time.sleep(60)
-
-
 if os.environ.get("JOBHUNTER_DAILY_AT"):
-    threading.Thread(target=_daily_scheduler, args=(os.environ["JOBHUNTER_DAILY_AT"],), daemon=True).start()
-
-
-class RunRequest(ApiModel):
-    """What to run."""
-    kind: str = Field("all", description="all — mail, then vacancies (like run_daily.bat); main — only "
-                                          "vacancies; applications — only mail", pattern="^(all|main|applications)$")
-    skip: list[Literal["mail", "telegram", "freehire", "aggregators"]] = Field(
-        default_factory=list, description="Stages turned off in advance: mail — do not run applications.py; "
-                                          "telegram / freehire / aggregators — the --no-… flags of main.py")
-
-
-class RunStarted(BaseModel):
-    scripts: list[str] = Field(description="Commands in start order")
-
-
-class Report(BaseModel):
-    date: str = Field(description="YYYY-MM-DD")
-    file: str = Field(description="File name: open /files/reports/<file>")
-    size_kb: int
-    built: str = Field(description="Build time, HH:MM")
-    md: bool = Field(description="A Markdown version sits next to it")
-
-
-class BuiltCv(BaseModel):
-    name: str = Field(description="\"Company — Role\" from the first line of the .md, otherwise the file name")
-    vacancy: str = Field(description="Link to the vacancy or ''")
-    pdf: str
-    md: str = Field(description="Link to the Markdown draft or ''")
-    one_page: bool
-    mtime: float
-    built: str = Field(description="DD.MM HH:MM")
-
-
-class Skill(BaseModel):
-    name: str
-    pattern: str = Field(description="Regular expression (case-insensitive)")
-    base_weight: int = Field(description="Weight from profile.toml")
-    weight: int = Field(description="Weight with the edit from profile_overrides.json")
-    disabled: bool
-    added: bool = Field(description="Your own skill, added from the UI")
-    matches: int = Field(description="Fitting vacancies of the last report that mention the skill")
-    share: int = Field(description="% of fitting vacancies")
-    invalid: bool = Field(False, description="The pattern does not compile")
-
-
-class SkillsReport(BaseModel):
-    skills: list[Skill]
-    relevant: int = Field(description="Fitting vacancies in the last report")
-    day: str = Field(description="Day of the last report or ''")
-
-
-class MarketFit(BaseModel):
-    median: int | None = Field(description="Median CV-to-vacancy match, %; null — not measured")
-    share80: int = Field(description="% of vacancies with a match of 80% or more")
-
-
-class MarketKeyword(BaseModel):
-    name: str
-    count: int
-    share: int = Field(description="% of fitting vacancies where the technology is a key one")
-    in_cv: Literal["pdf", "base", ""] = Field(description="pdf — in the PDF CV, base — only in the base, '' — nowhere")
-    partial: str = Field(description="A caveat: present, but partly (AWS: only S3) or ''")
-
-
-class MarketTitle(BaseModel):
-    name: str
-    count: int
-    share: int
-    in_headline: bool = Field(description="The phrase is in the CV headline")
-
-
-class MarketLevel(BaseModel):
-    name: str
-    count: int
-    share: int
-
-
-class MarketHygiene(BaseModel):
-    stop_words: list[str] = Field(description="Filler words in experience bullets")
-    numbers_by_job: dict[str, int] = Field(description="Company -> bullets with numbers")
-    pages: dict[str, int] = Field(description="PDF -> pages")
-    bullets: int
-    with_numbers: int
-    with_verb: int = Field(description="Bullets starting with an action verb")
-    long: list[str] = Field(description="Too long bullets (the beginning)")
-    avg_words: int
-    no_numbers: list[str] = Field(description="Bullets without numbers (the beginning)")
-    contacts: dict[str, bool] = Field(description="Contact -> found in the PDF")
-
-
-class MarketReport(BaseModel):
-    """Without vacancies in the archive — only day='', total=0, relevant=0 and advice."""
-    day: str
-    total: int = Field(description="Vacancies of the day")
-    relevant: int = Field(description="Fitting by title and with a text")
-    fit: MarketFit | None = None
-    keywords: list[MarketKeyword] = []
-    titles: list[MarketTitle] = []
-    seniority: list[MarketLevel] = []
-    headline: str = Field("", description="CV headlines joined with \" / \"")
-    hygiene: MarketHygiene | None = None
-    days: list[str] = Field([], description="Archive days, newest first")
-    advice: list[str] = Field(description="Conclusions: what to fix in the CV")
-
-
-class Source(BaseModel):
-    """Common fields; the rest comes from state/sources_latest.json and ats_mapping.json as is (ATS: platform, slug…)."""
-    model_config = ConfigDict(extra="allow")
-
-    name: str
-    kind: str = Field(description="ats / aggregator / site / career_page / …")
-    jobs: int = Field(description="Vacancies the source gave")
-    error: str = Field(description="Error or ''")
-    reason: str = Field(description="Why there are no vacancies in the report (a gaps.groups key) or ''")
-    detail: str
-    checked: str = Field(description="When the board was checked, if it matters for the reason, or ''")
-    platform: str | None = Field(None, description="ATS platform; null — board not found")
-    slug: str | None = None
-
-
-class SourceKind(BaseModel):
-    sources: int
-    jobs: int
-    empty: int = Field(description="No vacancies and no error")
-    errors: int
-
-
-class FreehireQuery(BaseModel):
-    name: str
-    title: str
-    params: dict[str, Any]
-    total: int | None = Field(description="Vacancies on the site; null — before the first run")
-    fetched: int | None = Field(description="Fetched; null — before the first run")
-    skipped: bool = Field(description="The query is off (relocation, for example)")
-
-
-class GapGroup(BaseModel):
-    key: str
-    title: str
-    hint: str
-    count: int
-
-
-class GapRow(BaseModel):
-    name: str
-    reason: str
-    detail: str
-    checked: str
-
-
-class Gaps(BaseModel):
-    groups: list[GapGroup]
-    rows: list[GapRow]
-    reports: int | None = Field(description="Reports the companies were looked up in")
-
-
-class SourcesReport(BaseModel):
-    built: str = Field(description="Run time DD.MM HH:MM or ''")
-    rows: list[Source]
-    kinds: dict[str, SourceKind]
-    telegram: list[str]
-    freehire: list[FreehireQuery]
-    gaps: Gaps
-
-
-class SkipRequest(ApiModel):
-    """Which stage of the running run to skip."""
-    stage: str = Field(description="Stage key from /api/progress (stages[].key); the stage must be running and skippable")
+    threading.Thread(target=daily_scheduler, args=(runner, os.environ["JOBHUNTER_DAILY_AT"], SCHEDULER_FILE),
+                     daemon=True).start()
 
 
 # --- data for the pages ------------------------------------------------------------------------
@@ -585,44 +266,12 @@ def cover_page(request: Request):
     return page(request, "cover")
 
 
-# Slow page computations ("Market" analyses all vacancies of a report, "Skills" searches every skill in their
-# texts) are kept both in memory and on disk: after a server restart the page opens at once.
-# The key is the names and modification times of the input files; a file changed — recompute.
-WEB_CACHE_FILE = ROOT / "state" / "web_cache.json"
-_cache_lock = threading.Lock()
-_memory_cache: dict[str, dict] = {}
-
-
-def _cached(name: str, key: list, compute):
-    """The cached value if the key matches; otherwise compute() and a write to the cache."""
-    key = json.loads(json.dumps(key, default=str))  # tuple -> list, Path -> str: comparable with what was read from disk
-    with _cache_lock:
-        if not _memory_cache and WEB_CACHE_FILE.exists():
-            try:
-                _memory_cache.update(json.loads(WEB_CACHE_FILE.read_text(encoding="utf-8")))
-            except ValueError:
-                pass
-        entry = _memory_cache.get(name)
-        if entry and entry.get("key") == key:
-            return entry["value"]
-    value = compute()
-    with _cache_lock:
-        _memory_cache[name] = {"key": key, "value": value}
-        WEB_CACHE_FILE.parent.mkdir(exist_ok=True)
-        WEB_CACHE_FILE.write_text(json.dumps(_memory_cache, ensure_ascii=False, default=str), encoding="utf-8")
-    return value
-
-
-def _mtime(path: Path) -> float:
-    return path.stat().st_mtime if path.exists() else 0
-
-
 def market_report(day: str = "") -> dict:
     """market_check.analyze + conclusions; recomputed (~10 s) only if the day's vacancies or the CV changed."""
     files = sorted(config.JOBS_ARCHIVE_DIR.glob("*.json"))
     path = next((f for f in files if f.stem == day), files[-1] if files else None)
     cv_files = [config.CV_BASE_FILE, *(Path(p) for p in market_check.geo.S.get("cv", {}).get("files", []))]
-    key = [path and path.name, path and path.stat().st_mtime, *(_mtime(f) for f in cv_files)]
+    key = [path and path.name, path and path.stat().st_mtime, *(cache.mtime(f) for f in cv_files)]
 
     def compute():
         report = market_check.analyze(path.stem if path else "")
@@ -630,7 +279,7 @@ def market_report(day: str = "") -> dict:
         return report
 
     # a report for another day is opened rarely — it replaces the last one; the last one has the "market" key
-    return _cached("market" if path == (files[-1] if files else None) else "market:other", key, compute)
+    return cache.cached("market" if path == (files[-1] if files else None) else "market:other", key, compute)
 
 
 def companies_report() -> dict:
@@ -643,7 +292,7 @@ def companies_report() -> dict:
     # a run rewrites ats_mapping.json all the time — board links are added per request, not cached
     deps = [config.COMPANIES_FILE, config.SETTINGS_FILE, config.MAIL_CACHE_FILE, config.MANUAL_APPLICATIONS_FILE,
             Path(industry.__file__)]
-    key = [[f.name, f.stat().st_mtime] for f in files] + [_mtime(f) for f in deps]
+    key = [[f.name, f.stat().st_mtime] for f in files] + [cache.mtime(f) for f in deps]
 
     def compute() -> dict:
         from jobhunter.applications_report import StatusIndex
@@ -671,7 +320,7 @@ def companies_report() -> dict:
         return {"companies": companies, "counts": counts, "labels": industry.LABELS, "vacancies": len(unique),
                 "market": industry.market_by_industry(unique.values())}
 
-    data = _cached("companies_by_industry", key, compute)
+    data = cache.cached("companies_by_industry", key, compute)
     try:
         mapping = json.loads(config.MAPPING_FILE.read_text(encoding="utf-8")) if config.MAPPING_FILE.exists() else {}
     except ValueError:  # a run is writing the file right now
@@ -684,8 +333,8 @@ def companies_report() -> dict:
 
 def application_companies() -> list[str]:
     """Company hints in the Applications form (parsing all letters takes ~1 s) — until letters or applications change."""
-    key = [_mtime(config.MANUAL_APPLICATIONS_FILE), _mtime(config.MAIL_CACHE_FILE)]
-    return _cached("companies", key, manual_apps.companies)
+    key = [cache.mtime(config.MANUAL_APPLICATIONS_FILE), cache.mtime(config.MAIL_CACHE_FILE)]
+    return cache.cached("companies", key, manual_apps.companies)
 
 
 def warm_caches() -> None:
@@ -708,46 +357,6 @@ def market_page(request: Request, day: str = ""):
                      "vacancies are called and whether the CV headline matches, experience bullet hygiene and conclusions.")
 def api_market(day: str = ""):
     return market_report(day)
-
-
-class CompanyJob(BaseModel):
-    title: str
-    url: str
-    day: str
-
-
-class CompanyRow(BaseModel):
-    name: str
-    industries: list[str]
-    by: str = Field(description="Where the industry comes from: `list` (known companies / companies.txt) or `vacancies`")
-    vacancies: int = Field(description="Vacancies over all days, without repeats by title")
-    last: str = Field(description="The last day with a vacancy or ''")
-    status: str = Field(description="Application status or ''")
-    board: str = Field(description="Link to the ATS board or ''")
-    jobs: list[CompanyJob]
-
-
-class SkillShare(BaseModel):
-    name: str
-    share: int = Field(description="% of the industry's vacancies")
-
-
-class IndustryMarket(BaseModel):
-    industry: str
-    label: str
-    vacancies: int
-    remote_share: int | None = Field(description="% remote among vacancies with a known format; null — unknown")
-    salaries: int = Field(description="Vacancies with a salary range")
-    salary_median: float | None = Field(description="Median of the range middle, EUR/month; null — fewer than 3 ranges")
-    skills: list[SkillShare]
-
-
-class CompaniesReport(BaseModel):
-    companies: list[CompanyRow]
-    counts: dict[str, int] = Field(description="Companies per industry code")
-    labels: dict[str, str] = Field(description="Industry code -> label")
-    vacancies: int = Field(description="Archive vacancies without repeats")
-    market: list[IndustryMarket]
 
 
 @app.get("/companies", response_class=HTMLResponse, include_in_schema=False)
@@ -845,41 +454,6 @@ def api_sources():
 
 # --- a CV for a vacancy -------------------------------------------------------------------------
 
-class CvRequest(ApiModel):
-    """Which vacancy to build a CV for: a link from a report, any link, or pasted text."""
-    url: str = Field("", description="Link to the vacancy. First looked up in saved reports (state/jobs/), "
-                                     "otherwise the page is read (robots.txt, 1 request/s)")
-    date: str = Field("", description="Date YYYY-MM-DD of the report the button was clicked in — looked up there first")
-    text: str = Field("", description="Vacancy text; if set, the link is not read")
-    company: str = Field("", description="Company (refines or replaces the one found)")
-    title: str = Field("", description="Vacancy title (refines or replaces the one found)")
-    one_page: bool = Field(False, strict=True, description="One-page variant: shrinks until it fits")
-
-
-class CvPick(BaseModel):
-    section: str = Field(description="Summary or a company from the experience")
-    text: str
-    pin: bool = Field(description="The bullet is pinned in the base (present in every version)")
-    techs: list[str] = Field(description="Vacancy technologies found in the bullet")
-    topics: list[str] = Field(description="Vacancy topics shared with the bullet")
-    similarity: float = Field(description="Text similarity of the bullet to the vacancy (TF-IDF, 0–1)")
-    score: float = Field(description="Total score: technology 2, topic 1, similarity up to 4")
-
-
-class CvResult(BaseModel):
-    company: str
-    title: str
-    source: str = Field(description="Where the vacancy came from: report date, page — from the page, text — pasted")
-    pdf: str = Field(description="Link to the PDF")
-    md: str = Field(description="Link to the Markdown draft (it can be edited and rebuilt: cvgen.py --render)")
-    pages: int
-    one_page: bool
-    fit: int = Field(description="Fit % of the CV to the vacancy")
-    missing: list[str] = Field(description="Key vacancy skills missing from the CV")
-    techs: list[str]
-    topics: list[str]
-    picks: list[CvPick] = Field(description="Picked bullets and why")
-
 
 def resolve_job(body) -> dict:
     """The vacancy from the request: pasted text, otherwise by link — from the reports, otherwise from the page."""
@@ -911,10 +485,6 @@ def api_cv(body: CvRequest):
         one_page=body.one_page, fit=result["fit"], missing=result["missing"], techs=result["techs"],
         topics=result["topics"], picks=result["picks"],
     )
-
-
-class CoverRequest(CvRequest):
-    style: Literal["short", "full"] = Field("short", description="short — bulleted, full — in paragraphs")
 
 
 @app.post("/api/cover", responses=errors(400, 404, 422), summary="Cover letter for a vacancy",
@@ -961,16 +531,14 @@ def skills_payload() -> dict:
 
     # vacancy counts per pattern are cached for the last report: changing a weight or turning a skill off
     # does not change the pattern and does not trigger a recount; a new skill is counted alone (~0.2 s), the rest come from the cache
-    key = [files[-1].name if files else "", _mtime(files[-1]) if files else 0]
-    counts = dict(_cached("skills", key, lambda: {"relevant": len(load_texts()), "matches": {}}))
+    key = [files[-1].name if files else "", cache.mtime(files[-1]) if files else 0]
+    counts = dict(cache.cached("skills", key, lambda: {"relevant": len(load_texts()), "matches": {}}))
     matches = dict(counts["matches"])
     missing = [r["pattern"] for r in rows if r["pattern"] not in matches]
     if missing:
         matches.update({p: count(p) for p in missing})
         counts = {**counts, "matches": matches}
-        with _cache_lock:
-            _memory_cache["skills"] = {"key": json.loads(json.dumps(key)), "value": counts}
-            WEB_CACHE_FILE.write_text(json.dumps(_memory_cache, ensure_ascii=False, default=str), encoding="utf-8")
+        cache.put("skills", key, counts)
     relevant = counts["relevant"]
     for row in rows:
         n = matches.get(row["pattern"])
@@ -979,37 +547,6 @@ def skills_payload() -> dict:
             row["invalid"] = True
         row["share"] = round(100 * row["matches"] / relevant) if relevant else 0
     return {"skills": rows, "relevant": relevant, "day": files[-1].stem if files else ""}
-
-
-class SkillChange(ApiModel):
-    """A skill edit: weight and / or turning off. Applies from the next run."""
-    weight: int | None = Field(None, ge=-30, le=30, description="New weight; negative is a penalty for the skill in a vacancy")
-    disabled: bool | None = Field(None, strict=True, description="true — the skill does not count in the score")
-
-    @field_validator("weight", mode="before")
-    @classmethod
-    def weight_not_bool(cls, value: object) -> object:
-        return _not_bool(value)
-
-
-def _not_bool(value: object) -> object:
-    """A weight is a number. Pydantic in lax mode would take true as 1, and strict=True would reject 3.0 too (an
-    integer by JSON Schema) — so only bool is cut off."""
-    if isinstance(value, bool):
-        raise ValueError("the weight is an integer, not true/false")
-    return value
-
-
-class NewSkill(ApiModel):
-    """Your own skill: name, regular expression (case-insensitive) and weight."""
-    name: str = Field(min_length=1, max_length=60)
-    pattern: str = Field(min_length=1, description="Regular expression, searched in the vacancy title and text")
-    weight: int = Field(2, ge=-30, le=30)
-
-    @field_validator("weight", mode="before")
-    @classmethod
-    def weight_not_bool(cls, value: object) -> object:
-        return _not_bool(value)
 
 
 @app.get("/skills", response_class=HTMLResponse, include_in_schema=False)
@@ -1068,25 +605,6 @@ def api_skill_reset(name: str):
 
 
 # --- application events ------------------------------------------------------------------------
-
-class ApplicationEvent(ApiModel):
-    """An application event: written to applications_manual.toml, the applications page is rebuilt from the letter cache."""
-    company: str = Field(min_length=1, description="Company — as in the report, the event is merged with letters by it")
-    kind: Literal["applied", "interview", "rejected", "declined", "offer", "other"] = Field(
-        description="applied — applied, interview — a stage, rejected — rejected, declined — declined by you, offer — offer, "
-                    "other — a note")
-    note: str = Field("", description="What happened")
-    url: str = Field("", description="Link to the vacancy: reports will mark it \"🔁 already applied\"")
-    source: str = Field("", description="Where: company site, LinkedIn, Telegram…")
-    date: datetime | None = Field(None, description="Event time; now by default")
-
-    @field_validator("date", mode="before")
-    @classmethod
-    def iso_date(cls, value: object) -> object:
-        """Only an ISO string, as in the schema: pydantic would also take a number (Unix seconds) — "0" would become 1970."""
-        if value is not None and not isinstance(value, str | datetime):
-            raise ValueError("the date is an ISO 8601 string, e.g. 2026-11-18T10:00")
-        return value
 
 
 @app.post("/api/applications/events", responses=errors(400, 422), status_code=201, summary="Add an application event",
