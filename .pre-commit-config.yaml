@@ -1,0 +1,28 @@
+# Git hooks: pip install -r requirements-dev.txt, then pre-commit install (once per clone).
+# The same checks run in CI (.github/workflows/ci.yml); the hooks only catch them before the push.
+exclude: ^(tests/fixtures/|docs/img/|cv_out/|reports/|state/|ats_mapping.json$)
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.4
+    hooks:
+      - id: ruff-check
+  - repo: local
+    hooks:
+      # mypy from the project's own environment (it needs the installed dependencies and the pydantic plugin):
+      # commit from a shell with .venv activated
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
+        pass_filenames: false

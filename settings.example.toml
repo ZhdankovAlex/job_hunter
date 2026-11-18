@@ -266,4 +266,3 @@ own_names = []
 # sender (part of the name or address) -> company: for letters with no company in the subject or the text
 [mail.sender_company]
 # "Jane Recruiter" = "Example Corp"
-

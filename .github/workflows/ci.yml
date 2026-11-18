@@ -31,5 +31,5 @@ jobs:
         run: ruff check .
       - name: Types (mypy)
         run: mypy
-      - name: Tests (pytest)
-        run: pytest -q
+      - name: Tests (pytest) with coverage
+        run: pytest -q --cov

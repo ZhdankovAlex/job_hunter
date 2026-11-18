@@ -1,5 +1,11 @@
 # job-hunter
 
+[![CI](https://github.com/ZhdankovAlex/job_hunter/actions/workflows/ci.yml/badge.svg)](https://github.com/ZhdankovAlex/job_hunter/actions/workflows/ci.yml)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
+[![Checked with mypy](https://img.shields.io/badge/mypy-checked-2a6db2)](https://mypy-lang.org/)
+[![Ruff](https://img.shields.io/badge/lint-ruff-261230)](https://github.com/astral-sh/ruff)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 A self-hosted job search assistant with a local web UI. Every day it collects vacancies from public
 ATS boards (Greenhouse, Lever, Ashby, Workable, …), job aggregators, big-tech career sites,
 [freehire.me](https://freehire.me) and, optionally, Telegram channels; drops the ones that do not fit;
@@ -127,7 +133,7 @@ Daily runs via Task Scheduler / cron or Docker: [docs/pipeline.md](docs/pipeline
 
 | File | About |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | How the project works: the big picture and the reasons behind it |
+| [docs/architecture.md](docs/architecture.md) | How the project works: the big picture, design decisions and trade-offs, known debt |
 | [docs/web-ui.md](docs/web-ui.md) | Web UI pages and how they are built (templates, cache), starting and skipping stages, API |
 | [docs/pipeline.md](docs/pipeline.md) | Run stages, progress, what makes a run fast, `main.py` flags, daily runs |
 | [docs/sources.md](docs/sources.md) | ATS boards, freehire, aggregators, career pages, Telegram, fixing `ats_mapping.json` |
@@ -146,8 +152,9 @@ Daily runs via Task Scheduler / cron or Docker: [docs/pipeline.md](docs/pipeline
 
 ## Development
 
-Tests run without network and personal files, in about a second; CI runs the linter and the tests on every
-pull request ([docs/testing.md](docs/testing.md)):
+Tests run without network and personal files, in 10–20 seconds; CI runs ruff, mypy and the tests with a
+coverage floor on every pull request ([docs/testing.md](docs/testing.md)). Why the code is shaped the way it
+is: [design decisions and trade-offs](docs/architecture.md#design-decisions-and-trade-offs).
 
 ```bash
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
@@ -155,6 +162,12 @@ pull request ([docs/testing.md](docs/testing.md)):
 
 ```bash
 .venv\Scripts\python.exe -m pytest
+```
+
+The same checks as git hooks, before every commit:
+
+```bash
+.venv\Scripts\pre-commit install
 ```
 
 ## License
