@@ -45,6 +45,9 @@ TOPICS = {
     "architecture": r"architect|design(?:ing)? systems|system design|monolith",
     "product": r"product|customers?|users?\b|features?",
     "integrations": r"integrat|third[\s-]party|partners?",
+    # the pet-project topic (projects section): job search, ATS, collecting data from websites
+    "scraping": r"scrap(?:e|er|ers|ing)\b|crawl|\bats\b|applicant tracking|job boards?|hr[\s-]?tech"
+                r"|talent acquisition|data extraction",
 }
 _TOPIC_RX = {name: re.compile(rx, re.I) for name, rx in TOPICS.items()}
 # always in the technology line under a workplace
@@ -261,6 +264,7 @@ class Limits:
         intro_paragraphs: paragraphs describing the company and the role.
         skill_items: skills per group (None — no limit).
         publications: the Publications section.
+        project_bullets: bullets of a pet project (None — the project's bullets_max).
     """
 
     def __init__(self, compact: bool = False):
@@ -272,6 +276,7 @@ class Limits:
         self.skill_items = 7 if compact else None
         self.skill_groups: int | None = None  # skill groups (those matching the vacancy best)
         self.publications = not compact
+        self.project_bullets = 1 if compact else None
 
     def shrink(self) -> bool:
         """Removes one more least important piece; False — nothing left to shrink.
@@ -369,15 +374,35 @@ def build_markdown(base: dict, company: str, title: str, text: str, url: str = "
         md += [*job["intro"][: limits.intro_paragraphs], ""]
         md += [f"- {b['text']}" for b in bullets]
         md += ["", f"_{' · '.join(tech)}_"]
+    md += _projects(base, vac, limits, picks) if not generic else []
     edu = base["education"]
     md += [
         *(["", "## Publications", base["publications"]["text"]] if limits.publications else []),
         "", "## Education", f"**{edu['degree']}** · {edu['years']}  ",
         edu["school"] + ("  " if vac.is_ai and limits.publications else ""),
-        *([edu["thesis_ai"]] if vac.is_ai and limits.publications else []),  # the one-page variant has no thesis topic
+        *([edu["thesis_ai"]] if vac.is_ai and limits.publications and edu.get("thesis_ai") else []),  # the one-page variant has no thesis topic
         "", "## Languages", base["languages"]["text"], "",
     ]
     return "\n".join(md)
+
+
+def _projects(base: dict, vac: Vacancy, limits: Limits, picks: list | None) -> list[str]:
+    """The Projects section: pet projects, only when a vacancy topic matches the project's requires (an AI role by
+    itself does not count, unlike _allowed). Otherwise a pet project would mix with work experience."""
+    md: list[str] = []
+    for proj in base.get("projects", []):
+        if not set(proj.get("requires", [])) & vac.topics:
+            continue
+        high = limits.project_bullets or proj.get("bullets_max", 3)
+        bullets = _pick(proj["bullets"], vac, 1, high)
+        if picks is not None:
+            picks += [{"section": proj["name"], "text": b["text"], "pin": bool(b.get("pin")),
+                       **vac.explain(b["text"], b.get("topics", []))} for b in bullets]
+        label = re.sub(r"^https?://", "", proj["link"])
+        md += ["", f"### {proj['name']} — {proj['kind']}", f"*[{label}]({proj['link']})*", "", proj["intro"], ""]
+        md += [f"- {b['text']}" for b in bullets]
+        md += ["", f"_{' · '.join(proj['stack'])}_"]
+    return ["", "## Projects", *md] if md else []
 
 
 # --- Markdown -> HTML: classic (like the desktop CV) and harvard ------------------------------
