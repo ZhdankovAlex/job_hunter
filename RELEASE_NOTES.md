@@ -4,6 +4,14 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-18
 
+### Tests for the vacancy score: relevance coverage from 39% to 99% (#8)
+
+- tests/test_relevance.py: Profile.score and location_points on a small profile.toml of its own with "telling" weights — the total shows which adjustment fired. Skills and their order by weight, title-only adjustments, outsourcing, Russian language (share of Cyrillic or a mark), Go vs "Python not primary" (they do not add up), JVM and 8+ years, language marks, CV gaps with the cv_missing_cap floor, a freehire EUR range from 60k (year / month / hour), company priority, every location branch, base_score without penalties, skill edits from the UI, a broken pattern and a broken overrides file
+- the core of the score was only tested indirectly, through cv_match
+- docs: testing.md — the new file in the table
+
+<sub>59b9c97</sub>
+
 ### mypy as a profile skill and a CV technology, Claude Code skills for new sources and commits (#7)
 
 - profile.example.toml: a "Static typing (mypy)" skill (weight 1) — mypy, pyright, type hints, static typing
