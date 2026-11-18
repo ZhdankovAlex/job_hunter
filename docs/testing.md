@@ -33,6 +33,7 @@ after `pytest`, `git status` is clean.
 |---|---|
 | `tests/test_mail.py` | Letter type: application, stage, rejection, offer. Conditional phrases and caveats ("If your profile fits…", "may not be the right fit"), typographic apostrophes, quoted old letters, speed on a long letter, company from the sender and the subject, `[mail.sender_company]` |
 | `tests/test_applications_report.py` | Application status and the funnel: a new application after a rejection, cancelled meetings, "declined", rejection after silence, events in the future |
+| `tests/test_relevance.py` | The vacancy score: skills and their order by weight, title-only adjustments, outsourcing, Russian language, Go vs "Python not primary", JVM and 8+ years, CV gaps with a floor, freehire data (an EUR range from 60k), location, company priority, skill edits from the UI and broken patterns |
 | `tests/test_cv_match.py` | Fit %: key and nice-to-have skills, "Python, Go or Java", years of experience, new terms; the combined technology pattern answers the same as the separate ones |
 | `tests/test_sources.py` | Parsing fin.dev (JSON-LD), career pages (the `links` setting, the title from `aria-label`), Teamtailor RSS — on saved pages from `tests/fixtures/`; `[manual_jobs]` entries with `company` / `location`; `Http` and `FakeHttp` fit the `HttpClient` protocol |
 | `tests/test_filters.py` | Selection by role, employment type and the presence of a link |
