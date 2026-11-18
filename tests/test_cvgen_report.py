@@ -36,6 +36,40 @@ def test_picks_explain_choice(base):
     assert picks, "the picked bullets and the reasons must be recorded"
 
 
+PROJECT = {"name": "job-hunter", "kind": "open-source", "link": "https://github.com/acme/job-hunter",
+           "intro": "A job search pipeline.", "stack": ["Python", "FastAPI"], "requires": ["scraping"],
+           "bullets": [{"text": "Aggregates vacancies from 9 ATS APIs.", "topics": ["scraping"]},
+                       {"text": "Property-based API tests.", "topics": ["quality"]}]}
+SCRAPING = VACANCY + " You will build web scrapers and integrations with ATS platforms (Greenhouse, Lever)."
+
+
+def test_project_only_for_scraping_vacancies(base):
+    """A pet project goes into the CV only for vacancies of its topic (requires): ATS, scrapers. A regular backend or
+    AI vacancy and the base CVs do not get it — there it would mix with work experience."""
+    b = {**base, "projects": [PROJECT]}
+    assert "scraping" in cvgen.Vacancy("Backend Engineer", SCRAPING).topics
+    for md in (cvgen.build_markdown(b, "Acme", "Senior Software Engineer", VACANCY),
+               cvgen.build_markdown(b, "Acme", "AI Engineer", "LLM, RAG, AI agents, Python."),
+               cvgen.build_markdown(b, "", "", "", generic="backend")):
+        assert "## Projects" not in md and "job-hunter" not in md
+    picks: list = []
+    md = cvgen.build_markdown(b, "Acme", "Senior Python Developer", SCRAPING, picks=picks)
+    assert md.index("## Experience") < md.index("## Projects") < md.index("## Education")
+    assert "### job-hunter — open-source" in md and "9 ATS" in md and "_Python · FastAPI_" in md
+    assert any(p["section"] == "job-hunter" for p in picks)
+    html = cvgen.markdown_to_html(md)
+    assert 'href="https://github.com/acme/job-hunter"' in html
+    short = cvgen.build_markdown(b, "Acme", "Senior Python Developer", SCRAPING, limits=cvgen.Limits(compact=True))
+    assert "## Projects" in short and "Property-based" not in short  # one-page: a single bullet
+
+
+def test_topic_regexes_linear_on_long_text():
+    import time
+    start = time.perf_counter()
+    cvgen.Vacancy("x", "a" * 100_000)
+    assert time.perf_counter() - start < 1
+
+
 def test_markdown_to_html(base):
     html = cvgen.markdown_to_html(cvgen.build_markdown(base, "Acme", "Backend Engineer", VACANCY))
     assert "<h1>" in html and "</html>" in html

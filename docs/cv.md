@@ -18,7 +18,11 @@ Score of every achievement and experience bullet:
 
 Then: `pin` — always; the rest by score, from 5 to `bullets_max`. The headline is the AI variant for AI / LLM
 roles, otherwise backend; summary = intro + 2–3 best achievements + closing; skills — what the vacancy has plus
-`always` (at least 3 per group), the AI / LLM group only for AI roles. The top of the `.md` has a comment: the
+`always` (at least 3 per group), the AI / LLM group only for AI roles. **Projects** (`[[projects]]` in the
+base) — pet projects after experience, only when the vacancy has a topic from the project's `requires`: e.g.
+`scraping` (ATS, scrapers, crawlers, job boards). Other CVs, AI roles included, and the base CVs have no pet
+project, so it does not mix with work experience; its bullets are picked like experience bullets, up to
+`bullets_max`. The top of the `.md` has a comment: the
 vacancy, Fit %, which key skills are missing, technologies and topics.
 
 Real embeddings (sentence-transformers) are not used: ~2 GB of dependencies (PyTorch) for a few dozen bullets.
@@ -26,7 +30,7 @@ Real embeddings (sentence-transformers) are not used: ~2 GB of dependencies (PyT
 ## One-page version
 
 `one_page` / `--one-page`: denser layout, one company description, 2 achievements in the summary, no
-Publications section and thesis topic. After the build the PDF pages are counted (pypdf); if more than one,
+Publications section and thesis topic, one pet-project bullet. After the build the PDF pages are counted (pypdf); if more than one,
 it shrinks step by step (`Limits.shrink`): first the skill groups least matching the vacancy (down to 5), then
 experience bullets (the latest job down to 3, the previous one down to 1, older ones down to 1), then the
 summary — until it fits. The file is `…_1p.pdf`.

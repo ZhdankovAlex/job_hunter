@@ -79,6 +79,25 @@ topics = ["distributed", "highload"]
 text = "**Cut API p95 latency from 800 ms to 120 ms** by eliminating N+1 queries."
 topics = ["performance", "sql", "api"]
 
+# Pet projects: the Projects section after experience, only for vacancies with a topic from requires
+# (TOPICS in cvgen.py), e.g. scraping — ATS, scrapers, job boards. Other CVs and the base CVs do not have it.
+[[projects]]
+name = "job-hunter"
+kind = "open-source"
+link = "https://github.com/example/job-hunter"
+intro = "A job search pipeline: collects vacancies, scores them against the CV, builds a tailored CV."
+stack = ["Python", "FastAPI", "pytest"]
+requires = ["scraping"]
+bullets_max = 3
+
+[[projects.bullets]]
+text = "**Aggregates vacancies from 5 ATS APIs** into one model; polite scraping with robots.txt and 1 req/s per host."
+topics = ["scraping", "integrations"]
+
+[[projects.bullets]]
+text = "**Property-based API tests** generated from the OpenAPI schema."
+topics = ["quality", "api"]
+
 [publications]
 text = ""
 
