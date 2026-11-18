@@ -4,6 +4,16 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-18
 
+### mypy as a profile skill and a CV technology, Claude Code skills for new sources and commits (#7)
+
+- profile.example.toml: a "Static typing (mypy)" skill (weight 1) — mypy, pyright, type hints, static typing
+- cv_match.TECH: mypy — without it the "mypy" line of the CV base never reached a CV built for a vacancy that asks for it (optional skills are picked by a TECH_RX match)
+- .claude/skills/new-source: connecting a site, board, ATS or channel — robots.txt and bot protection, choosing the way (ATS, career_pages, manual_jobs, an adapter), a fixture and a FakeHttp test, docs/sources.md
+- .claude/skills/prep-commit: checks, personal files, which docs to update, the commit message style that RELEASE_NOTES.md is built from; .gitignore keeps the rest of .claude/ out of git
+- docs/configuration.md: .claude/skills/ as example Claude Code skills
+
+<sub>a97c0b2</sub>
+
 ### Docs: run speed, how web pages are built (#6)
 
 - docs/pipeline.md: "Run speed" — parallel hosts with a per-host limit, skipping unreachable hosts, not re-searching missing boards, caches between runs, the quadratic regexes that were fixed and the rule to test regexes on 50–100 KB without spaces
