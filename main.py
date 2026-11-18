@@ -9,7 +9,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta, timezone
 
-from jobhunter import (aggregators, applied, config, filters, freehire, geo, html_report, keys, report, sites,
+from jobhunter import (aggregators, applied, config, filters, freehire, geo, html_report, industry, keys, report, sites,
                        telegram, verify)
 from jobhunter.ats import PLATFORMS, AtsClient
 from jobhunter.companies import load_companies
@@ -524,6 +524,7 @@ def run(args):
         cv.analyze(job, job.text)
     for job in [*fresh, *(tg_jobs or [])]:
         job.tier = tiers.tier(job)
+        job.industries = industry.classify(job.company, job.title, getattr(job, "description", "") or job.text)
 
     profile = Profile()
     for job in fresh:
@@ -618,7 +619,9 @@ def run(args):
     # a copy by date — so CVs can be built from older reports too
     jobs_json = json.dumps([
         {"url": j.url or getattr(j, "post_url", ""), "company": j.company, "title": j.title,
-         "location": j.location, "text": getattr(j, "description", "") or getattr(j, "text", ""), "fit": j.cv_fit}
+         "location": j.location, "text": getattr(j, "description", "") or getattr(j, "text", ""), "fit": j.cv_fit,
+         # for the Companies page: industry, remote, salary (industry.market_by_industry)
+         "industries": j.industries, "remote": getattr(j, "remote", None), "salary": getattr(j, "salary", "")}
         for j in [*fresh, *(tg_jobs or [])]
     ], ensure_ascii=False)
     (config.ROOT / "state" / "jobs_latest.json").write_text(jobs_json, encoding="utf-8")

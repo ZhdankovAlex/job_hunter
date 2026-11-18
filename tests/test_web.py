@@ -21,7 +21,7 @@ def client(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("path", ["/pipeline", "/applications", "/skills", "/api/skills", "/cv", "/cover", "/prep",
-                                  "/reports", "/market", "/api/market"])
+                                  "/reports", "/market", "/api/market", "/companies", "/api/companies"])
 def test_pages_open_without_data(client, path):
     http, _, _ = client
     assert http.get(path).status_code == 200

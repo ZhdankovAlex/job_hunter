@@ -117,6 +117,7 @@ class TgJob:
     cv_nice_have: list = field(default_factory=list)
     cv_nice_missing: list = field(default_factory=list)
     tier: int = 4
+    industries: list = field(default_factory=list)  # industries of the company (industry.classify)
     mismatch_lang: str = ""
     salary_note: str = ""  # salary range: stated or estimated from the base (salary.py)
     levels_note: str = ""  # median for the vacancy country from levels.fyi (levels.py)

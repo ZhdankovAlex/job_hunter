@@ -2,7 +2,10 @@
 # Copy to companies.txt (it is in .gitignore) and make your own list; until companies.txt exists,
 # the program reads this file.
 #
-# Format: Company | priority (0–3) | note
+# Format: Company | priority (0–3) | note | industries | brands
+# Industries (optional): comma-separated codes from jobhunter/industry.py (fintech, devtools, ecommerce…) —
+# they win over the guess from vacancy texts on the Companies page. Brands (optional): product names under
+# which the company posts vacancies; a vacancy under a brand counts for the company.
 # A line without "|" has priority 0. Lines starting with "#" are ignored.
 # Priority raises the company's vacancies in the report (profile.toml → company_priority_per_point)
 # and draws ★ next to the name. A note starting with VERIFY goes to the report.

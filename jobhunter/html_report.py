@@ -6,7 +6,7 @@ from datetime import date
 from html import escape
 from urllib.parse import quote
 
-from . import cv_match, outreach, report, salary, tiers
+from . import cv_match, industry, outreach, report, salary, tiers
 
 _CSS = """
 :root { color-scheme: light dark; --bg:#fff; --fg:#1b1f24; --muted:#667085; --line:#e4e7ec; --row:#f8fafc;
@@ -51,7 +51,7 @@ td.small, .small { color: var(--muted); font-size: 12.5px; }
 a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
 .tag { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--chip); font-size: 12px;
        margin-right: 4px; white-space: nowrap; }
-.tag.new { background: var(--accent); color: #fff; } .tag.top { background: #f59e0b; color: #1b1f24; }
+.tag.ind { color: var(--accent); } .tag.new { background: var(--accent); color: #fff; } .tag.top { background: #f59e0b; color: #1b1f24; }
 .ok { color: var(--ok); } .warn { color: var(--warn); }
 details { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 14px; }
 .fit { position: relative; min-width: 74px; height: 20px; border-radius: 5px; background: var(--chip); overflow: hidden; }
@@ -209,6 +209,12 @@ def _levels(job) -> str:
             f'title="Software Engineer, all grades, total compensation (base + bonuses + stock)">📊 {_e(note)}</a></div>')
 
 
+def _industry_tags(job) -> str:
+    """Industries of the vacancy as tags (industry.py)."""
+    return "".join(f' <span class="tag ind" title="industry">{_e(industry.LABELS.get(ind, ind))}</span>'
+                   for ind in (getattr(job, "industries", None) or []) if ind != "other")
+
+
 def _missing(job) -> str:
     """What is missing: key skills, then nice-to-have."""
     core = ", ".join(getattr(job, "cv_core_missing", []))
@@ -280,6 +286,7 @@ def render(day: date, jobs: list, stats: dict, tg_jobs: list | None = None) -> s
         tags = ('<span class="tag new">new</span>' if is_new else "") + ('<span class="tag top">top</span>' if is_top else "")
         score = getattr(j, "score", 0)  # company priority from companies.txt
         roots = f' <span class="tag" title="company priority (companies.txt)">{"★" * score}</span>' if score else ""
+        roots += _industry_tags(j)
         status_class = "ok" if status.startswith("✅") else "warn"
         contact = f' <span class="small">{_e(j.contact)}</span>' if getattr(j, "contact", "") and not j.url else ""
         rows.append(

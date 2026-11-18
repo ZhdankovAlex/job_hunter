@@ -282,3 +282,11 @@ button.small { padding: 3px 10px; font-size: 12px; }
 #sources td:nth-child(6) { white-space: nowrap; }
 .filter-block { margin-bottom: 8px; }
 .filter-search { width: 320px; max-width: 100%; }
+
+/* Companies */
+a.chip:hover { text-decoration: none; outline: 1px solid var(--accent); }
+.chip.on { background: var(--accent); color: #fff; }
+table.industries tbody tr { cursor: pointer; }
+table.industries tbody tr:hover { background: var(--accent-soft); }
+table.industries tbody tr.on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+table.industries tbody tr.on a { font-weight: 600; }

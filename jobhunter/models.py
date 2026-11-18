@@ -9,6 +9,8 @@ class Company:
     name: str
     score: int = 0  # company priority (0–3) from companies.txt
     note: str = ""
+    industries: list[str] = field(default_factory=list)  # 4th field of companies.txt (industry.INDUSTRIES codes)
+    brands: list[str] = field(default_factory=list)  # 5th field: brands / products of the company
 
 
 @dataclass
@@ -68,6 +70,7 @@ class Job:
     cv_nice_have: list = field(default_factory=list)
     cv_nice_missing: list = field(default_factory=list)
     tier: int = 4  # category: 1 backend, 2 ML, 3 DevOps/platform, 4 other (tiers.py)
+    industries: list = field(default_factory=list)  # industries of the company from the vacancy text (industry.py)
     sources: list = field(default_factory=list)  # all sources where the vacancy was seen
     extra: dict = field(default_factory=dict)  # raw freehire fields (enrichment, collections, …)
 

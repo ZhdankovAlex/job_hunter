@@ -24,7 +24,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from jobhunter import config, cover_letter, coverage, cvgen, interview_prep, manual_apps, market_check, progress, relevance, vacancy_lookup
+from jobhunter import config, cover_letter, coverage, cvgen, industry, interview_prep, manual_apps, market_check, progress, relevance, vacancy_lookup
+from jobhunter.models import norm_name
 
 ROOT = config.ROOT
 WEB = Path(__file__).parent
@@ -64,7 +65,7 @@ async def no_cache_reports(request: Request, call_next):
 # (key, label, icon) — the icon is visible in the collapsed left panel too
 # (address, label, emoji icon; the same icons as the report buttons: 📬 applications, 📄 CV, 🎤 prep)
 NAV = [("pipeline", "Pipeline", "⚙️"), ("reports", "Reports", "📋"), ("applications", "Applications", "📬"),
-       ("cv", "CV", "📄"), ("cover", "Cover letter", "✉️"), ("prep", "Interview prep", "🎤"), ("market", "CV vs market", "⚖️"),
+       ("cv", "CV", "📄"), ("cover", "Cover letter", "✉️"), ("prep", "Interview prep", "🎤"), ("market", "CV vs market", "⚖️"), ("companies", "Companies", "🏢"),
        ("skills", "Skills", "🛠️"), ("sources", "Sources", "🌐")]
 
 
@@ -401,6 +402,55 @@ def market_report(day: str = "") -> dict:
     return _cached("market" if path == (files[-1] if files else None) else "market:other", key, compute)
 
 
+def companies_report() -> dict:
+    """Companies by industry (industry.companies_overview) over all archive days; vacancies without repeats.
+
+    Recomputed only when the archive files, companies.txt, applications (the mail cache,
+    applications_manual.toml) or the industry rules change; board links from ats_mapping.json — on every request.
+    """
+    files = sorted(config.JOBS_ARCHIVE_DIR.glob("*.json"))
+    # a run rewrites ats_mapping.json all the time — board links are added per request, not cached
+    deps = [config.COMPANIES_FILE, config.SETTINGS_FILE, config.MAIL_CACHE_FILE, config.MANUAL_APPLICATIONS_FILE,
+            Path(industry.__file__)]
+    key = [[f.name, f.stat().st_mtime] for f in files] + [_mtime(f) for f in deps]
+
+    def compute() -> dict:
+        from jobhunter.applications_report import StatusIndex
+
+        unique: dict[str, dict] = {}
+        for f in files:
+            for job in json.loads(f.read_text(encoding="utf-8")):
+                job["day"] = f.stem
+                unique[job.get("url") or f"{job.get('company')}|{job.get('title')}"] = job
+        for job in unique.values():
+            job["industries"] = job.get("industries") or industry.classify(
+                job.get("company", ""), job.get("title", ""), job.get("text", ""))
+        try:
+            index: StatusIndex | None = StatusIndex()
+        except Exception:  # a broken mail cache — the summary is useful without statuses too
+            index = None
+
+        def status(name: str) -> str:
+            return index.lookup(name) if index else ""
+        companies = industry.companies_overview(unique.values(), status, {})
+        counts = {ind: 0 for ind in [*industry.INDUSTRIES, "other"]}
+        for c in companies:
+            for ind in c["industries"]:
+                counts[ind] += 1
+        return {"companies": companies, "counts": counts, "labels": industry.LABELS, "vacancies": len(unique),
+                "market": industry.market_by_industry(unique.values())}
+
+    data = _cached("companies_by_industry", key, compute)
+    try:
+        mapping = json.loads(config.MAPPING_FILE.read_text(encoding="utf-8")) if config.MAPPING_FILE.exists() else {}
+    except ValueError:  # a run is writing the file right now
+        mapping = {}
+    boards = industry.board_links(mapping)
+    for c in data["companies"]:
+        c["board"] = boards.get(norm_name(c["name"]), "")
+    return data
+
+
 def application_companies() -> list[str]:
     """Company hints in the Applications form (parsing all letters takes ~1 s) — until letters or applications change."""
     key = [_mtime(config.MANUAL_APPLICATIONS_FILE), _mtime(config.MAIL_CACHE_FILE)]
@@ -409,7 +459,7 @@ def application_companies() -> list[str]:
 
 def warm_caches() -> None:
     """Computes "Market", "Skills" and the Applications hints in advance — in the background at server start and after a run."""
-    for fn in (application_companies, market_report, skills_payload):
+    for fn in (application_companies, market_report, companies_report, skills_payload):
         try:
             fn()
         except Exception as e:  # warming up is not essential: the page computes it itself and shows the error
@@ -427,6 +477,61 @@ def market_page(request: Request, day: str = ""):
                      "vacancies are called and whether the CV headline matches, experience bullet hygiene and conclusions.")
 def api_market(day: str = ""):
     return market_report(day)
+
+
+class CompanyJob(BaseModel):
+    title: str
+    url: str
+    day: str
+
+
+class CompanyRow(BaseModel):
+    name: str
+    industries: list[str]
+    by: str = Field(description="Where the industry comes from: `list` (known companies / companies.txt) or `vacancies`")
+    vacancies: int = Field(description="Vacancies over all days, without repeats by title")
+    last: str = Field(description="The last day with a vacancy or ''")
+    status: str = Field(description="Application status or ''")
+    board: str = Field(description="Link to the ATS board or ''")
+    jobs: list[CompanyJob]
+
+
+class SkillShare(BaseModel):
+    name: str
+    share: int = Field(description="% of the industry's vacancies")
+
+
+class IndustryMarket(BaseModel):
+    industry: str
+    label: str
+    vacancies: int
+    remote_share: int | None = Field(description="% remote among vacancies with a known format; null — unknown")
+    salaries: int = Field(description="Vacancies with a salary range")
+    salary_median: float | None = Field(description="Median of the range middle, EUR/month; null — fewer than 3 ranges")
+    skills: list[SkillShare]
+
+
+class CompaniesReport(BaseModel):
+    companies: list[CompanyRow]
+    counts: dict[str, int] = Field(description="Companies per industry code")
+    labels: dict[str, str] = Field(description="Industry code -> label")
+    vacancies: int = Field(description="Archive vacancies without repeats")
+    market: list[IndustryMarket]
+
+
+@app.get("/companies", response_class=HTMLResponse, include_in_schema=False)
+def companies_page(request: Request, industry: str = "", empty: bool = True):
+    data = companies_report()
+    rows = [c for c in data["companies"] if (not industry or industry in c["industries"]) and (c["vacancies"] or empty)]
+    return page(request, "companies", d=data, rows=rows, industry=industry, empty=empty)
+
+
+@app.get("/api/companies", response_model=CompaniesReport, summary="Companies by industry",
+         description="Companies from the vacancy archive and the industry lists: industries, vacancies over all days, "
+                     "the last day, application status, board link; companies without vacancies — to search by hand; "
+                     "and the market by industry (vacancies, remote share, median salary, top technologies).")
+def api_companies():
+    return companies_report()
 
 
 @app.get("/sources", response_class=HTMLResponse, include_in_schema=False)
