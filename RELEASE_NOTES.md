@@ -4,6 +4,19 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-18
 
+### Web API: schemathesis checks, response models, fixes for malformed input (#5)
+
+- tests/test_api_schema.py: schemathesis over /openapi.json through ASGI. Reads: every GET except the SSE stream, /api/companies included. Writes: POST/PUT/DELETE in positive and negative modes; everything the endpoints write (profile_overrides.json, applications_manual.toml, reports/, cv_out/, last_run.log, progress.*, web_cache.json) goes to tmp; runs start no processes, vacancy lookup and PDF build are stubbed
+- response_model for /api/market, /api/reports, /api/sources, GET /api/cv, /api/skills; error codes in OpenAPI via responses=errors(...) (400 / 404 / 409 / 422); a duplicate skill is now 409
+- strict input: bool only true/false, a weight is not a bool, an event date only an ISO string
+- a lone surrogate ("\ud800") in a note wiped applications_manual.toml: write_text truncated the file and then failed on encoding. The text is now checked before writing (profile_overrides.json too), and surrogates are rejected on input with a 422; the 422 response itself no longer fails to serialize them (was a 500)
+- DEL (\x7f) in a note produced invalid TOML: json.dumps does not escape it
+- cv_match: the link-stripping regex was O(n^2) on a long word without spaces (65 KB — 9 s), now per token; state/cv_text.json is written only when a new PDF was parsed
+- 405 lists every allowed method: GET and POST on /api/cv and /api/skills are separate routes
+- schemathesis in requirements-dev.txt, .hypothesis/ in .gitignore; docs: testing.md (schemathesis, running one endpoint), web-ui.md (response models and error codes)
+
+<sub>6c9da6a</sub>
+
 ### Company industries and the Companies page (#4)
 
 - jobhunter/industry.py: a vacancy's industry from the company name, title and description (fintech, trading, iGaming, crypto, adtech, devtools, security, e-commerce, travel, edtech, healthtech, gamedev, AI, B2B SaaS, Big Tech, outsourcing, otherwise "other"); weighted patterns with word boundaries against false positives, all patterns of an industry in one regex. Known companies win over the text: a few built-in examples, your own in [industry_companies] (settings.toml, empty by default) or the 4th field of companies.txt; the 5th field — brands, a vacancy under a brand counts for its owner.
