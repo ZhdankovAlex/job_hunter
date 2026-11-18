@@ -32,7 +32,7 @@ TECH = {
     "Django": r"\bdjango\b", "FastAPI": r"fastapi", "Flask": r"\bflask\b", "Tornado": r"\btornado\b",
     "SQLAlchemy": r"sqlalchemy", "Celery": r"\bcelery\b", "asyncio": r"asyncio|aiohttp|async python",
     "Pydantic": r"pydantic", "gRPC": r"\bgrpc\b", "GraphQL": r"graphql", "REST API": r"\brest(?:ful)?\b",
-    "WebSocket": r"websockets?", "pytest": r"pytest",
+    "WebSocket": r"websockets?", "pytest": r"pytest", "mypy": r"\bmypy\b|type hints|static typing",
     "Jira": r"\bjira\b", "Agile / Scrum": r"\bagile\b|\bscrum\b|\bkanban\b",
     # general concepts that often appear in requirements
     "Distributed systems": r"distributed systems?", "Microservices": r"micro[\s-]?services?",

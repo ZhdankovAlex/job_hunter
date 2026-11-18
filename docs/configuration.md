@@ -16,6 +16,7 @@
 
 | File | What is inside |
 |---|---|
+| `.claude/skills/` | Example Claude Code skills — project checklists the assistant follows: connecting a new source (`/new-source`) and preparing a commit (`/prep-commit`) |
 | `.github/workflows/` | CI (`ci.yml`) and rebuilding `RELEASE_NOTES.md` after a push to main (`release-notes.yml`) |
 | `RELEASE_NOTES.md` | What changed and when — built automatically, not edited by hand |
 | `settings.toml` | Almost everything: home country, locations and relocation, freehire queries, sources, Telegram, `[manual_jobs]`, mail company aliases, career pages, thresholds |

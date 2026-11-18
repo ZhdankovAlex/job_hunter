@@ -71,3 +71,11 @@ def test_known_term_cache_is_consistent(profile):
     assert profile._known_term("Python") is True
     assert profile._known_term("Python") is True  # from the cache
     assert profile._known_term("Temporal") is False
+
+
+@pytest.mark.parametrize("text", ["We use mypy in CI", "Python with type hints", "static typing is a must"])
+def test_mypy_is_a_known_technology(text):
+    """Without mypy in TECH the "mypy" line of the CV base never reached a CV built for a vacancy asking for it
+    (optional skills are picked by a TECH_RX match)."""
+    assert cv_match.TECH_RX["mypy"].search(text)
+    assert cv_match._TECH_ANY_RX.search(text)

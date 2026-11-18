@@ -28,5 +28,6 @@ cv/base.toml
 cv/*.pdf
 
 # local Claude Code settings
-.claude/
+.claude/*
+!.claude/skills/
 .hypothesis/
