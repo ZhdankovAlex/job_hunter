@@ -4,6 +4,16 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-19
 
+### Wider ruff: import order, Python 3.11 syntax, redundant branches and traps — I, UP, SIM, RUF (#20)
+
+- pyproject.toml: I, UP, SIM, RUF on top of E9, F, B; isort with combine-as-imports. Off: RUF001–RUF003 (Cyrillic, "—" and "…" in texts are normal, ~1100 false positives) and SIM905 (long word lists read better as "a b c".split() than as a 300+ character line of literals)
+- Auto-fixes: sorted imports (main.py imports gathered at the top), timezone.utc → datetime.UTC, no quotes in annotations, parentheses in mixed and / or, unused noqa removed
+- Unsafe fixes, reviewed in the diff: itertools.pairwise instead of zip(a, a[1:]), contextlib.suppress instead of try / except / pass, [*lines, ...] instead of concatenation, _ for unused variables
+- By hand: ClassVar on Runner.SCRIPTS and SKIP_FLAGS, a merged nested if in mail.py, a raw string in pytest.raises(match=). No behaviour change
+- docs: testing.md — which ruff rules are on and why RUF001–003 and SIM905 are off
+
+<sub>c2e18eb</sub>
+
 ### Typing: strict mypy on the key modules — network, models, classifiers, web (#19)
 
 - pyproject.toml: [[tool.mypy.overrides]] for jobhunter.http, models, stack, industry, companies and web.* — disallow_untyped_defs, disallow_incomplete_defs, disallow_untyped_decorators, disallow_any_generics, warn_return_any. The rest of the project stays as before (check_untyped_defs); strictness grows step by step
