@@ -101,3 +101,50 @@ def test_fake_and_real_http_satisfy_protocol():
     assert not isinstance(object(), HttpClient)
     assert not issubclass(FakeHttp, Http)
     assert hasattr(Http, "post") and not hasattr(FakeHttp, "post")  # the Workday source needs HttpPostClient
+
+
+def test_uzum_reads_next_flight_payload_and_filters_titles():
+    """Uzum: jobs and texts live in the Next.js stream; a description is a "$1d" chunk reference or inline JSON."""
+    url = "https://people.uzum.com/career/ru/vacancies?page=10"
+    http = FakeHttp({url: fixture_text("uzum_list.html")})
+    jobs = {j.title: j for j in sites.uzum(http)}
+    assert set(jobs) == {"Senior Python Developer (Uzum Bank)", "Backend Engineer (Go)"}  # the operator role is skipped
+    py = jobs["Senior Python Developer (Uzum Bank)"]
+    assert py.company == "Uzum" and py.source == "uzum"
+    assert py.location == "Remote; Tashkent, Uzbekistan" and py.remote is True
+    assert py.url == "https://people.uzum.com/career/ru/vacancies/101"
+    assert py.posted is not None and py.posted.date().isoformat() == "2026-11-12"
+    assert "FastAPI" in py.description and "Kafka" in py.description and "<li>" not in py.description
+    go = jobs["Backend Engineer (Go)"]
+    assert go.location == "Hybrid; Tashkent, Uzbekistan" and go.remote is None and go.posted is None
+    assert "гибрид" in go.description
+    assert http.calls == [url]  # everything is in one response: job pages are not opened
+
+
+def test_uzum_asks_for_more_when_total_exceeds_page():
+    page = fixture_text("uzum_list.html").replace('total\\":3', 'total\\":200')
+    base = "https://people.uzum.com/career/ru/vacancies"
+    http = FakeHttp({f"{base}?page=10": page, f"{base}?page=14": page})
+    assert len(list(sites.uzum(http))) == 2
+    assert http.calls == [f"{base}?page=10", f"{base}?page=14"]
+
+
+def test_yango_follows_cursor_on_own_host_and_reads_vacancy_page():
+    """Yango: "next" points to an internal host, so only the cursor is taken; text comes from the job page."""
+    api = "https://yango.com/career/api/publications"
+    http = FakeHttp({
+        api: fixture_text("yango_list_1.json"),
+        api + "?cursor=CUR2": fixture_text("yango_list_2.json"),
+        "https://yango.com/career/vacancy/101": "<html><body><h1>Senior Python Developer</h1>"
+                                                "<p>FastAPI, PostgreSQL</p></body></html>",
+        "https://yango.com/career/vacancy/103": "<html><body><p>Go backend</p></body></html>",
+    })
+    jobs = {j.title: j for j in sites.yango(http)}
+    assert set(jobs) == {"Senior Python Developer (Uzbekistan)", "Backend Engineer"}  # support is skipped
+    py = jobs["Senior Python Developer (Uzbekistan)"]
+    assert py.company == "Yango" and py.source == "yango"
+    assert py.location == "Remote; Tashkent" and py.remote is True
+    assert py.url == "https://yango.com/career/vacancy/101" and "FastAPI" in py.description
+    assert jobs["Backend Engineer"].location == "Almaty" and jobs["Backend Engineer"].remote is None
+    assert "https://yango.com/career/vacancy/102" not in http.calls
+    assert not any("internal.example" in u for u in http.calls)

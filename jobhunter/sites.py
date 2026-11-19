@@ -10,6 +10,7 @@ import json
 import logging
 import re
 from collections.abc import Iterator
+from datetime import UTC, datetime
 
 from . import config as c, filters
 from .http import FetchError, HttpClient
@@ -709,7 +710,126 @@ def hirehi(http: HttpClient) -> Iterator[Job]:
             )
 
 
+_UZUM = "https://people.uzum.com/career/ru/vacancies"
+_UZUM_PAGE = 15  # jobs per "page": ?page=N returns the first 15*N in one response
+_UZUM_WORK_MODES = {"remote": "Remote", "hybrid": "Hybrid", "office": "Office"}
+
+
+def _flight_json(payload: str, ref: object) -> object:
+    """JSON of a field: a "$1d" reference into the Next.js stream (chunk `1d:T<length>,`) or an inline string."""
+    if not isinstance(ref, str):
+        return None
+    if not ref.startswith("$"):
+        try:
+            return json.loads(ref)
+        except ValueError:
+            return None
+    # a T chunk carries its length and no newline, so it may follow the previous text directly
+    m = re.search(rf"(?<![0-9a-f]){re.escape(ref[1:])}:T[0-9a-f]+,(?=[{{\[])", payload)
+    if not m:
+        return None
+    try:
+        return json.JSONDecoder().raw_decode(payload, m.end())[0]
+    except ValueError:
+        return None
+
+
+def _html_bodies(node: object) -> Iterator[str]:
+    """Every "body" string in the page-builder component tree (the Uzum job description)."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "body" and isinstance(value, str):
+                yield value
+            else:
+                yield from _html_bodies(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _html_bodies(item)
+
+
+def uzum(http: HttpClient) -> Iterator[Job]:
+    """Uzum (people.uzum.com, Next.js on top of Huntflow): the list and texts come from the page data stream.
+
+    /api/ is disallowed by robots.txt, so we read the HTML: ?page=N returns the first 15*N jobs; two requests at most.
+    """
+    page_no = 10
+    for _ in range(2):
+        payload = _next_payload(_get(http, f"{_UZUM}?page={page_no}"))
+        start = payload.find('"initialData":{"vacancies":')
+        if start < 0:
+            raise FetchError("uzum: no initialData in the page data stream (the layout changed)")
+        tail = payload[start:]
+        total = re.search(r'"pagination":\{[^{}]*"total":(\d+)', tail)
+        need = -(-int(total.group(1)) // _UZUM_PAGE) if total else 0
+        if need <= page_no:
+            break
+        page_no = need
+    for item in _array_after(tail, '"vacancies":'):
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title_ru") or item.get("title_en") or "")
+        if not title or not filters.title_candidate(title):
+            continue
+        mode = (item.get("work_mode") or {}).get("work_mode_key", "")
+        city = str((item.get("city") or {}).get("city_key") or "").title()
+        place = f"{city}, Uzbekistan" if city else "Uzbekistan"
+        if mode in _UZUM_WORK_MODES and mode != "office":
+            place = f"{_UZUM_WORK_MODES[mode]}; {place}"
+        body = _flight_json(payload, item.get("body_ru"))
+        try:
+            posted = datetime.strptime(str(item.get("publication_date")), "%m/%d/%Y").replace(tzinfo=UTC)
+        except ValueError:
+            posted = None
+        yield Job(
+            company="Uzum",
+            title=title,
+            location=place,
+            url=f"{_UZUM}/{item.get('id')}",
+            posted=posted,
+            description=html_to_text("\n".join(_html_bodies(body))),
+            remote=True if mode == "remote" else None,
+            source="uzum",
+        )
+
+
+_YANGO = "https://yango.com/career"
+_YANGO_MAX_PAGES = 40  # 5 jobs per response (the API ignores page_size); guards against a looping cursor
+
+
+def yango(http: HttpClient) -> Iterator[Job]:
+    """Yango: JSON yango.com/career/api/publications (cursor in "next"), text from the /career/vacancy/<id> page."""
+    url: str | None = f"{_YANGO}/api/publications"
+    for _ in range(_YANGO_MAX_PAGES):
+        if not url:
+            break
+        r = http.get(url)
+        if r.status_code != 200:
+            raise FetchError(f"yango: HTTP {r.status_code}")
+        data = r.json()
+        for item in data.get("results") or []:
+            title = str(item.get("title") or "")
+            if not title or not filters.title_candidate(title):
+                continue
+            vacancy = item.get("vacancy") or {}
+            modes = {str(m.get("slug")) for m in vacancy.get("work_modes") or [] if isinstance(m, dict)}
+            cities = [str(c.get("name")) for c in vacancy.get("cities") or [] if isinstance(c, dict) and c.get("name")]
+            place = "; ".join(cities)
+            if "remote" in modes:
+                place = f"Remote; {place}" if place else "Remote"
+            link = f"{_YANGO}/vacancy/{item.get('id')}"
+            yield Job(
+                company="Yango", title=title, location=place, url=link,
+                description=_page_text(_get(http, link)) or str(item.get("short_summary") or ""),
+                remote=True if "remote" in modes else None, source="yango",
+            )
+        # "next" points to an internal host; take only the cursor from it
+        cursor = re.search(r"[?&]cursor=([^&]+)", str(data.get("next") or ""))
+        url = f"{_YANGO}/api/publications?cursor={cursor.group(1)}" if cursor else None
+
+
 SOURCES.update({
+    "uzum": uzum,
+    "yango": yango,
     "hirehi": hirehi,
     "manual": manual_jobs,
     "relocate.me": relocate_me,

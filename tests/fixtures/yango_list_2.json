@@ -1,0 +1,35 @@
+{
+ "count": 3,
+ "next": null,
+ "previous": null,
+ "results": [
+  {
+   "id": 103,
+   "publication_slug_url": "x-103",
+   "title": "Backend Engineer",
+   "short_summary": "Short summary.",
+   "vacancy": {
+    "id": 9103,
+    "cities": [
+     {
+      "id": 1,
+      "name": "Almaty"
+     }
+    ],
+    "skills": [],
+    "work_modes": [
+     {
+      "id": 1,
+      "slug": "office",
+      "name": "office"
+     }
+    ]
+   },
+   "public_service": {
+    "id": 1,
+    "slug": "ride_hailing",
+    "name": "Ride-hailing"
+   }
+  }
+ ]
+}

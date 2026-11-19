@@ -1,0 +1,58 @@
+{
+ "count": 3,
+ "next": "http://internal.example/_api/yango/publications?page_size=5&cursor=CUR2",
+ "previous": null,
+ "results": [
+  {
+   "id": 101,
+   "publication_slug_url": "x-101",
+   "title": "Senior Python Developer (Uzbekistan)",
+   "short_summary": "Short summary.",
+   "vacancy": {
+    "id": 9101,
+    "cities": [
+     {
+      "id": 1,
+      "name": "Tashkent"
+     }
+    ],
+    "skills": [],
+    "work_modes": [
+     {
+      "id": 1,
+      "slug": "remote",
+      "name": "remote"
+     }
+    ]
+   },
+   "public_service": {
+    "id": 1,
+    "slug": "ride_hailing",
+    "name": "Ride-hailing"
+   }
+  },
+  {
+   "id": 102,
+   "publication_slug_url": "x-102",
+   "title": "Customer Support Specialist (Togo)",
+   "short_summary": "Short summary.",
+   "vacancy": {
+    "id": 9102,
+    "cities": [],
+    "skills": [],
+    "work_modes": [
+     {
+      "id": 1,
+      "slug": "remote",
+      "name": "remote"
+     }
+    ]
+   },
+   "public_service": {
+    "id": 1,
+    "slug": "ride_hailing",
+    "name": "Ride-hailing"
+   }
+  }
+ ]
+}
