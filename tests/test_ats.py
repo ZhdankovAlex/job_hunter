@@ -147,3 +147,47 @@ def test_save_keeps_concurrent_edits(client, tmp_path):
 
 def test_slug_candidates():
     assert companies.slug_candidates("Grafana Labs")[:3] == ["grafanalabs", "grafana-labs", "grafana"]
+
+
+# --- vacancy text from the job page (BambooHR, Rippling, Breezy) ------------------------------
+
+
+def _job(url, title="Backend Engineer"):
+    return ats.Job(company="Acme", title=title, location="", url=url, source="x")
+
+
+def test_fill_details_bamboohr(tmp_path):
+    detail = {"result": {"jobOpening": {"description": "<p>Python, asyncio</p>", "datePosted": "2026-11-02"}}}
+    http = FakeHttp({"https://acme.bamboohr.com/careers/7/detail": json.dumps(detail)})
+    jobs = [_job("https://acme.bamboohr.com/careers/7"), _job("https://acme.bamboohr.com/careers/8", "Office Manager")]
+    ats.AtsClient(http, tmp_path / "m.json")._fill_details("bamboohr", "acme", jobs)
+    assert http.calls == ["https://acme.bamboohr.com/careers/7/detail"]  # unsuitable titles are not opened
+    assert jobs[0].description == "Python, asyncio" and jobs[0].posted.date().isoformat() == "2026-11-02"
+
+
+def test_fill_details_rippling(tmp_path):
+    card = {"description": {"company": "<p>About</p>", "role": "<p>Python</p>"},
+            "workLocations": ["Remote (Poland)", "Remote (Poland)", None], "employmentType": {"id": "FULL_TIME"}}
+    http = FakeHttp({"https://api.rippling.com/platform/api/ats/v1/board/acme/jobs/u1": json.dumps(card)})
+    (job,) = jobs = [_job("https://ats.rippling.com/acme/jobs/u1/")]
+    ats.AtsClient(http, tmp_path / "m.json")._fill_details("rippling", "acme", jobs)
+    assert "About" in job.description and "Python" in job.description
+    assert job.location == "Remote (Poland)" and job.remote is True and job.employment == "FULL_TIME"
+
+
+def test_fill_details_breezy_json_ld_and_errors(tmp_path, caplog):
+    page = '<script type="application/ld+json">{"description": "<b>Django</b>"}</script>'
+    broken = '<script type="application/ld+json">{oops</script>'
+    http = FakeHttp({"https://acme.breezy.hr/p/1": page, "https://acme.breezy.hr/p/2": broken})
+    jobs = [_job("https://acme.breezy.hr/p/1"), _job("https://acme.breezy.hr/p/2"), _job("https://acme.breezy.hr/p/3")]
+    ats.AtsClient(http, tmp_path / "m.json")._fill_details("breezy", "acme", jobs)
+    assert jobs[0].description == "Django"
+    assert "could not get the vacancy text https://acme.breezy.hr/p/2" in caplog.text  # broken JSON-LD does not crash
+    assert jobs[2].description == ""  # 404
+
+
+def test_fill_details_limit(tmp_path):
+    http = FakeHttp({})
+    jobs = [_job(f"https://acme.breezy.hr/p/{i}") for i in range(ats.DETAIL_FETCH_LIMIT + 3)]
+    ats.AtsClient(http, tmp_path / "m.json")._fill_details("breezy", "acme", jobs)
+    assert len(http.calls) == ats.DETAIL_FETCH_LIMIT

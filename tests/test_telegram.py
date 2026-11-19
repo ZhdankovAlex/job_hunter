@@ -169,3 +169,75 @@ def test_classify_skips(location, text):
     job = tg.TgJob(channel="c", posted=WHEN, title="Developer" if "Frontend" not in text else "Frontend Developer",
                    company="Acme", location=location, salary="", url="", contact="", post_url="", text=text)
     assert not tg.classify(job)
+
+
+# --- collect: going through the channels ---------------------------------------------------------
+
+
+def _tg_job(channel, post_id, when, raw):
+    title, company = raw.split("|")
+    return [tg.TgJob(channel=channel, posted=when, title=title, company=company, location="Remote", salary="",
+                     url=f"https://agg.example/{post_id}" if company == "Agg" else f"https://acme.example/{post_id}",
+                     contact="", post_url=f"https://t.me/{channel}/{post_id}")]
+
+
+def test_collect(monkeypatch, tmp_path, caplog):
+    """A failing channel, forwarded posts, a broken post, duplicates across channels and the aggregator link check."""
+    from jobhunter import config, progress
+
+    monkeypatch.setattr(progress, "PROGRESS_FILE", tmp_path / "progress.json")
+    monkeypatch.setattr(config, "TELEGRAM_CHANNELS", ["down", "one", "two"])
+    monkeypatch.setattr(tg, "AGGREGATOR_HOSTS", ("agg.example",))
+    older, newer = datetime(2026, 11, 1, tzinfo=UTC), datetime(2026, 11, 5, tzinfo=UTC)
+    posts = {
+        "one": [(1, older, "Python Dev|Acme", False), (2, newer, "Forward|Other", True), (3, newer, "boom", False)],
+        "two": [(4, newer, "Python  dev|ACME", False), (5, newer, "Backend|Agg", False)],
+    }
+
+    def fetch_posts(http, channel, cutoff):
+        if channel == "down":
+            raise tg.FetchError("HTTP 500")
+        return posts[channel]
+
+    monkeypatch.setattr(tg, "fetch_posts", fetch_posts)
+    monkeypatch.setattr(tg, "PARSERS", {})  # every channel uses the default parser
+    monkeypatch.setattr(tg, "parse_youritjob", _tg_job)
+    monkeypatch.setattr(tg, "classify", lambda job: True)
+    jobs, failed = tg.collect(FakeHttp({}))
+    assert failed == ["down"]
+    assert "could not parse the post" in caplog.text  # the "boom" post is skipped, the rest is read
+    by_company = {j.company: j for j in jobs}
+    assert set(by_company) == {"ACME", "Agg"}  # the forwarded post is skipped, the Acme duplicate merged
+    assert by_company["ACME"].posted == newer  # of the duplicates, the freshest
+    assert by_company["Agg"].marks[-1] == "❌ link does not open (HTTP 404)"
+
+
+@pytest.mark.parametrize("title,location,text,label", [
+    ("Senior Python Developer", "Berlin, office", "Python, FastAPI. Full-time. We offer relocation support to Germany.",
+     "🌍 office in another country"),
+    ("Senior Python Developer", "Berlin, hybrid", "Python, FastAPI. Full-time.", "❓ hybrid in another country"),
+    ("Senior Python Developer", "Remote, Germany", "Python, FastAPI. Full-time.", "❓ remote, tied to another country"),
+], ids=["relocation", "hybrid", "remote-other-country"])
+def test_classify_outside_home(title, location, text, label, monkeypatch):
+    monkeypatch.setattr(tg.geo, "COUNTRY_BOUND_REMOTE", True)
+    job = tg.TgJob(channel="c", posted=WHEN, title=title, company="Acme", location=location,
+                   salary="", url="", contact="", post_url="", text=text)
+    assert tg.classify(job)
+    assert job.label.startswith(label)
+
+
+def test_classify_marks_other_primary_language():
+    job = tg.TgJob(channel="c", posted=WHEN, title="Senior Go Backend Developer", company="Acme", location="Remote",
+                   salary="", url="", contact="", post_url="", text="Go, Python for scripts, PostgreSQL. Full-time.")
+    assert tg.classify(job)
+    assert any("Python not primary language" in m for m in job.marks)
+
+
+def test_classify_skips_part_time_and_country_bound_off(monkeypatch):
+    def job(location, text, title="Python Developer"):
+        return tg.TgJob(channel="c", posted=WHEN, title=title, company="Acme", location=location,
+                        salary="", url="", contact="", post_url="", text=text)
+
+    assert not tg.classify(job("Remote", "Python, Django.", "Python Developer (part-time)"))
+    monkeypatch.setattr(tg.geo, "COUNTRY_BOUND_REMOTE", False)
+    assert not tg.classify(job("Remote, Germany", "Python, Django. Full-time."))
