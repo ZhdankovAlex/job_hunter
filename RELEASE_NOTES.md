@@ -4,6 +4,18 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-19
 
+### Tests for sources and run progress, 3 bugs in parsing and logging, coverage floor 77% (#21)
+
+- New tests (299 → 355, coverage 70% → 79.8%): progress — stages, skipping by the button, warnings with their group, history and ETA; sites — boards and sites (Next.js, turbo-stream, SSR, JSON-LD, RSS); aggregators and bigtech — pagination, the order of opening vacancies, broken answers
+- conftest.py: RouteHttp — the answer depends on the method, URL and query parameters; supports POST (Workday)
+- progress: the first warning of a second run in the same process was lost — the previous run's collector removed itself from the logger while logging walked the handler list, so the next handler was skipped; now Pipeline() removes old collectors
+- sites.fetch: a stub page with code 200 instead of JSON dropped the whole source and the pages already collected (ValueError passed by except FetchError); now it is a warning "could not parse the response"
+- Habr Career: the description no longer ends with a fragment of a tag; Cryptocurrency Jobs: a title without " at " no longer becomes the company
+- pyproject.toml: fail_under 68 → 77
+- docs: testing.md — the new test files in the table, RouteHttp, the coverage floor
+
+<sub>978ec6f</sub>
+
 ### Wider ruff: import order, Python 3.11 syntax, redundant branches and traps — I, UP, SIM, RUF (#20)
 
 - pyproject.toml: I, UP, SIM, RUF on top of E9, F, B; isort with combine-as-imports. Off: RUF001–RUF003 (Cyrillic, "—" and "…" in texts are normal, ~1100 false positives) and SIM905 (long word lists read better as "a b c".split() than as a 300+ character line of literals)
