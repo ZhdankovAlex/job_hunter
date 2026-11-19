@@ -287,3 +287,23 @@ def test_jsonld_skips_broken_blocks_and_reads_graph():
             + _ld({"@graph": [{"@type": "Organization"}, {"@type": "JobPosting", "title": "X"}]}))
     assert sites._jsonld(page, "JobPosting") == {"@type": "JobPosting", "title": "X"}
     assert sites._jsonld(page, "ItemList") == {}
+
+
+def test_bolt_pages_dedupe_and_details():
+    """Bolt: pages until one has no new vacancies, repeats are skipped, the text only for suitable titles."""
+    base = "https://bolt.eu/en/careers/positions/"
+    ids = ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"]
+
+    def item(uid, title, place):
+        return (f'<div data-testid="AccordionItem"><a href="/en/careers/positions/{uid}"><style>.x{{}}</style>'
+                f"<span>{title}</span><span>Engineering</span><span>{place}</span></a></div>")
+
+    http = FakeHttp({
+        base: item(ids[0], "Senior Backend Engineer", "Tallinn") + item(ids[1], "Office Manager", "Tallinn"),
+        base + "?page=2": item(ids[0], "Senior Backend Engineer", "Tallinn"),  # only a repeat: stop paging
+        f"{base}{ids[0]}/": "<p>About the role. Python.</p><p>WORKPLACE Remote</p><p>TYPE Full-time View all jobs</p>",
+    })
+    (job,) = sites.bolt(http)
+    assert (job.title, job.location, job.remote, job.employment) == (
+        "Senior Backend Engineer", "Tallinn (Remote)", True, "Full-time")
+    assert f"{base}{ids[1]}/" not in http.calls and base + "?page=3" not in http.calls

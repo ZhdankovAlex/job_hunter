@@ -83,7 +83,7 @@ def location_slug(location: str, reloc_country: str = "") -> tuple[str, str]:
     return "", ""
 
 
-_NUMBER_RX = re.compile(r"([\d,.]+)\s*([KM])?", re.I)
+_NUMBER_RX = re.compile(r"(\d[\d,.]*)\s*([KM])?", re.I)  # from a digit: "Not enough data." is not a number
 
 
 def _amount(text: str) -> float | None:
@@ -107,6 +107,8 @@ def parse(md: str) -> dict | None:
     # for some currencies the median is given per month, with "(… per year)" in brackets
     if median_value is not None and "per year)" in median.group(1):
         median_value *= 12
+    if median_value is None:  # "Not enough data." — no line for the report
+        return None
     return {
         "currency": currency.group(1), "median": median_value,
         "p25": _amount(quartiles.group(1)), "p75": _amount(quartiles.group(2)),

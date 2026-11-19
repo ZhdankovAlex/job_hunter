@@ -39,9 +39,9 @@ after `pytest`, `git status` is clean.
 | `tests/test_filters.py` | Selection by role, employment type and the presence of a link |
 | `tests/test_verify.py` | Full-text checks: on-site, country binding, JVM, Russia-only remote, AI trainer; 7+ and 8+ years are a penalty, not hiding; manual check |
 | `tests/test_geo_salary.py` | Relocation and remote within a country (Georgia the country vs the US state, excluded countries, residents only, "remote from anywhere"); salary ranges ("4.5–5.5k EUR", yearly, hourly); grade |
-| `tests/test_ats.py` | Greenhouse, Lever, Ashby, Workable, Recruitee, Breezy, Rippling responses; board discovery, empty board, Lever EU, Teamtailor on its own domain, "board gone / moved", saving `ats_mapping.json` without overwriting other edits |
+| `tests/test_ats.py` | Greenhouse, Lever, Ashby, Workable, Recruitee, Breezy, Rippling responses; board discovery, empty board, Lever EU, Teamtailor on its own domain, "board gone / moved", saving `ats_mapping.json` without overwriting other edits; vacancy text from BambooHR / Rippling / Breezy pages (limit, broken JSON-LD) |
 | `tests/test_freehire.py` | API record → vacancy (utm, salary, preview), prefilter (role, experience, `part_time`), relocation from freehire's markup |
-| `tests/test_telegram.py` | Posts of every channel format (markup as on t.me), telegra.ph, reading a channel page, labels and filtering |
+| `tests/test_telegram.py` | Posts of every channel format (markup as on t.me), telegra.ph, reading a channel page, labels and filtering (relocation, hybrid, remote in another country); going through channels: a failing channel, forwarded and broken posts, duplicates, the aggregator link |
 | `tests/test_cvgen_report.py` | A CV for a vacancy (headline for the title, one-page version, HTML); the report: sections and staffing in the appendix |
 | `tests/test_vacancy_lookup.py` | A vacancy by link: the company from JobPosting, or from the domain when JobPosting names the career site ("Career Hub") |
 | `tests/test_api_schema.py` | The whole web API against its OpenAPI schema (schemathesis): no 500s, responses and codes as in the schema, invalid input is rejected — see below |
@@ -55,8 +55,11 @@ after `pytest`, `git status` is clean.
 | `tests/test_claude_hooks.py` | Claude Code hooks (`.claude/hooks`): writes into personal files are denied, `*.example.*` files are not, the allow marker works for an hour; ruff and mypy only on the changed files of a temporary git repo, silence when there are no errors |
 | `tests/test_release_notes.py` | `RELEASE_NOTES.md` from the git history: grouping by day, bot commits are skipped |
 | `tests/test_progress.py` | Run state: stages in order, skipping a stage with the button (only this pid and only a skippable stage), log warnings with the action / code / site group and caps, a traceback for exceptions, a second run in the same process, stage-duration history and ETA, the status line and `watch`, `errors.log` rotation |
-| `tests/test_sites_boards.py` | Boards and sites from `sites.py`: pagination and errors (a stub page instead of JSON keeps what was collected), Aiven turbo-stream, Habr Career SSR, the Next.js data stream (justjoin.it, remote.com), `__NEXT_DATA__`, JSON-LD (hirehi, `manual_jobs`), Cryptocurrency Jobs RSS, relocate.me, 01.tech |
+| `tests/test_sites_boards.py` | Boards and sites from `sites.py`: pagination and errors (Bolt: repeats and the text only for suitable titles) (a stub page instead of JSON keeps what was collected), Aiven turbo-stream, Habr Career SSR, the Next.js data stream (justjoin.it, remote.com), `__NEXT_DATA__`, JSON-LD (hirehi, `manual_jobs`), Cryptocurrency Jobs RSS, relocate.me, 01.tech |
 | `tests/test_aggregators_bigtech.py` | Arbeitnow, Remote OK, Himalayas (pages, salary range, errors); Microsoft, Workday (search by POST), Oracle, Amazon: the order of opening vacancies (home country → remote → Europe → freshest), the details limit, duplicates, broken answers |
+| `tests/test_runner.py` | Starting a run from the web UI (processes are fakes): script queue and `--no-*` flags, refusal while a run is going on, "Stop" (Windows and POSIX, a run from the terminal), the daily scheduled run |
+| `tests/test_levels.py` | levels.fyi: country by location, Markdown page parsing (monthly median, "Not enough data"), cache for `CACHE_DAYS` and the old cache on failure, the report line |
+| `tests/test_tiers_staffing.py` | Vacancy category (Backend / ML / DevOps / Other) and the intermediaries blacklist: names, prefixes, `re:` patterns, outsourcing by the text |
 
 Letters and pages in the tests are made up, but they repeat wordings the program once got wrong. Found a new
 bug — first add an example that shows it, then fix it.
