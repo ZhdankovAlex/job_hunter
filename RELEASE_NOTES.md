@@ -2,6 +2,19 @@
 
 Built from the git history automatically after a push to main (`python -m jobhunter.release_notes`). Newest changes first.
 
+## 2026-11-19
+
+### CV match: "except Django" and industry labels are not requirements, Russian scrapers, the employer instead of the career site (#16)
+
+- cv_match: a technology after "except", "excluding", "other than", "not" (or Russian «кроме», «за исключением») in the same part of a sentence is not a requirement. Was: "any framework except django" put Django among the gaps and lowered Fit. Russian «не» and «без» are not negations: «не менее 3 лет Python» still requires Python
+- cv_match: field labels "Industry: …", "Location: …" give no out-of-dictionary terms; industries (Sports, Betting, Gaming, Casino) are generic words. Was: "Industry: Sports Trading" added Sports to the missing skills
+- cvgen: the scraping topic recognises Russian vacancies: «скраперы» / «скрапперы», «краулеры», «парсеры сайтов». Was: the Projects section did not appear although scrapers were a plus in the vacancy
+- vacancy_lookup: when JobPosting names the career site ("Career Hub", "Careers") or is empty, the company comes from the domain: career.acme.inc → Acme
+- tests: one test per bug, new tests/test_vacancy_lookup.py; CV topics in linear time on a 100 KB Russian word without spaces (the first version of the parser pattern took 18 s on it)
+- docs: scoring.md — negation and field labels in Fit, cv.md — Russian Projects topics and the company by link, testing.md — the new test file
+
+<sub>b770513</sub>
+
 ## 2026-11-18
 
 ### CV: a Projects section for pet projects, only for ATS and scraping vacancies (#15)
