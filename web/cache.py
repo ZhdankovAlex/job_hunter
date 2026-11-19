@@ -16,10 +16,10 @@ from jobhunter import config
 
 WEB_CACHE_FILE = config.ROOT / "state" / "web_cache.json"
 _cache_lock = threading.Lock()
-_memory_cache: dict[str, dict] = {}
+_memory_cache: dict[str, dict[str, Any]] = {}
 
 
-def cached(name: str, key: list, compute: Callable[[], Any]) -> Any:
+def cached(name: str, key: list[Any], compute: Callable[[], Any]) -> Any:
     """The cached value if the key matches; otherwise compute() and a write to the cache."""
     key = json.loads(json.dumps(key, default=str))  # tuple -> list, Path -> str: comparable with what was read from disk
     with _cache_lock:
@@ -36,7 +36,7 @@ def cached(name: str, key: list, compute: Callable[[], Any]) -> Any:
     return value
 
 
-def put(name: str, key: list, value: Any) -> None:
+def put(name: str, key: list[Any], value: Any) -> None:
     """Writes a value to the cache (memory and disk) — for a computation that extends what is already saved."""
     key = json.loads(json.dumps(key, default=str))
     with _cache_lock:

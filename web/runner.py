@@ -30,7 +30,7 @@ class Runner:
         """root — project folder (scripts' cwd), log — where output goes, on_finish — after the queue."""
         self.root, self.log, self.on_finish = root, log, on_finish
         self.lock = threading.Lock()
-        self.process: subprocess.Popen | None = None
+        self.process: subprocess.Popen[bytes] | None = None
         self.thread: threading.Thread | None = None
         self.queue: list[str] = []
         self.stopping = False

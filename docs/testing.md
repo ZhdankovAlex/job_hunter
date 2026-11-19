@@ -128,8 +128,14 @@ list of uncovered lines:
 before every commit; enable it once with `pre-commit install`. `.github/dependabot.yml` opens a weekly PR with
 updated Python dependencies and a monthly one for GitHub Actions; CI checks each of them.
 
-mypy checks `jobhunter`, `web`, `main.py`, `cvgen.py` and `tests/conftest.py`, including the bodies of unannotated
-functions (`check_untyped_defs`); the settings are in `[tool.mypy]` in `pyproject.toml`. CI runs on Linux, so
+mypy checks `jobhunter`, `web`, `main.py`, `cvgen.py`, `tests/conftest.py` and `.claude/hooks`, including the bodies
+of unannotated functions (`check_untyped_defs`); the settings are in `[tool.mypy]` in `pyproject.toml`. The key
+modules — `jobhunter/http.py`, `models.py`, `stack.py`, `industry.py`, `companies.py` and all of `web/` — run in strict
+mode (`[[tool.mypy.overrides]]`): every function is annotated (`disallow_untyped_defs`, `disallow_incomplete_defs`),
+`dict` / `list` carry element types (`disallow_any_generics`), and no `Any` is returned from a function with a concrete
+return type (`warn_return_any`). In `web/app.py`, endpoints without a response model of their own set
+`response_model=None`: otherwise FastAPI would make the return annotation the response model and start validating
+the response. CI runs on Linux, so
 platform-dependent code (`subprocess.CREATE_NEW_PROCESS_GROUP` exists only on Windows) is checked locally with:
 
 ```bash
