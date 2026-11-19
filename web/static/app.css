@@ -174,6 +174,9 @@ html.nav-collapsed .sidenav a, html.nav-collapsed .nav-toggle, html.nav-collapse
 .errors-box summary { cursor: pointer; font-weight: 600; font-size: 15px; margin-bottom: 8px; }
 .errors li { font-size: 12.5px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
 .errors b { color: var(--warn); }
+.errors .trace summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.errors .trace pre { margin: 4px 0 0; padding: 6px 8px; max-height: 300px; overflow: auto; font-size: 11.5px;
+  white-space: pre-wrap; word-break: break-word; background: var(--bg, rgba(0,0,0,.04)); border-radius: 4px; }
 
 /* reports */
 .side { border-right: 1px solid var(--line); background: var(--card); padding: 16px; overflow: auto; }

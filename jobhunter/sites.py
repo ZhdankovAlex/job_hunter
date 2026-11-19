@@ -771,7 +771,10 @@ def career_page(http: HttpClient, company, url: str, location: str = "", links: 
             # an "Apply" button with the title in a neighbouring block: take it from the address /job/senior-python-developer
             slug = _JOB_SLUG_RX.search(href)
             title = slug.group(1).replace("-", " ").replace("_", " ").strip().title() if slug else ""
-        link = urljoin(r.url, href)
+        try:
+            link = urljoin(r.url, href)
+        except ValueError:  # a malformed address like http://['website']/ — skip just this link
+            continue
         if links and (not link.startswith(links) or link.rstrip("/") == links.rstrip("/")):
             continue
         if 5 <= len(title) <= 110 and filters.title_candidate(title):

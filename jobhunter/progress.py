@@ -23,6 +23,7 @@ import shutil
 import sys
 import threading
 import time
+import traceback
 from collections.abc import Collection
 from datetime import datetime
 from typing import Any
@@ -32,6 +33,7 @@ from . import config
 PROGRESS_FILE = config.ROOT / "state" / "progress.json"
 WRITE_EVERY = 0.5  # seconds between file writes and redraws of the line
 MAX_ERRORS = 2000  # run warnings and errors kept in progress.json (guard against the file growing)
+MAX_TRACE = 8000  # traceback characters per entry (the tail: that is where the exception is)
 
 # Warning groups — what to do with them:
 #   action — a person must act: a board is gone/moved, a company has no board, cut by a limit, a file is not set;
@@ -395,8 +397,11 @@ class _ErrorCollector(logging.Handler):
             return
         with p._lock:
             message = record.getMessage()[:500]
-            p.errors.append({"time": _now(), "level": record.levelname, "message": message,
-                             "group": error_group(record.levelname, message)})
+            entry = {"time": _now(), "level": record.levelname, "message": message,
+                     "group": error_group(record.levelname, message)}
+            if record.exc_info:  # log.exception — the traceback for "details" on the Pipeline page
+                entry["trace"] = "".join(traceback.format_exception(*record.exc_info))[-MAX_TRACE:]
+            p.errors.append(entry)
             del p.errors[:-MAX_ERRORS]
 
 

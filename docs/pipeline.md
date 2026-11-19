@@ -148,7 +148,8 @@ after a run they open instantly ([web-ui.md](web-ui.md#how-pages-are-built)).
   JSON. Log warnings (WARNING and above) of the whole run go to `errors`, each with a `group`
   (`progress.error_group`): `action` — needs a human (a board is gone or moved, a company has no board, a list was
   cut by a limit), `code` — a code problem (a response format changed, an exception), `site` — another site's
-  failure (HTTP errors, SSL, timeouts).
+  failure (HTTP errors, SSL, timeouts). An entry from `log.exception` also has `trace` — the traceback (the last
+  8000 characters, `MAX_TRACE`); on the Pipeline page it expands under "details".
 - `errors.log` holds only the current run: a new run moves it to `errors.prev.log`. "Run everything" is two
   scripts in a row; the second gets `JOBHUNTER_CONTINUE_RUN=1` (set by the web UI and `run_daily.bat`) and appends
   to the same file.
