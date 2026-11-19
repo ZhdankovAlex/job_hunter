@@ -4,6 +4,16 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-19
 
+### New sources: Uzum and Yango career sites (#26)
+
+- Uzum (people.uzum.com, Next.js on top of Huntflow): `/api/` is disallowed by robots.txt, so the list and job texts come from the page data stream; `?page=N` returns the first 15·N jobs, one request is enough and job pages are not opened. A description is either a `$1d` reference to a `T` chunk or inline JSON
+- Next.js stream: `T` chunks follow each other without a newline — searching for `\n1d:T` lost most descriptions
+- Yango: JSON `yango.com/career/api/publications`, 5 jobs per response; `next` points to an internal host, so only the cursor is taken from it; job text comes from `/career/vacancy/<id>`
+- Tests on FakeHttp fixtures: title filter, location and remote, date, text without HTML, Uzum paging and the Yango cursor without requests to a foreign host
+- docs: sources.md — Uzum and Yango in the list of company sites without a public ATS
+
+<sub>da9fd33</sub>
+
 ### Report: report.render and html_report.render split into functions (#25)
 
 Covers the new report._split / _appendix / _summary and html_report helpers: priority overflow, relocation, staffing, local language, rejected before, Telegram, must_report / referral, freehire, salary.
