@@ -8,13 +8,38 @@ description: A checklist before a commit in job-hunter — checks, personal file
 Go step by step; whatever fails — fix it or tell the user, do not skip it silently.
 Commit and push only if the user asked; otherwise stop at step 5 (the draft).
 
-## 1. Checks
+## 1. Checks — a PASS/FAIL report
+Run all five, even if the first one fails, and show the user the report:
 ```bash
-JOBHUNTER_NO_WARM=1 .venv/Scripts/python.exe -m pytest -q
-.venv/Scripts/python.exe -m ruff check .
-.venv/Scripts/python.exe -m mypy
+JOBHUNTER_NO_WARM=1 .venv/Scripts/python.exe -m pytest -q        # tests
+.venv/Scripts/python.exe -m ruff check .                         # ruff
+.venv/Scripts/python.exe -m mypy                                 # mypy
+# secrets: added diff lines and new files carry no tokens, keys or passwords
+{ git diff HEAD; git ls-files -o --exclude-standard | xargs -r cat; } \
+  | grep -nEi '^\+?.*(api[_-]?key|secret|token|passw|bearer|BEGIN [A-Z ]*PRIVATE KEY|ghp_[A-Za-z0-9]{20}|sk-[A-Za-z0-9]{20}|AIza[0-9A-Za-z_-]{30})' \
+  | grep -v -E 'Co-Authored|example|FakeHttp'
+git status --short && git diff --stat HEAD                        # diff: only the files of this task
 ```
-All green. Platform-dependent code — also `mypy --platform linux` (CI runs on Linux).
+Platform-dependent code — also `mypy --platform linux` (CI runs on Linux).
+
+The report is a table, one line per step, with a short reason for each FAIL:
+```
+tests    PASS  412 passed
+ruff     PASS
+mypy     PASS
+secrets  PASS  (matches checked: variable names, not values)
+diff     FAIL  settings.toml in git status — a personal file / someone else's edit in web/app.py
+-----
+NOT READY
+```
+- secrets: a match is a reason to look at the line, not an automatic FAIL; FAIL is a real value only.
+- diff: FAIL — other people's files, personal ones (step 2), debug `print`/`breakpoint()`, empty files.
+- READY only when all five PASS. NOT READY — fix and run again, or tell the user what is in the way;
+  do not write the message draft (step 5) while NOT READY.
+
+Two Claude Code hooks back this up (`.claude/settings.json`, scripts in `.claude/hooks`): at the end of a turn
+ruff and mypy run on the changed files, and Write/Edit into personal files is blocked (if the user asked for
+the edit, the marker `state/allow_protected_edit` lifts the block for an hour).
 
 ## 2. What goes into the commit
 - `git status --short` and `git diff --stat`: only the files of this task. Other people's edits are not
