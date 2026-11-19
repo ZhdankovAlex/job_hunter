@@ -8,10 +8,13 @@ addopts = "-ra"
 [tool.coverage.run]
 # measured with pytest --cov (CI does it on every PR)
 source = ["jobhunter", "web"]
+# web/__main__.py is only argument parsing and uvicorn.run: a test would start a real server and browser,
+# and the app itself (web/app.py) is covered through TestClient
+omit = ["web/__main__.py"]
 
 [tool.coverage.report]
-# a floor just under the current total (79.8%), so coverage does not quietly drop; raise it as tests are added
-fail_under = 77
+# a floor just under the current total (84.6%), so coverage does not quietly drop; raise it as tests are added
+fail_under = 82
 show_missing = true
 skip_covered = true
 
