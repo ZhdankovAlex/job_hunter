@@ -118,7 +118,10 @@ class Pipeline:
         self._written = 0.0
         self._tty = sys.stdout.isatty()
         _current = self
-        logging.getLogger().addHandler(_ErrorCollector(self))
+        root = logging.getLogger()
+        for old in [h for h in root.handlers if isinstance(h, _ErrorCollector)]:
+            root.removeHandler(old)  # the collector of a previous run in this process; not in emit, see _ErrorCollector
+        root.addHandler(_ErrorCollector(self))
         self._flush(force=True)
 
     # --- stages -----------------------------------------------------------------------------
@@ -387,7 +390,8 @@ class _ErrorCollector(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         p = self.pipeline
         if p is not _current:
-            logging.getLogger().removeHandler(self)
+            # do not remove itself here: logging walks the handler list, and removing from it during the walk
+            # skips the next handler, so the first warning of a new run was lost. Pipeline() removes it.
             return
         with p._lock:
             message = record.getMessage()[:500]

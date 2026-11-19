@@ -79,8 +79,42 @@ class FakeHttp:
         return FakeResponse(self.pages[url], 200, url)
 
 
+Answer = str | tuple[int, str] | None
+
+
+class RouteHttp:
+    """A fake for APIs with parameters and POST: route(method, url, params_or_json) picks the answer.
+
+    route returns the text (200), (code, text) or None (404). Requests go to .calls: (method, url, params|json).
+    """
+
+    def __init__(self, route: Any):
+        self.route = route
+        self.calls: list[tuple[str, str, Any]] = []
+
+    def _answer(self, method: str, url: str, data: Any) -> FakeResponse:
+        self.calls.append((method, url, data))
+        answer: Answer = self.route(method, url, data or {})
+        if answer is None:
+            return FakeResponse("", 404, url)
+        if isinstance(answer, tuple):
+            return FakeResponse(answer[1], answer[0], url)
+        return FakeResponse(answer, 200, url)
+
+    def get(self, url: str, params: dict | None = None, timeout: float = 40,
+            headers: dict | None = None) -> FakeResponse:
+        return self._answer("GET", url, params)
+
+    def post(self, url: str, json: Any = None, timeout: float = 40,
+             headers: dict | None = None) -> FakeResponse:
+        return self._answer("POST", url, json)
+
+
 if TYPE_CHECKING:  # mypy checks the fake against the sources' protocol: a diverging signature fails CI
+    from jobhunter.http import HttpPostClient
+
     _fake_is_client: HttpClient = FakeHttp({})
+    _route_is_client: HttpPostClient = RouteHttp(lambda *a: None)
 
 
 @pytest.fixture

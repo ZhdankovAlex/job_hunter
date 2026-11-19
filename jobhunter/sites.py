@@ -235,6 +235,8 @@ def fetch(name: str, http: HttpClient) -> list[Job]:
             jobs.append(job)
     except FetchError as e:
         log.warning("site %s: %s", name, e)
+    except ValueError as e:  # JSON or a date did not parse (a stub page with code 200): keep what was collected
+        log.warning("site %s: could not parse the response (%s)", name, e)
     return jobs
 
 
@@ -426,7 +428,9 @@ def cryptocurrencyjobs(http: HttpClient) -> Iterator[Job]:
     except ET.ParseError as e:
         raise FetchError(f"cryptocurrencyjobs: could not parse RSS ({e})")
     for item in root.iter("item"):
-        title, _, company = (item.findtext("title") or "").rpartition(" at ")
+        title, at, company = (item.findtext("title") or "").rpartition(" at ")
+        if not at:  # "Office Manager" without " at ": rpartition puts it all in the last part, it is not a company
+            title, company = company, ""
         text = html_to_text(item.findtext("description"))
         if re.search(r"no geographical restrictions|from anywhere", text, re.I):
             location = "Remote, Worldwide"
@@ -509,7 +513,8 @@ def habr_career(http: HttpClient) -> Iterator[Job]:
                 log.warning("habr career %s: %s", url, e)
                 detail = ""
             i = detail.find("vacancy-description__text")
-            body = html_to_text(detail[detail.find(">", i) + 1: detail.find("basic-section", i)]) if i != -1 else ""
+            end = detail.rfind("<", i, detail.find("basic-section", i))  # without the start of the next section's tag
+            body = html_to_text(detail[detail.find(">", i) + 1: end]) if i != -1 else ""
             places = [x["title"] for x in item.get("locations") or []]
             skills = ", ".join(x["title"] for x in item.get("skills") or [])
             salary = (item.get("salary") or {}).get("formatted") or ""

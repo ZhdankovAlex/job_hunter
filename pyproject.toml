@@ -10,8 +10,8 @@ addopts = "-ra"
 source = ["jobhunter", "web"]
 
 [tool.coverage.report]
-# a floor just under the current total (70%), so coverage does not quietly drop; raise it as tests are added
-fail_under = 68
+# a floor just under the current total (79.8%), so coverage does not quietly drop; raise it as tests are added
+fail_under = 77
 show_missing = true
 skip_covered = true
 
