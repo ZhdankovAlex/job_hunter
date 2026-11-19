@@ -4,6 +4,17 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-19
 
+### Tests for the web run launcher, levels.fyi and Telegram, a levels.fyi parsing bug (#27)
+
+- levels.fyi: a "Not enough data." median crashed page parsing with ValueError: the number pattern `[\d,.]+` matched a lone dot and passed it to float(). A number now starts with a digit, and a page without a median counts as unparsed, so the report keeps the cached data
+- Coverage: web/runner.py 52% → 98%, levels, tiers and staffing → 100%, ats → 89%, telegram → 88%
+- web/runner.py: script queue and `--no-*` flags, CONTINUE_RUN_ENV for the second script, refusal while a run is going on, "Stop" on Windows and POSIX (also for a run from the terminal), the daily schedule
+- ATS: vacancy text from BambooHR, Rippling and Breezy pages, only for suitable titles and at most DETAIL_FETCH_LIMIT; broken JSON-LD does not break the company
+- Telegram: going through channels (failing channel, forwarded and broken posts, duplicates, aggregator link) and labels outside the home country; Bolt: pagination and repeats
+- docs: testing.md lists test_runner.py, test_levels.py, test_tiers_staffing.py and the new cases
+
+<sub>e48eacf</sub>
+
 ### New sources: Uzum and Yango career sites (#26)
 
 - Uzum (people.uzum.com, Next.js on top of Huntflow): `/api/` is disallowed by robots.txt, so the list and job texts come from the page data stream; `?page=N` returns the first 15·N jobs, one request is enough and job pages are not opened. A description is either a `$1d` reference to a `T` chunk or inline JSON
