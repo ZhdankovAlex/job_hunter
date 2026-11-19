@@ -4,6 +4,15 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-19
 
+### Tests for the HTTP client rules, freehire, mail and vacancy stack, coverage floor 82% (#23)
+
+- New tests (355 → 427, coverage 79.8% → 84.6%): http — robots.txt (`*`, `$`, own group, Crawl-delay, missing file), 1 request per second per host, retries on 5xx, Retry-After, a host turned off after 429, cancellation — on a fake clock and session; stack — the main language from the title and the requirements block; freehire — cache, request limit, ignored_params, pages and duplicates, full texts, finding the filter that zeroes the result; mail — sync freshness, Gmail without network, reading only new messages, OAuth token, manual events
+- No bugs found
+- pyproject.toml: fail_under 77 → 82; web/__main__.py (argparse and uvicorn.run) excluded from coverage
+- docs: testing.md — new test files in the table, coverage floor
+
+<sub>1e95710</sub>
+
 ### CI: coverage table in the run summary, Codecov, coverage and pre-commit badges (#22)
 
 - ci.yml: the per-module coverage table goes to the summary of every run (Actions → the run → Summary); coverage.xml is uploaded to Codecov (history, per-file view, a comment on each PR); without the CODECOV_TOKEN secret the upload only warns and does not fail CI
