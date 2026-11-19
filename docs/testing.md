@@ -126,7 +126,10 @@ in texts are normal for the project), and so is `SIM905` (long word lists read b
 list of literals). The formatter (`ruff format`) is not enabled.
 
 Coverage is measured for `jobhunter` and `web` (`[tool.coverage]` in `pyproject.toml`); the run fails below
-`fail_under` (77%, just under the current total of 79.8%). Raise the floor when tests are added. Locally, with the
+`fail_under` (77%, just under the current total of 79.8%). Raise the floor when tests are added. The per-module table is in the summary of every CI run
+(Actions → the run → Summary); history, a per-file view and a coverage comment on each pull request are on
+[Codecov](https://codecov.io/gh/ZhdankovAlex/job_hunter) (`codecov.yml`: the total may not drop by more than 1%;
+the coverage of changed lines is shown but does not fail the PR). Locally, with the
 list of uncovered lines:
 
 ```bash
