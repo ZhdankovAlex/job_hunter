@@ -48,6 +48,10 @@ after `pytest`, `git status` is clean.
 | `tests/test_main_run.py` | The whole `main.run` without network: one company on Greenhouse via `FakeHttp`, the order of stages, reports and the vacancies JSON; a write outside `tmp_path` fails the test |
 | `tests/test_web.py` | Web UI pages open on empty data; the "Skills" cache; reports are served with `Cache-Control: no-cache` |
 | `tests/test_http.py` | A host that does not respond is skipped until the end of the run; success resets the counter |
+| `tests/test_http_rules.py` | `Http` rules on a fake clock and session: robots.txt (`*`, `$`, own group, Crawl-delay; no file — allowed, 5xx and network errors — host skipped), 1 request per second per host, retries on 5xx, Retry-After capped at a minute, a host is turned off after three 429s, cancellation by the button |
+| `tests/test_stack.py` | The main language of a vacancy: title, requirements block (C++ only there, a "nice to have" line does not count), Python alongside another language, Python only as a nice-to-have |
+| `tests/test_freehire_client.py` | The freehire client: disk cache and its lifetime, request limit per run, HTTP error and non-JSON, `meta.ignored_params` stops the run, pages and duplicates across queries, full texts in batches of 10 companies, finding the filter that zeroes the result |
+| `tests/test_mail_gmail.py` | Message cache and sync freshness, Gmail without network (1 request/s, `nextPageToken` pages, text/plain vs HTML), reading only new messages and intermediate cache saves, the OAuth token (refresh, revocation, sign-in with a timeout), manual events |
 | `tests/test_claude_hooks.py` | Claude Code hooks (`.claude/hooks`): writes into personal files are denied, `*.example.*` files are not, the allow marker works for an hour; ruff and mypy only on the changed files of a temporary git repo, silence when there are no errors |
 | `tests/test_release_notes.py` | `RELEASE_NOTES.md` from the git history: grouping by day, bot commits are skipped |
 | `tests/test_progress.py` | Run state: stages in order, skipping a stage with the button (only this pid and only a skippable stage), log warnings with the action / code / site group and caps, a second run in the same process, stage-duration history and ETA, the status line and `watch`, `errors.log` rotation |
@@ -126,7 +130,7 @@ in texts are normal for the project), and so is `SIM905` (long word lists read b
 list of literals). The formatter (`ruff format`) is not enabled.
 
 Coverage is measured for `jobhunter` and `web` (`[tool.coverage]` in `pyproject.toml`); the run fails below
-`fail_under` (77%, just under the current total of 79.8%). Raise the floor when tests are added. The per-module table is in the summary of every CI run
+`fail_under` (82%, just under the current total of 84.6%; `web/__main__.py`, the server launcher, is in `omit`). Raise the floor when tests are added. The per-module table is in the summary of every CI run
 (Actions → the run → Summary); history, a per-file view and a coverage comment on each pull request are on
 [Codecov](https://codecov.io/gh/ZhdankovAlex/job_hunter) (`codecov.yml`: the total may not drop by more than 1%;
 the coverage of changed lines is shown but does not fail the PR). Locally, with the
