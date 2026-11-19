@@ -4,6 +4,15 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-19
 
+### Typing: strict mypy on the key modules — network, models, classifiers, web (#19)
+
+- pyproject.toml: [[tool.mypy.overrides]] for jobhunter.http, models, stack, industry, companies and web.* — disallow_untyped_defs, disallow_incomplete_defs, disallow_untyped_decorators, disallow_any_generics, warn_return_any. The rest of the project stays as before (check_untyped_defs); strictness grows step by step
+- Annotations on every function in these modules; Job lists are list[str], JSON is dict[str, Any]; Params / Headers aliases in http.py for the HttpClient / HttpPostClient protocols. No behaviour change
+- web/app.py: endpoints without a response model of their own set response_model=None. Otherwise FastAPI makes the return annotation the response model: the schema of 9 endpoints in /openapi.json would change and responses would go through pydantic validation. /openapi.json was compared with the previous version — identical
+- docs: testing.md — which modules are strict and why response_model=None
+
+<sub>b9144c6</sub>
+
 ### Docs: how the project is developed with Claude Code, CLAUDE.md with the working rules (#18)
 
 - CLAUDE.md: the rules every Claude Code session gets — hard limits (nothing is sent out, no LinkedIn automation, robots.txt and 1 request per second via jobhunter/http.py), checks, tests without network and personal files, documentation in the same commit
