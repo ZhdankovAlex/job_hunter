@@ -1,6 +1,5 @@
 """Application status and funnel: a repeated process, cancelled meetings, "declined by you", days of silence."""
-from jobhunter import applications_report as ar
-from jobhunter import mail
+from jobhunter import applications_report as ar, mail
 from jobhunter.mail import APPLIED, DECLINED, INTERVIEW, OTHER, REJECTED, Application, Event
 
 

@@ -1,12 +1,12 @@
 """Public JSON APIs of the ATS platforms + finding and caching company slugs."""
 import json
-import re
 import logging
+import re
 import threading
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterable
-from email.utils import parsedate_to_datetime
 from datetime import date
+from email.utils import parsedate_to_datetime
 
 from . import config, geo
 from .companies import slug_candidates

@@ -9,6 +9,7 @@ import threading
 from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
+from typing import ClassVar
 
 from fastapi import HTTPException
 
@@ -18,13 +19,13 @@ from jobhunter import progress
 class Runner:
     """One run at a time: scripts one after another in a background thread, output goes to last_run.log."""
 
-    SCRIPTS = {
+    SCRIPTS: ClassVar[dict[str, list[str]]] = {
         "all": ["applications.py", "main.py"],  # like run_daily.bat: mail first, then vacancies
         "main": ["main.py"],
         "applications": ["applications.py"],
     }
     # what can be turned off in advance -> a main.py flag; "mail" removes applications.py from the queue
-    SKIP_FLAGS = {"telegram": "--no-telegram", "freehire": "--no-freehire", "aggregators": "--no-aggregators"}
+    SKIP_FLAGS: ClassVar[dict[str, str]] = {"telegram": "--no-telegram", "freehire": "--no-freehire", "aggregators": "--no-aggregators"}
 
     def __init__(self, root: Path, log: Path, on_finish: Callable[[], None] = lambda: None) -> None:
         """root — project folder (scripts' cwd), log — where output goes, on_finish — after the queue."""

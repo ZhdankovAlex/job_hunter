@@ -8,23 +8,37 @@ import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from datetime import date, timedelta, timezone
+from datetime import UTC, date, timedelta
 
-from jobhunter import (aggregators, applied, config, filters, freehire, geo, html_report, industry, keys, report, sites,
-                       telegram, verify)
+from jobhunter import (
+    aggregators,
+    applied,
+    config,
+    cvgen,
+    filters,
+    freehire,
+    geo,
+    html_report,
+    industry,
+    keys,
+    levels,
+    progress,
+    report,
+    salary as salary_rules,
+    sites,
+    telegram,
+    tiers,
+    verify,
+)
+from jobhunter.applications_report import StatusIndex
 from jobhunter.ats import PLATFORMS, AtsClient
 from jobhunter.companies import load_companies
+from jobhunter.cv_match import CvProfile
 from jobhunter.http import Http, cancel as http_cancel
 from jobhunter.models import norm_name
 from jobhunter.relevance import Profile
-from jobhunter import salary as salary_rules
 from jobhunter.salary import SalaryBase
-from jobhunter import cvgen
-from jobhunter.cv_match import CvProfile
-from jobhunter.applications_report import StatusIndex
-from jobhunter import tiers
 from jobhunter.staffing import Blacklist
-from jobhunter import levels, progress
 
 STAGES = [
     ("companies", "Company list"),
@@ -168,7 +182,7 @@ def is_fresh(job, seen: dict[str, str], today: date, max_age_days: int) -> bool:
     """Published no earlier than max_age_days ago; without a date — counted from the first sighting."""
     cutoff = today - timedelta(days=max_age_days)
     if job.posted:
-        return job.posted.astimezone(timezone.utc).date() >= cutoff
+        return job.posted.astimezone(UTC).date() >= cutoff
     first_seen = seen.get(keys.norm_url(job.url))
     return first_seen is None or date.fromisoformat(first_seen) >= cutoff
 
@@ -311,7 +325,7 @@ def merge_duplicates(jobs):
         sources = list(dict.fromkeys([*(base.sources or [base.source]), *(job.sources or [job.source])]))
         extra = base.extra or job.extra
         geo_fields = (best.location_check, best.reloc_country, best.reloc_type, best.reloc_quote)
-        if (job.posted and job.posted.timestamp() or 0) > (base.posted and base.posted.timestamp() or 0):
+        if ((job.posted and job.posted.timestamp()) or 0) > ((base.posted and base.posted.timestamp()) or 0):
             merged[key] = base = job
         base.location = "; ".join(locations)
         base.sources, base.extra = sources, extra

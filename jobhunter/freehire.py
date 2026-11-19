@@ -17,8 +17,7 @@ import logging
 import time
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from . import config as c
-from . import filters, geo, language, progress
+from . import config as c, filters, geo, language, progress
 from .http import FetchError, HttpClient
 from .models import Job, html_to_text, parse_date
 

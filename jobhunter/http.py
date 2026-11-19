@@ -1,4 +1,5 @@
 """HTTP client: at most 1 request per second per host + robots.txt check."""
+import contextlib
 import logging
 import re
 import threading
@@ -62,10 +63,8 @@ class _Robots:
             if key in ("allow", "disallow") and value:
                 self.rules.append((key == "allow", value))
             elif key == "crawl-delay":
-                try:
+                with contextlib.suppress(ValueError):
                     self.crawl_delay = float(value)
-                except ValueError:
-                    pass
 
     @staticmethod
     def _matches(pattern: str, path: str) -> bool:

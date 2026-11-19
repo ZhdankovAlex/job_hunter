@@ -12,8 +12,8 @@ import re
 import subprocess
 import sys
 import tomllib
-from typing import Literal, overload
 from pathlib import Path
+from typing import Literal, overload
 
 from . import config, cv_match, geo
 from .config import ROOT
@@ -184,9 +184,9 @@ def _skills(base: dict, vac: Vacancy, everything: bool = False) -> list[tuple[st
     """Skill groups; everything — all items (the base CV)."""
     lines = []
     for group in base["skills"]:
-        if group.get("only_ai") and not vac.is_ai or not _allowed(group, vac):
+        if (group.get("only_ai") and not vac.is_ai) or not _allowed(group, vac):
             continue
-        everything = everything or vac.is_ai and group.get("only_ai") or (
+        everything = everything or (vac.is_ai and group.get("only_ai")) or (
             group["group"].startswith("AI-assisted") and "ai_tools" in vac.topics)
         items = [i["text"] for i in group["items"]
                  if everything or i.get("always") or _techs(i["text"]) & vac.techs]
@@ -201,7 +201,7 @@ def _skills(base: dict, vac: Vacancy, everything: bool = False) -> list[tuple[st
     return lines
 
 
-def _top_groups(groups: list[tuple[str, str]], vac: "Vacancy", limit: int | None) -> list[tuple[str, str]]:
+def _top_groups(groups: list[tuple[str, str]], vac: Vacancy, limit: int | None) -> list[tuple[str, str]]:
     """At most limit skill groups: keep those with the most vacancy technologies, keep the base order."""
     if not limit or len(groups) <= limit:
         return groups
@@ -667,9 +667,7 @@ def auto_build(jobs: list, day) -> int:
     """
     import logging
 
-    from . import tiers
-
-    from . import progress
+    from . import progress, tiers
 
     log = logging.getLogger(__name__)
     picked = [j for j in jobs if j.is_new_today and getattr(j, "cv_fit", -1) >= AUTO_FIT_MIN

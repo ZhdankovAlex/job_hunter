@@ -113,8 +113,12 @@ Reads go the same way: `-k "read_only and companies"`.
 ## CI
 
 `.github/workflows/ci.yml`: on every pull request and push to `main` GitHub Actions installs the dependencies and
-runs `ruff check .`, `mypy` and `pytest --cov`. Ruff checks only what catches real bugs (syntax, pyflakes, bugbear), not
-style: the settings are in `pyproject.toml`.
+runs `ruff check .`, `mypy` and `pytest --cov`. Ruff (`[tool.ruff.lint]` in `pyproject.toml`) catches bugs — syntax,
+pyflakes, bugbear (`E9`, `F`, `B`) — and keeps the code uniform: import order (`I`), modern Python 3.11 syntax (`UP`:
+`datetime.UTC`, no quotes in annotations), redundant branches (`SIM`), traps such as mutable class attributes without
+`ClassVar` (`RUF`). `ruff check . --fix` repairs almost all of it. `RUF001`–`RUF003` are off (Cyrillic, "—" and "…"
+in texts are normal for the project), and so is `SIM905` (long word lists read better as `"a b c".split()` than as a
+list of literals). The formatter (`ruff format`) is not enabled.
 
 Coverage is measured for `jobhunter` and `web` (`[tool.coverage]` in `pyproject.toml`); the run fails below
 `fail_under` (68%, just under the current total of 70%). Raise the floor when tests are added. Locally, with the

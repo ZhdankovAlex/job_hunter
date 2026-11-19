@@ -7,10 +7,11 @@ if one of them is in the CV.
 """
 from __future__ import annotations
 
+import itertools
 import json
-from collections import Counter
 import logging
 import re
+from collections import Counter
 from pathlib import Path
 
 from . import config
@@ -276,14 +277,14 @@ class CvProfile:
             # parts of a sentence: "frontend (React, JS) and backend, ideally Python (C++ or Java)" — "ideally"
             # and "or" apply only to their own part, React is required here
             cuts = [0, *(m.end() for m in _CLAUSE_SPLIT_RX.finditer(sentence)), len(sentence) + 1]
-            clauses = [sentence[a:b] for a, b in zip(cuts, cuts[1:])]
+            clauses = [sentence[a:b] for a, b in itertools.pairwise(cuts)]
             # "Nice to have: Go, Rust and Kafka" — a caveat at the start of a sentence applies to the whole sentence
             header_nice = bool(_NICE_RX.search(sentence[:40]))
 
             def clause_of(name, sentence=sentence, cuts=cuts):  # called right here, in this iteration
                 m = TECH_RX[name].search(sentence)
                 pos = m.start() if m else 0
-                idx = next(i for i, (a, b) in enumerate(zip(cuts, cuts[1:])) if a <= pos < b)
+                idx = next(i for i, (a, b) in enumerate(itertools.pairwise(cuts)) if a <= pos < b)
                 return idx, bool(_NEGATION_RX.search(sentence, cuts[idx], pos))
 
             by_clause: dict[int, list[str]] = {}

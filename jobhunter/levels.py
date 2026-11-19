@@ -161,6 +161,6 @@ class Levels:
         median, low, high = (self._eur_month(data[k], data["currency"]) for k in ("median", "p25", "p75"))
         if median is None:
             return f"levels.fyi, {label}: {data['currency']} {data['median']:,.0f}/yr", data["url"]
-        k = lambda v: f"{v / 1000:.1f}K"  # noqa: E731
+        k = lambda v: f"{v / 1000:.1f}K"
         spread = f", 25–75%: €{k(low)}–{k(high)}" if low and high else ""
         return f"levels.fyi, {label}: median ≈ €{k(median)}/mo{spread} ({data['samples']} salaries)", data["url"]

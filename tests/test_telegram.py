@@ -1,13 +1,13 @@
 """Telegram channels: parsing posts of each format and the vacancy label. The posts are made up, but follow the
 channels' layout; most channels are Russian-language, so the post samples are in Russian."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from conftest import FakeHttp
 
 from jobhunter import telegram as tg
 
-WHEN = datetime(2026, 11, 10, 12, 0, tzinfo=timezone.utc)
+WHEN = datetime(2026, 11, 10, 12, 0, tzinfo=UTC)
 
 
 def parse(channel, raw, post_id=101):
@@ -146,7 +146,7 @@ def test_fetch_posts_reads_page_and_cutoff():
                 f'<div class="tgme_widget_message_text js-message_text" dir="auto">{text}</div>'
                 f'<time datetime="{when}" class="time">12:00</time></div></div>')
     page = message(1, "2026-10-01T10:00:00+00:00", "old") + message(2, "2026-11-10T10:00:00+00:00", "<b>new</b>")
-    posts = tg.fetch_posts(FakeHttp({"https://t.me/s/chan": page}), "chan", datetime(2026, 11, 1, tzinfo=timezone.utc))
+    posts = tg.fetch_posts(FakeHttp({"https://t.me/s/chan": page}), "chan", datetime(2026, 11, 1, tzinfo=UTC))
     assert [(p[0], p[2]) for p in posts] == [(2, "<b>new</b>")]
 
 

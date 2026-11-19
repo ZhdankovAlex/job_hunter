@@ -1,7 +1,7 @@
 import html
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -98,8 +98,8 @@ def parse_date(value: object) -> datetime | None:
         if isinstance(value, (int, float)):
             if value > 1e11:
                 value /= 1000
-            return datetime.fromtimestamp(value, tz=timezone.utc)
+            return datetime.fromtimestamp(value, tz=UTC)
         dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
     except (ValueError, OSError, OverflowError):
         return None

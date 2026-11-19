@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    from jobhunter import config
     import web.app as web
+    from jobhunter import config
 
     jobs = tmp_path / "jobs"
     jobs.mkdir()

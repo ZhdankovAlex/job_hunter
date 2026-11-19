@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from . import config as c
 
@@ -54,8 +54,8 @@ def age_bucket(job) -> int:
     """Freshness group number: 0 — published in the last 3 days, 4 — older than a month."""
     if not job.posted:
         return UNKNOWN_AGE_BUCKET
-    posted = job.posted if job.posted.tzinfo else job.posted.replace(tzinfo=timezone.utc)
-    days = (datetime.now(timezone.utc) - posted).days
+    posted = job.posted if job.posted.tzinfo else job.posted.replace(tzinfo=UTC)
+    days = (datetime.now(UTC) - posted).days
     return next((i for i, limit in enumerate(AGE_BUCKETS) if days <= limit), len(AGE_BUCKETS))
 
 

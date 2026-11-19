@@ -241,7 +241,7 @@ def _new_section(jobs, tg_jobs):
     new_tg = sorted((j for j in tg_jobs if j.is_new_today and not _blocked(j)), key=tiers.sort_key)
     lines = [f"## 🆕 New in the last day — {len(new) + len(new_tg)}", ""]
     if not new and not new_tg:
-        return lines + ["No new vacancies since the last run.", ""]
+        return [*lines, "No new vacancies since the last run.", ""]
     lines += [
         "| Score | Company | Vacancy | Location | Status | Date | Source | Link | Missing / marks |",
         "|---|---|---|---|---|---|---|---|---|",
@@ -315,7 +315,7 @@ def _top_section(jobs, tg_jobs):
             break
     lines = [f"## 🎯 Top {limit} by relevance to the CV — {len(picked)}", ""]
     if not picked:
-        return lines + ["No fitting vacancies.", ""]
+        return [*lines, "No fitting vacancies.", ""]
     lines += [
         "| # | Score | Company | Vacancy | Location | Status | Date | Source | Link | Missing | Marks |",
         "|---|---|---|---|---|---|---|---|---|---|---|",
@@ -381,7 +381,7 @@ def _review_section(jobs, tg_jobs):
     picked = pick_review(jobs, tg_jobs)
     lines = [f"## ⭐ Top to review — {len(picked)}", ""]
     if not picked:
-        return lines + ["No vacancies have passed all checks yet.", ""]
+        return [*lines, "No vacancies have passed all checks yet.", ""]
     lines += [
         "| # | Category | Score | Company | Vacancy | Location | Status | Date | Source | Link | Why it fits | Match with the CV |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|",
@@ -520,7 +520,7 @@ def _telegram_section(tg_jobs, stats):
     for channel in stats.get("tg_failed", []):
         lines += [f"> ⚠️ Could not read the channel @{channel} (see errors.log).", ""]
     if not tg_jobs:
-        return lines + ["No fitting vacancies.", ""]
+        return [*lines, "No fitting vacancies.", ""]
     lines += [
         "| Channel | Date | Title | Company | Location / format | Salary | Link or contact | Marks |",
         "|---|---|---|---|---|---|---|---|",

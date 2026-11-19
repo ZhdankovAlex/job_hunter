@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from urllib.parse import quote
 
 from . import geo, mail
@@ -197,7 +197,7 @@ class StatusIndex:
         if config.MAIL_CACHE_FILE.exists():
             messages = list(json.loads(config.MAIL_CACHE_FILE.read_text(encoding="utf-8")).values())
         apps, _ = mail.summarize(messages)
-        self.now = datetime.now(timezone.utc)
+        self.now = datetime.now(UTC)
         self.items = []  # (company key, app, status, explanation)
         for app in apps:
             in_applied = sheet.company_statuses(app.company) if sheet else ""
@@ -229,7 +229,7 @@ class StatusIndex:
 
 
 def render(day: date, apps: list, unknown: list, address: str, sheet=None, warning: str = "") -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     order = list(STATUS)
     items = []
     for app in apps:
@@ -265,7 +265,7 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
             "</tr>"
         )
     unknown_rows = [
-        f'<tr><td>{datetime.fromtimestamp(m["date"], tz=timezone.utc):%Y-%m-%d}</td><td>{_e(KIND_NAMES[m["kind"]])}</td>'
+        f'<tr><td>{datetime.fromtimestamp(m["date"], tz=UTC):%Y-%m-%d}</td><td>{_e(KIND_NAMES[m["kind"]])}</td>'
         f'<td class="small">{_e(m["from"])}</td>'
         f'<td><a href="{_e(_thread_link(address, m["thread"]))}" target="_blank" rel="noopener">{_e(m["subject"][:110])}</a></td></tr>'
         for m in sorted(unknown, key=lambda m: -m["date"])

@@ -141,7 +141,7 @@ def parse_log(raw: str) -> list[Change]:
     for record in raw.split(_RECORD):
         if not record.strip():
             continue
-        sha, date, title, body = (record.strip("\n").split(_FIELD) + ["", "", "", ""])[:4]
+        sha, date, title, body = ([*record.strip("\n").split(_FIELD), "", "", "", ""])[:4]
         if title.strip() == BOT_TITLE:
             continue
         if sha[:7] in REWORDED:

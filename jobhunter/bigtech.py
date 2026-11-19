@@ -10,10 +10,9 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Iterator
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from . import config as c
-from . import filters, geo
+from . import config as c, filters, geo
 from .http import FetchError, HttpClient, HttpPostClient
 from .models import Job, html_to_text, parse_date
 
@@ -98,7 +97,7 @@ def _workday_posted(text: str):
     if not m:
         return None
     days = 0 if m.group(1).lower() == "today" else 1 if m.group(1).lower() == "yesterday" else int(m.group(2))
-    return datetime.now(timezone.utc) - timedelta(days=days)
+    return datetime.now(UTC) - timedelta(days=days)
 
 
 def workday(company: str, host: str, tenant: str, site: str):
@@ -210,7 +209,7 @@ def amazon(http: HttpClient) -> Iterator[Job]:
                     continue
                 seen.add(j.get("id_icims"))
                 try:
-                    posted = datetime.strptime(j.get("posted_date") or "", "%B %d, %Y").replace(tzinfo=timezone.utc)
+                    posted = datetime.strptime(j.get("posted_date") or "", "%B %d, %Y").replace(tzinfo=UTC)
                 except ValueError:
                     posted = None
                 location = j.get("normalized_location") or j.get("location") or ""

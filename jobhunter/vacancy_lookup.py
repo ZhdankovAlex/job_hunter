@@ -12,8 +12,8 @@ from urllib.parse import urlsplit
 
 from . import config
 from .http import FetchError, Http, HttpClient
-from .models import html_to_text
 from .keys import norm_url
+from .models import html_to_text
 
 _JSONLD_RX = re.compile(r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>', re.S | re.I)
 _TITLE_RX = re.compile(r"<title[^>]*>(.*?)</title>", re.S | re.I)

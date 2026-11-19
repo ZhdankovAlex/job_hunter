@@ -6,7 +6,7 @@ import argparse
 import builtins
 import json
 import pathlib
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -20,7 +20,7 @@ BOARD = "https://boards-api.greenhouse.io/v1/boards/acme/jobs"
 
 
 def _board() -> str:
-    posted = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    posted = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     jobs = [
         {"title": "Senior Python Developer", "absolute_url": "https://example.com/jobs/1",
          "location": {"name": "Remote"}, "first_published": posted,
