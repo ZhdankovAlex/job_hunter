@@ -3,6 +3,7 @@
 __pycache__/
 *.pyc
 .coverage
+coverage.xml
 htmlcov/
 
 # run data: vacancies, reports, mail cache, tokens

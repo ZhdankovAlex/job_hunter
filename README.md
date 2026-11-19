@@ -3,7 +3,9 @@
 [![CI](https://github.com/ZhdankovAlex/job_hunter/actions/workflows/ci.yml/badge.svg)](https://github.com/ZhdankovAlex/job_hunter/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 [![Checked with mypy](https://img.shields.io/badge/mypy-checked-2a6db2)](https://mypy-lang.org/)
+[![codecov](https://codecov.io/gh/ZhdankovAlex/job_hunter/graph/badge.svg)](https://codecov.io/gh/ZhdankovAlex/job_hunter)
 [![Ruff](https://img.shields.io/badge/lint-ruff-261230)](https://github.com/astral-sh/ruff)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://pre-commit.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 A self-hosted job search assistant with a local web UI. Every day it collects vacancies from public

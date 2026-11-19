@@ -1,0 +1,14 @@
+# Codecov: the coverage of the whole project may not drop by more than 1% in a PR;
+# the coverage of the changed lines (patch) is shown in the PR but does not fail it.
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        informational: true
+comment:
+  layout: "diff, files"
+  require_changes: false

@@ -32,4 +32,16 @@ jobs:
       - name: Types (mypy)
         run: mypy
       - name: Tests (pytest) with coverage
-        run: pytest -q --cov
+        run: pytest -q --cov --cov-report=term --cov-report=xml
+      # the per-module coverage table goes to the run page (Summary); the floor was checked by the step above
+      - name: Coverage in the run summary
+        if: ${{ !cancelled() }}
+        run: coverage report --format=markdown --fail-under=0 >> "$GITHUB_STEP_SUMMARY"
+      # history, per-file view and a comment on every PR; without the CODECOV_TOKEN secret it only warns
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          fail_ci_if_error: false
