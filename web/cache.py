@@ -6,6 +6,7 @@ changed — recompute.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import threading
 from collections.abc import Callable
@@ -24,10 +25,8 @@ def cached(name: str, key: list[Any], compute: Callable[[], Any]) -> Any:
     key = json.loads(json.dumps(key, default=str))  # tuple -> list, Path -> str: comparable with what was read from disk
     with _cache_lock:
         if not _memory_cache and WEB_CACHE_FILE.exists():
-            try:
+            with contextlib.suppress(ValueError):
                 _memory_cache.update(json.loads(WEB_CACHE_FILE.read_text(encoding="utf-8")))
-            except ValueError:
-                pass
         entry = _memory_cache.get(name)
         if entry and entry.get("key") == key:
             return entry["value"]

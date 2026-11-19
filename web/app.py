@@ -11,8 +11,10 @@ import os
 import re
 import sys
 import threading
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
@@ -21,11 +23,20 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Stre
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.responses import Response
-from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any
 
-
-from jobhunter import config, cover_letter, coverage, cvgen, industry, interview_prep, manual_apps, market_check, progress, relevance, vacancy_lookup
+from jobhunter import (
+    config,
+    cover_letter,
+    coverage,
+    cvgen,
+    industry,
+    interview_prep,
+    manual_apps,
+    market_check,
+    progress,
+    relevance,
+    vacancy_lookup,
+)
 from jobhunter.models import norm_name
 from web import cache
 from web.models import (
@@ -35,7 +46,6 @@ from web.models import (
     CoverRequest,
     CvRequest,
     CvResult,
-    errors,
     MarketReport,
     NewSkill,
     Report,
@@ -45,6 +55,7 @@ from web.models import (
     SkillsReport,
     SkipRequest,
     SourcesReport,
+    errors,
 )
 from web.runner import Runner, daily_scheduler
 

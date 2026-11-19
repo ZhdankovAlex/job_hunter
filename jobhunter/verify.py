@@ -13,8 +13,7 @@ from __future__ import annotations
 
 import re
 
-from . import config as c
-from . import geo
+from . import config as c, geo
 from .stack import language_mismatch_text
 
 MIN_TEXT_CHARS = 400  # shorter — we assume there is no vacancy text

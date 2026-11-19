@@ -47,12 +47,12 @@ def test_unreachable_host_is_skipped(client):
 
 def test_success_resets_and_other_hosts_unaffected(client):
     state = {"fail": True}
-    h, session = client(lambda url: requests.ConnectTimeout("x") if "lever" in url and state["fail"] else 200)
+    h, _session = client(lambda url: requests.ConnectTimeout("x") if "lever" in url and state["fail"] else 200)
     with pytest.raises(http_mod.FetchError):
         h.get("https://api.lever.co/v0/postings/a")
     assert h.get("https://ok.example/jobs").status_code == 200
     state["fail"] = False
     assert h.get("https://api.lever.co/v0/postings/b").status_code == 200  # back up — the counter is reset
     state["fail"] = True
-    with pytest.raises(http_mod.FetchError, match="timed out|ConnectTimeout|x"):
+    with pytest.raises(http_mod.FetchError, match=r"timed out|ConnectTimeout|x"):
         h.get("https://api.lever.co/v0/postings/c")  # the first failure in a row again — not turned off yet

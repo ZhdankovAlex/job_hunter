@@ -3,15 +3,14 @@ import html
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from . import config as c
-from . import filters, geo, language, progress
-from .verify import ABROAD_OK_RX, HIDE_RUSSIA_ONLY, ru_only
+from . import config as c, filters, geo, language, progress
 from .http import FetchError, HttpClient
-from .models import parse_date
 from .keys import company_key
+from .models import parse_date
+from .verify import ABROAD_OK_RX, HIDE_RUSSIA_ONLY, ru_only
 
 log = logging.getLogger(__name__)
 
@@ -660,7 +659,7 @@ def _check_aggregator_link(http: HttpClient, job):
 
 def collect(http: HttpClient):
     """-> (vacancies, list of channels that could not be read)."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=c.TELEGRAM_MAX_AGE_DAYS)
+    cutoff = datetime.now(UTC) - timedelta(days=c.TELEGRAM_MAX_AGE_DAYS)
     jobs: dict = {}
     failed = []
     for channel in c.TELEGRAM_CHANNELS:

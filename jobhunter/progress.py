@@ -13,6 +13,7 @@ without passing an object: if there is no run with progress, the calls do nothin
 """
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import logging
@@ -60,7 +61,7 @@ BAR_WIDTH = 24
 PENDING, RUNNING, DONE, FAILED, SKIPPED = "pending", "running", "done", "failed", "skipped"
 _ICONS = {PENDING: "·", RUNNING: "▶", DONE: "✔", FAILED: "✖", SKIPPED: "–"}
 
-_current: "Pipeline | None" = None
+_current: Pipeline | None = None
 
 
 def _now() -> str:
@@ -104,10 +105,8 @@ class Pipeline:
                        for k, t in stages]
         self._skip_keys: set[str] = set()
         self._control_read = 0.0
-        try:  # requests made to a previous run do not apply to this one
+        with contextlib.suppress(OSError):  # requests made to a previous run do not apply to this one
             CONTROL_FILE.unlink(missing_ok=True)
-        except OSError:
-            pass
         self.counters: dict[str, int] = {}
         self.tallies: dict[str, dict[str, int]] = {}  # breakdowns: reject reasons, vacancies by source
         self.events: list[dict] = []  # run feed: what was found, what was rejected (all stages, up to MAX_EVENTS)
@@ -256,10 +255,8 @@ class Pipeline:
         runs = history.setdefault(self.script, [])
         runs.append({"finished": _now(), "total": int(time.time() - self.started), "stages": durations})
         del runs[:-HISTORY_RUNS]
-        try:
+        with contextlib.suppress(OSError):
             HISTORY_FILE.write_text(json.dumps(history, ensure_ascii=False, indent=1), encoding="utf-8")
-        except OSError:
-            pass
 
     # --- output -----------------------------------------------------------------------------
 
@@ -376,10 +373,8 @@ def rotate_errors_log() -> None:
 
     if os.environ.get(CONTINUE_RUN_ENV) or not config.ERRORS_LOG.exists():
         return
-    try:
+    with contextlib.suppress(OSError):  # another process holds the file — keep writing to the old one
         os.replace(config.ERRORS_LOG, config.ERRORS_LOG_PREV)
-    except OSError:  # another process holds the file — keep writing to the old one
-        pass
 
 
 class _ErrorCollector(logging.Handler):

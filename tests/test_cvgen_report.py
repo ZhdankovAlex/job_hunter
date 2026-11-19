@@ -1,6 +1,6 @@
 """A CV for a vacancy (cvgen, base — cv/base.example.toml) and building the report (report, html_report)."""
 import re
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -102,7 +102,7 @@ def test_slug():
 
 def job(title, company="Acme", **kw):
     return Job(company=company, title=title, location="Remote", url=f"https://{company.lower()}.example/{title}",
-               source="test", posted=datetime(2026, 11, 10, tzinfo=timezone.utc),
+               source="test", posted=datetime(2026, 11, 10, tzinfo=UTC),
                description="Python, PostgreSQL", **kw)
 
 

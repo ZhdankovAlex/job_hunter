@@ -13,12 +13,12 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from email.utils import parseaddr
 
 from . import config, geo, progress
-from .models import html_to_text
 from .keys import company_key
+from .models import html_to_text
 
 log = logging.getLogger(__name__)
 
@@ -328,7 +328,7 @@ def save_sync(error: str = "") -> None:
     """Remembers how the mail update ended: on success — the time, on error — its text."""
     state = _read_sync()
     if not error:
-        state["ok_at"] = datetime.now(timezone.utc).isoformat()
+        state["ok_at"] = datetime.now(UTC).isoformat()
     state["error"] = error
     config.MAIL_SYNC_FILE.parent.mkdir(exist_ok=True)
     config.MAIL_SYNC_FILE.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
@@ -343,7 +343,7 @@ def stale_warning() -> str:
         return f"Mail was not updated, {since}: {state['error']}. Run applications.py"
     if not ok_at:
         return "Mail has not been updated yet: run applications.py"
-    if (datetime.now(timezone.utc) - ok_at).total_seconds() > SYNC_STALE_HOURS * 3600:
+    if (datetime.now(UTC) - ok_at).total_seconds() > SYNC_STALE_HOURS * 3600:
         return f"Mail has not been updated for a long time, {since}. Run applications.py"
     return ""
 
@@ -520,15 +520,15 @@ def summarize(messages: list[dict]) -> tuple[list[Application], list[dict]]:
         if kind == OFFER and re.search(r"inmail|hit-reply@linkedin", sender, re.I):
             kind = APPLIED  # "JOB OFFER AT X" in a LinkedIn InMail is a recruiter writing first, not an offer
         company = company_of(sender, subject, body)
-        when = datetime.fromtimestamp(msg["date"], tz=timezone.utc)
+        when = datetime.fromtimestamp(msg["date"], tz=UTC)
         if not company:
             if kind != OTHER:
                 unknown.append({**msg, "kind": kind})
             continue
-        if kind == OTHER and ATS_DOMAINS_RX.search(sender) is None and FREE_MAIL_RX.search(sender) is None:
-            # an ordinary letter from a corporate domain with no sign of an application — most likely not about hiring
-            if not re.search(r"recruit|talent|hiring|career|hr\b|people|подбор|рекрут", sender, re.I):
-                continue
+        # an ordinary letter from a corporate domain with no sign of an application — most likely not about hiring
+        if (kind == OTHER and ATS_DOMAINS_RX.search(sender) is None and FREE_MAIL_RX.search(sender) is None
+                and not re.search(r"recruit|talent|hiring|career|hr\b|people|подбор|рекрут", sender, re.I)):
+            continue
         _add_event(apps, company, Event(when, kind, subject, sender, msg["thread"]))
     for company, event in manual_events():
         _add_event(apps, company, event)

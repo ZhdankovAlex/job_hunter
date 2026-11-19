@@ -6,7 +6,7 @@ settings.example.toml with test values (home country, relocation countries), see
 """
 import os
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -85,7 +85,7 @@ if TYPE_CHECKING:  # mypy checks the fake against the sources' protocol: a diver
 
 @pytest.fixture
 def now():
-    return datetime(2026, 11, 12, 12, 0, tzinfo=timezone.utc)
+    return datetime(2026, 11, 12, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture

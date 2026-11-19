@@ -11,8 +11,7 @@ import logging
 import re
 from collections.abc import Iterator
 
-from . import config as c
-from . import filters
+from . import config as c, filters
 from .http import FetchError, HttpClient
 from .models import Job, html_to_text, parse_date
 
@@ -805,6 +804,6 @@ def career_page(http: HttpClient, company, url: str, location: str = "", links: 
 
 
 # --- Big companies (jobhunter/bigtech.py): Microsoft, Workday sites, Oracle, Amazon ----
-from .bigtech import SOURCES as BIGTECH_SOURCES  # noqa: E402
+from .bigtech import SOURCES as BIGTECH_SOURCES
 
 SOURCES.update(BIGTECH_SOURCES)

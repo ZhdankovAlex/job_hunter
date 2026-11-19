@@ -21,10 +21,17 @@ line-length = 120
 extend-exclude = ["cv_out", "reports", "state"]
 
 [tool.ruff.lint]
-# only what catches real bugs: syntax, pyflakes, bugbear
-select = ["E9", "F", "B"]
-# raise without from and zip without strict are not bugs in this code
-ignore = ["B904", "B905"]
+# syntax, pyflakes, bugbear catch real bugs; I, UP, SIM, RUF keep imports sorted, the syntax modern,
+# branches lean, and catch traps (mutable class attributes, unused noqa)
+select = ["E9", "F", "B", "I", "UP", "SIM", "RUF"]
+ignore = [
+    "B904", "B905",  # raise without from and zip without strict are not bugs in this code
+    "RUF001", "RUF002", "RUF003",  # "ambiguous characters": Cyrillic, "—" and "…" in the project's texts are fine
+    "SIM905",  # long word lists read better as "a b c".split() than as a line of literals
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
 
 [tool.mypy]
 # third-party packages without stubs do not fail the check

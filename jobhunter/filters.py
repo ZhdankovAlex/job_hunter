@@ -1,7 +1,6 @@
 """Vacancy selection: keywords, location, primary language."""
 
-from . import config as c
-from . import geo, language, verify
+from . import config as c, geo, language, verify
 from .stack import language_mismatch_text
 
 
