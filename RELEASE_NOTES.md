@@ -4,6 +4,15 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-19
 
+### CI: coverage table in the run summary, Codecov, coverage and pre-commit badges (#22)
+
+- ci.yml: the per-module coverage table goes to the summary of every run (Actions → the run → Summary); coverage.xml is uploaded to Codecov (history, per-file view, a comment on each PR); without the CODECOV_TOKEN secret the upload only warns and does not fail CI
+- codecov.yml: the project total may not drop by more than 1% in a PR; patch coverage is informational
+- README: Codecov and pre-commit badges; .gitignore: coverage.xml
+- docs: testing.md — where to see coverage
+
+<sub>b2a5331</sub>
+
 ### Tests for sources and run progress, 3 bugs in parsing and logging, coverage floor 77% (#21)
 
 - New tests (299 → 355, coverage 70% → 79.8%): progress — stages, skipping by the button, warnings with their group, history and ETA; sites — boards and sites (Next.js, turbo-stream, SSR, JSON-LD, RSS); aggregators and bigtech — pagination, the order of opening vacancies, broken answers
