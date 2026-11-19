@@ -4,6 +4,14 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-19
 
+### Docs: how the project is developed with Claude Code, CLAUDE.md with the working rules (#18)
+
+- CLAUDE.md: the rules every Claude Code session gets — hard limits (nothing is sent out, no LinkedIn automation, robots.txt and 1 request per second via jobhunter/http.py), checks, tests without network and personal files, documentation in the same commit
+- docs/claude-code.md: what lives where, what CLAUDE.md covers, the project skills, both hooks and how to bypass the protection, built-in skills and subagents, why there are so few hooks and skills
+- docs: links from README.md and architecture.md; configuration.md names CLAUDE.md, the skills and the hooks
+
+<sub>f25a6f0</sub>
+
 ### Claude Code hooks: ruff and mypy at the end of a turn, personal file protection, a READY / NOT READY report in /prep-commit (#17)
 
 - Stop hook (.claude/hooks/stop_check.py): ruff check and mypy only on the changed and new .py files (git diff HEAD plus untracked), mypy within [tool.mypy] files. Errors go back to the agent, which fixes them before finishing the turn; no errors, no output. pytest is not run, it is too slow
