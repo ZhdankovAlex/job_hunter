@@ -4,6 +4,17 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-19
 
+### Claude Code hooks: ruff and mypy at the end of a turn, personal file protection, a READY / NOT READY report in /prep-commit (#17)
+
+- Stop hook (.claude/hooks/stop_check.py): ruff check and mypy only on the changed and new .py files (git diff HEAD plus untracked), mypy within [tool.mypy] files. Errors go back to the agent, which fixes them before finishing the turn; no errors, no output. pytest is not run, it is too slow
+- PreToolUse hook on Write/Edit (.claude/hooks/protect_files.py): writes into settings.toml, cv/base.toml, applications_manual.toml, profile.toml and companies.txt are denied with an explanation; the *.example.* files stay editable. If the user asked for the edit, the marker state/allow_protected_edit lifts the block for an hour
+- The hook command finds the interpreter in .venv/bin (Linux, macOS) or .venv/Scripts (Windows)
+- /prep-commit: the checks are a PASS/FAIL table (tests, ruff, mypy, a secrets scan, extra files in the diff) and a READY / NOT READY verdict; no message draft while NOT READY
+- mypy also checks the hook scripts; tests/test_claude_hooks.py covers both hooks on a temporary git repo, without network
+- docs: testing.md — the new test file
+
+<sub>6a4acdf</sub>
+
 ### CV match: "except Django" and industry labels are not requirements, Russian scrapers, the employer instead of the career site (#16)
 
 - cv_match: a technology after "except", "excluding", "other than", "not" (or Russian «кроме», «за исключением») in the same part of a sentence is not a requirement. Was: "any framework except django" put Django among the gaps and lowered Fit. Russian «не» and «без» are not negations: «не менее 3 лет Python» still requires Python
