@@ -50,6 +50,9 @@ after `pytest`, `git status` is clean.
 | `tests/test_http.py` | A host that does not respond is skipped until the end of the run; success resets the counter |
 | `tests/test_claude_hooks.py` | Claude Code hooks (`.claude/hooks`): writes into personal files are denied, `*.example.*` files are not, the allow marker works for an hour; ruff and mypy only on the changed files of a temporary git repo, silence when there are no errors |
 | `tests/test_release_notes.py` | `RELEASE_NOTES.md` from the git history: grouping by day, bot commits are skipped |
+| `tests/test_progress.py` | Run state: stages in order, skipping a stage with the button (only this pid and only a skippable stage), log warnings with the action / code / site group and caps, a second run in the same process, stage-duration history and ETA, the status line and `watch`, `errors.log` rotation |
+| `tests/test_sites_boards.py` | Boards and sites from `sites.py`: pagination and errors (a stub page instead of JSON keeps what was collected), Aiven turbo-stream, Habr Career SSR, the Next.js data stream (justjoin.it, remote.com), `__NEXT_DATA__`, JSON-LD (hirehi, `manual_jobs`), Cryptocurrency Jobs RSS, relocate.me, 01.tech |
+| `tests/test_aggregators_bigtech.py` | Arbeitnow, Remote OK, Himalayas (pages, salary range, errors); Microsoft, Workday (search by POST), Oracle, Amazon: the order of opening vacancies (home country → remote → Europe → freshest), the details limit, duplicates, broken answers |
 
 Letters and pages in the tests are made up, but they repeat wordings the program once got wrong. Found a new
 bug — first add an example that shows it, then fix it.
@@ -101,6 +104,8 @@ Reads go the same way: `-k "read_only and companies"`.
 ## Writing a new test
 
 - Network — through `FakeHttp` from `tests/conftest.py`: URL → response text, every request is recorded in `.calls`.
+  When the answer depends on the query parameters or a POST is needed (paginated APIs, Workday) — `RouteHttp`:
+  `route(method, url, params_or_json)` returns the text, `(code, text)` or `None` (404).
 - Saved pages go to `tests/fixtures/` and are read with `fixture_text("name")`. Only anonymised ones: no real
   letters, recruiter names or addresses.
 - Time — the `now` and `at(days)` fixtures, not `datetime.now()`.
@@ -121,7 +126,7 @@ in texts are normal for the project), and so is `SIM905` (long word lists read b
 list of literals). The formatter (`ruff format`) is not enabled.
 
 Coverage is measured for `jobhunter` and `web` (`[tool.coverage]` in `pyproject.toml`); the run fails below
-`fail_under` (68%, just under the current total of 70%). Raise the floor when tests are added. Locally, with the
+`fail_under` (77%, just under the current total of 79.8%). Raise the floor when tests are added. Locally, with the
 list of uncovered lines:
 
 ```bash
