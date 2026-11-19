@@ -136,6 +136,22 @@ def test_second_run_in_same_process_keeps_first_warning(state):
     assert first.errors == []
 
 
+def test_exception_keeps_traceback(state):
+    """log.exception — the entry has a traceback that can be expanded on the Pipeline page."""
+    p = progress.Pipeline("main", STAGES)
+    log = logging.getLogger("jobhunter.test")
+    try:
+        raise AttributeError("'Job' object has no attribute 'text'")
+    except AttributeError:
+        log.exception("Run aborted")
+    log.warning("no exception")
+    crash, plain = p.errors
+    assert crash["message"] == "Run aborted"
+    assert crash["trace"].startswith("Traceback")
+    assert "AttributeError: 'Job' object has no attribute 'text'" in crash["trace"]
+    assert "trace" not in plain
+
+
 def test_errors_and_events_are_capped(state, monkeypatch):
     monkeypatch.setattr(progress, "MAX_ERRORS", 3)
     monkeypatch.setattr(progress, "MAX_EVENTS", 2)

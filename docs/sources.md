@@ -80,7 +80,7 @@ parameters are in `settings.toml` → `[freehire]`.
 
 ## Large companies
 
-`jobhunter/bigtech.py` (settings in `[bigtech]`): Microsoft, Workday sites (NVIDIA, Salesforce, Adobe, …),
+`jobhunter/bigtech.py` (settings in `[bigtech]`): Microsoft, Workday sites (NVIDIA, Salesforce, Adobe, Circle, …),
 Oracle Recruiting Cloud and Amazon. The search uses the sites' own JSON endpoints with `queries`; the full
 text is opened only for vacancies with a matching title, at most `details_per_company` per company (home
 country and remote first, then the freshest). Large companies rarely mention relocation in the text, so their

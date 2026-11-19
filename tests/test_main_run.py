@@ -100,3 +100,18 @@ def test_run_offline(isolated, monkeypatch):
     html = (tmp_path / "reports" / "latest.html").read_text(encoding="utf-8")
     assert "Senior Python Developer" in html and "Office Manager" not in html
     assert (tmp_path / "reports" / f"jobs_{day}.md").exists()
+
+
+def test_run_job_without_description(isolated):
+    """A vacancy with an empty description does not crash the run: Job has no `text` field (only TG vacancies do)."""
+    tmp_path, http = isolated
+    board = json.loads(_board())
+    board["jobs"][0]["content"] = ""
+    http.pages[BOARD] = json.dumps(board)
+    args = argparse.Namespace(only="", limit=None, rediscover=False, no_aggregators=True, no_freehire=True,
+                              no_telegram=True, no_applied=True)
+
+    main.run(args)
+
+    jobs = json.loads((tmp_path / "state" / "jobs_latest.json").read_text(encoding="utf-8"))
+    assert [j["title"] for j in jobs] == ["Senior Python Developer"]

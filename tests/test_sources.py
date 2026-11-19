@@ -47,6 +47,16 @@ def test_career_page_without_prefix_keeps_old_behaviour():
     assert "https://globex.example/hire-python-developers-in-48-hours/" in http.calls
 
 
+def test_career_page_skips_malformed_link():
+    """A link with the host in brackets (http://['website']/) makes urljoin raise ValueError; skip only that link."""
+    base = "https://acme.example/careers/"
+    page = ('<a href="http://[\'website\']/">Python Developer</a>'
+            '<a href="/careers/backend-python/">Senior Backend Engineer (Python)</a>')
+    http = FakeHttp({base: page, base + "backend-python/": fixture_text("career_job.html")})
+    jobs = sites.career_page(http, SimpleNamespace(name="Acme", score=1, note=""), base, "Remote")
+    assert [j.url for j in jobs] == [base + "backend-python/"]
+
+
 def test_teamtailor_rss():
     jobs = list(ats._teamtailor(fixture_text("teamtailor.rss"), "Initech"))
     assert [j.title for j in jobs] == ["Python Developer", "Office Manager"]

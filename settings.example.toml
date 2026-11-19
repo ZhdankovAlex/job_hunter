@@ -175,6 +175,7 @@ workday = [
     ["NVIDIA", "nvidia.wd5", "nvidia", "NVIDIAExternalCareerSite"],
     ["Salesforce", "salesforce.wd12", "salesforce", "External_Career_Site"],
     ["Adobe", "adobe.wd5", "adobe", "external_experienced"],
+    ["Circle", "circle.wd1", "circle", "Circle"],
 ]
 
 # --- Single vacancies found by hand (sites.manual_jobs): opened on every run -----------------

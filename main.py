@@ -625,7 +625,7 @@ def _stage_scoring(ctx: RunContext) -> None:
         cv.analyze(job, job.text)
     for job in ctx.reported:
         job.tier = tiers.tier(job)
-        job.industries = industry.classify(job.company, job.title, getattr(job, "description", "") or job.text)
+        job.industries = industry.classify(job.company, job.title, getattr(job, "description", "") or getattr(job, "text", ""))
 
     profile = ctx.profile = Profile()
     for job in ctx.fresh:

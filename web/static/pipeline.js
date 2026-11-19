@@ -111,7 +111,9 @@ function render(d) {
     box.hidden = !items.length;
     box.querySelector('[data-count]').textContent = items.length || '';
     box.querySelector('.errors').innerHTML = items.slice().reverse().map(e =>
-      `<li><time>${e.time.slice(11, 19)}</time> <b>${esc(e.level)}</b> ${esc(e.message)}</li>`).join('');
+      `<li><time>${e.time.slice(11, 19)}</time> <b>${esc(e.level)}</b> ${esc(e.message)}` +
+      (e.trace ? `<details class="trace"><summary>details</summary><pre>${esc(e.trace)}</pre></details>` : '') +
+      '</li>').join('');
   });
 }
 
