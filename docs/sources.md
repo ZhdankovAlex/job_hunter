@@ -76,6 +76,11 @@ parameters are in `settings.toml` → `[freehire]`.
 - Company sites without a public ATS, as examples of adapters: Aiven (`aiven.io/careers/job.data`), Bolt, fin.dev,
   Gurtam, Rivian and Paychex (iCIMS Jibe JSON), 01.tech (disabled by default — remove a name from `[sources].disabled`
   to use it).
+  - Uzum (`uzum`) — Next.js on top of Huntflow; `/api/` is disallowed by `robots.txt`, so the list and job texts
+    come from the page data stream (`_next_payload`): `?page=N` returns the first 15·N jobs (`_UZUM_PAGE`) in one
+    response, and job pages are not opened.
+  - Yango (`yango`) — JSON `yango.com/career/api/publications`, 5 jobs per response; the `next` field points to an
+    internal host, so only its `cursor` is used. Job text comes from `/career/vacancy/<id>`.
 - Any source from `sites.SOURCES` can be switched off by name in `settings.toml` → `[sources].disabled`.
 
 ## Large companies
