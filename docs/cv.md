@@ -20,7 +20,7 @@ Then: `pin` — always; the rest by score, from 5 to `bullets_max`. The headline
 roles, otherwise backend; summary = intro + 2–3 best achievements + closing; skills — what the vacancy has plus
 `always` (at least 3 per group), the AI / LLM group only for AI roles. **Projects** (`[[projects]]` in the
 base) — pet projects after experience, only when the vacancy has a topic from the project's `requires`: e.g.
-`scraping` (ATS, scrapers, crawlers, job boards). Other CVs, AI roles included, and the base CVs have no pet
+`scraping` (ATS, scrapers, crawlers, job boards; in Russian vacancies «скраперы», «краулеры», «парсеры сайтов»). Other CVs, AI roles included, and the base CVs have no pet
 project, so it does not mix with work experience; its bullets are picked like experience bullets, up to
 `bullets_max`. The top of the `.md` has a comment: the
 vacancy, Fit %, which key skills are missing, technologies and topics.
@@ -42,7 +42,9 @@ summary — until it fits. The file is `…_1p.pdf`.
   so it works for old reports too.
 - **The CV page** (`/cv`): a link to any vacancy or pasted text. A link not in the reports is read from the page
   (`jobhunter/vacancy_lookup.py`: robots.txt, 1 request/s; the text comes from `JobPosting` markup, else the whole
-  page). For LinkedIn and pages that render the vacancy with scripts, paste the text. Next to the result: "why
+  page). If `JobPosting` names the career site instead of the employer ("Career Hub", "Careers") or is empty, the
+  company comes from the domain: `career.acme.inc` → Acme. For LinkedIn and pages that render the vacancy with
+  scripts, paste the text. Next to the result: "why
   these bullets" (score, technologies, topics, similarity) and which key skills the CV lacks.
 - **API:** `POST /api/cv` (`url`, `date`, `text`, `company`, `title`, `one_page`), `GET /api/cv`.
 - **Command line:**

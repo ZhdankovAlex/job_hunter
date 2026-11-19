@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+from urllib.parse import urlsplit
 
 from . import config
 from .http import FetchError, Http, HttpClient
@@ -16,6 +17,16 @@ from .keys import norm_url
 
 _JSONLD_RX = re.compile(r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>', re.S | re.I)
 _TITLE_RX = re.compile(r"<title[^>]*>(.*?)</title>", re.S | re.I)
+# hiringOrganization that names the career site instead of the employer ("Career Hub"), or is empty
+_PLATFORM_NAME_RX = re.compile(r"(?:career|job|talent)s?(?:\s*(?:hub|portal|site|page|board))?|", re.I)
+_HOST_PREFIXES = {"www", "career", "careers", "jobs", "job", "apply", "hr", "talent", "hire", "work"}
+
+
+def _company_from_host(url: str) -> str:
+    """The company from the domain: career.acme.inc → "Acme" (career-site subdomains and the zone are dropped)."""
+    labels = (urlsplit(url).hostname or "").split(".")[:-1]
+    name = next((label for label in labels if label not in _HOST_PREFIXES), "")
+    return name.capitalize()
 
 
 class VacancyNotFound(Exception):
@@ -77,6 +88,8 @@ def fetch(url: str, http: HttpClient | None = None) -> dict:
     if posting:
         org = posting.get("hiringOrganization") or {}
         company = org.get("name", "") if isinstance(org, dict) else str(org)
+        if _PLATFORM_NAME_RX.fullmatch(company.strip()):
+            company = _company_from_host(url)
         text = html_to_text(posting.get("description", ""))
         title = posting.get("title", "")
     else:

@@ -47,7 +47,13 @@ TOPICS = {
     "integrations": r"integrat|third[\s-]party|partners?",
     # the pet-project topic (projects section): job search, ATS, collecting data from websites
     "scraping": r"scrap(?:e|er|ers|ing)\b|crawl|\bats\b|applicant tracking|job boards?|hr[\s-]?tech"
-                r"|talent acquisition|data extraction",
+                r"|talent acquisition|data extraction"
+                # Russian vacancies: «скраперы» / «скрапперы» (scrapers), «краулеры» (crawlers), «парсеры сайтов»
+                # (website parsers). A bare «парсер» is often about JSON or logs, so only together with sites and
+                # pages. Word endings have a length limit: «\w*\s+» on a long word without spaces backtracked
+                # from every position, O(n²)
+                r"|скрап+(?:ер|инг)|краул|парс(?:ер|инг|ить)[а-яё]{0,3}\s(?:[а-яё]{1,15}\s)?(?:сайт|страниц|веб)"
+                r"|сбор данных с сайт",
 }
 _TOPIC_RX = {name: re.compile(rx, re.I) for name, rx in TOPICS.items()}
 # always in the technology line under a workplace

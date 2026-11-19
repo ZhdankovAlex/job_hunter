@@ -63,11 +63,22 @@ def test_project_only_for_scraping_vacancies(base):
     assert "## Projects" in short and "Property-based" not in short  # one-page: a single bullet
 
 
-def test_topic_regexes_linear_on_long_text():
+@pytest.mark.parametrize("text", ["a" * 100_000, "парсер" * 20_000, "скрапер" * 15_000])
+def test_topic_regexes_linear_on_long_text(text):
+    """A 100 KB word without spaces: «парс\\w*\\s+» backtracked from every position — O(n²), 18 s."""
     import time
     start = time.perf_counter()
-    cvgen.Vacancy("x", "a" * 100_000)
+    cvgen.Vacancy("x", text)
     assert time.perf_counter() - start < 1
+
+
+@pytest.mark.parametrize("text", [
+    "Будет плюсом опыт написания скрапперов.", "Опыт разработки скраперов и краулеров.",
+    "Писали парсеры сайтов вакансий.",
+])
+def test_scraping_topic_in_russian(text):
+    """A Russian vacancy about scrapers (including the double-«п» spelling) gets the scraping topic and Projects."""
+    assert "scraping" in cvgen.Vacancy("Python-разработчик", text).topics
 
 
 def test_markdown_to_html(base):
