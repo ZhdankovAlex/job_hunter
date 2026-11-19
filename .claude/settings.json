@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py=\"$CLAUDE_PROJECT_DIR/.venv/bin/python\"; [ -x \"$py\" ] || py=\"$CLAUDE_PROJECT_DIR/.venv/Scripts/python.exe\"; \"$py\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect_files.py\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py=\"$CLAUDE_PROJECT_DIR/.venv/bin/python\"; [ -x \"$py\" ] || py=\"$CLAUDE_PROJECT_DIR/.venv/Scripts/python.exe\"; \"$py\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop_check.py\"",
+            "timeout": 180
+          }
+        ]
+      }
+    ]
+  }
+}

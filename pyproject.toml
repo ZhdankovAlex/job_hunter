@@ -29,7 +29,7 @@ ignore = ["B904", "B905"]
 [tool.mypy]
 # third-party packages without stubs do not fail the check
 python_version = "3.11"
-files = ["jobhunter", "web", "main.py", "cvgen.py", "tests/conftest.py"]
+files = ["jobhunter", "web", "main.py", "cvgen.py", "tests/conftest.py", ".claude/hooks"]
 ignore_missing_imports = true
 plugins = ["pydantic.mypy"]
 warn_unused_ignores = true

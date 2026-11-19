@@ -48,6 +48,7 @@ after `pytest`, `git status` is clean.
 | `tests/test_main_run.py` | The whole `main.run` without network: one company on Greenhouse via `FakeHttp`, the order of stages, reports and the vacancies JSON; a write outside `tmp_path` fails the test |
 | `tests/test_web.py` | Web UI pages open on empty data; the "Skills" cache; reports are served with `Cache-Control: no-cache` |
 | `tests/test_http.py` | A host that does not respond is skipped until the end of the run; success resets the counter |
+| `tests/test_claude_hooks.py` | Claude Code hooks (`.claude/hooks`): writes into personal files are denied, `*.example.*` files are not, the allow marker works for an hour; ruff and mypy only on the changed files of a temporary git repo, silence when there are no errors |
 | `tests/test_release_notes.py` | `RELEASE_NOTES.md` from the git history: grouping by day, bot commits are skipped |
 
 Letters and pages in the tests are made up, but they repeat wordings the program once got wrong. Found a new
