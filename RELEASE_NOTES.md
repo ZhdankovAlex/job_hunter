@@ -4,6 +4,21 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-19
 
+### Report: report.render and html_report.render split into functions (#25)
+
+Covers the new report._split / _appendix / _summary and html_report helpers: priority overflow, relocation, staffing, local language, rejected before, Telegram, must_report / referral, freehire, salary.
+
+---------
+
+- Report: report.render and html_report.render split into functions
+- report.render: sorting vacancies into sections (`_split`), the header, the appendix, the summary, companies, freehire and salary lines are separate functions; complexity of render 86 → 1
+- html_report.render: the main table row, the vacancy link, rejected before, dropped, staffing, skill gaps and the filter buttons are separate functions; complexity 58 → 16
+- Behaviour unchanged: the Markdown and HTML output is byte-for-byte the same as before on a snapshot of 120 synthetic vacancies, 20 Telegram posts and every section (with / without Telegram, empty report)
+- docs: architecture.md — "Known debt": the most complex functions now are `report._table` (22), `report._new_section` (21), `cvgen.build_markdown` (53), `market_check.advice` (40), `relevance.Profile.score` (38)
+- Tests for every report section and the summary
+
+<sub>2630337</sub>
+
 ### Traceback of errors on the Pipeline page, 2 run bugs, Circle via Workday (#24)
 
 - Pipeline: an error with an exception gets "details" with the traceback (the `trace` field in progress.json, the last 8000 characters), no need to look for it in errors.log
