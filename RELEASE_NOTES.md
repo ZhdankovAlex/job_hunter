@@ -4,6 +4,16 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-19
 
+### Traceback of errors on the Pipeline page, 2 run bugs, Circle via Workday (#24)
+
+- Pipeline: an error with an exception gets "details" with the traceback (the `trace` field in progress.json, the last 8000 characters), no need to look for it in errors.log
+- The run crashed at the scoring stage: for a vacancy with an empty description the industry was computed from `job.text`, a field only Telegram vacancies have (AttributeError)
+- A career page was skipped entirely because of one malformed link (`http://['website']/`): urljoin raised ValueError; now only that link is skipped
+- settings.example.toml: Circle in the Workday list
+- docs: pipeline.md — the `trace` field, web-ui.md — error details, testing.md — new checks, sources.md — Circle among the Workday sites
+
+<sub>751c5e7</sub>
+
 ### Tests for the HTTP client rules, freehire, mail and vacancy stack, coverage floor 82% (#23)
 
 - New tests (355 → 427, coverage 79.8% → 84.6%): http — robots.txt (`*`, `$`, own group, Crawl-delay, missing file), 1 request per second per host, retries on 5xx, Retry-After, a host turned off after 429, cancellation — on a fake clock and session; stack — the main language from the title and the requirements block; freehire — cache, request limit, ignored_params, pages and duplicates, full texts, finding the filter that zeroes the result; mail — sync freshness, Gmail without network, reading only new messages, OAuth token, manual events
