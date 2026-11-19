@@ -20,6 +20,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.responses import Response
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 
@@ -101,7 +103,7 @@ app.mount("/files/cv_out", StaticFiles(directory=ROOT / "cv_out"), name="cv_out"
 
 
 @app.middleware("http")
-async def no_cache_reports(request: Request, call_next):
+async def no_cache_reports(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
     """Reports are rebuilt under the same name (applications.html after every letter).
 
     Without Cache-Control the browser decides how long to keep a copy, and the "Applications" iframe
@@ -133,7 +135,7 @@ if os.environ.get("JOBHUNTER_DAILY_AT"):
 
 # --- data for the pages ------------------------------------------------------------------------
 
-def progress_payload() -> dict | None:
+def progress_payload() -> dict[str, Any] | None:
     """progress.json + whether the process is alive + ETA of the whole run + the script queue."""
     data = progress.read()
     if data is None:
@@ -146,7 +148,7 @@ def progress_payload() -> dict | None:
     return data
 
 
-def report_list() -> list[dict]:
+def report_list() -> list[dict[str, Any]]:
     """Reports by date, newest first: date, file, size, whether there is a Markdown version."""
     rows: list[dict[str, Any]] = []
     for path in REPORTS.glob("jobs_*.html"):
@@ -159,7 +161,7 @@ def report_list() -> list[dict]:
     return sorted(rows, key=lambda r: r["date"], reverse=True)
 
 
-def sources_payload() -> dict:
+def sources_payload() -> dict[str, Any]:
     """Sources of the last run + Telegram channels + freehire queries from the settings."""
     try:
         sources = json.loads(SOURCES_FILE.read_text(encoding="utf-8"))
@@ -172,7 +174,7 @@ def sources_payload() -> dict:
     rows = [{"name": k, **v, **{f: why.get(k, {}).get(f, "") for f in ("reason", "detail", "checked")}}
             for k, v in sources.items()]
     rows.sort(key=lambda r: (-r["jobs"], r["name"].lower()))
-    kinds: dict[str, dict] = {}
+    kinds: dict[str, dict[str, Any]] = {}
     for r in rows:
         k = kinds.setdefault(r["kind"], {"sources": 0, "jobs": 0, "empty": 0, "errors": 0})
         k["sources"] += 1
@@ -188,10 +190,11 @@ def sources_payload() -> dict:
     }
 
 
-def freehire_queries(settings: dict) -> list[dict]:
+def freehire_queries(settings: dict[str, Any]) -> list[dict[str, Any]]:
     """freehire queries: from state/freehire_latest.json, and before the first run — from settings.toml without results."""
     try:
-        return json.loads(FREEHIRE_FILE.read_text(encoding="utf-8"))
+        queries: list[dict[str, Any]] = json.loads(FREEHIRE_FILE.read_text(encoding="utf-8"))
+        return queries
     except (OSError, ValueError):
         skip = ("name", "title")
         return [{"name": q["name"], "title": q.get("title", q["name"]), "total": None, "fetched": None,
@@ -199,7 +202,7 @@ def freehire_queries(settings: dict) -> list[dict]:
                 for q in settings.get("queries", [])]
 
 
-def recent_cvs(limit: int = 40) -> list[dict]:
+def recent_cvs(limit: int = 40) -> list[dict[str, Any]]:
     """Built CVs (PDFs in cv_out/), newest first."""
     rows: list[dict[str, Any]] = []
     for pdf in (ROOT / "cv_out").rglob("*.pdf"):
@@ -222,7 +225,7 @@ def _static_version() -> str:
     return str(int(max((f.stat().st_mtime for f in (WEB / "static").rglob("*.*")), default=0)))
 
 
-def page(request: Request, name: str, **context) -> HTMLResponse:
+def page(request: Request, name: str, **context: Any) -> HTMLResponse:
     return templates.TemplateResponse(request, f"{name}.html",
                                       {"nav": NAV, "active": name, "v": _static_version(), **context})
 
@@ -230,17 +233,17 @@ def page(request: Request, name: str, **context) -> HTMLResponse:
 # --- pages -------------------------------------------------------------------------------------
 
 @app.get("/", include_in_schema=False)
-def index():
+def index() -> RedirectResponse:
     return RedirectResponse("/pipeline")
 
 
 @app.get("/pipeline", response_class=HTMLResponse, include_in_schema=False)
-def pipeline_page(request: Request):
+def pipeline_page(request: Request) -> HTMLResponse:
     return page(request, "pipeline")
 
 
 @app.get("/reports", response_class=HTMLResponse, include_in_schema=False)
-def reports_page(request: Request, file: str = ""):
+def reports_page(request: Request, file: str = "") -> HTMLResponse:
     reports = report_list()
     if file and not any(r["file"] == file for r in reports):
         raise HTTPException(404, "No such report")
@@ -249,7 +252,7 @@ def reports_page(request: Request, file: str = ""):
 
 
 @app.get("/applications", response_class=HTMLResponse, include_in_schema=False)
-def applications_page(request: Request, company: str = "", title: str = "", url: str = "", kind: str = ""):
+def applications_page(request: Request, company: str = "", title: str = "", url: str = "", kind: str = "") -> HTMLResponse:
     exists = (REPORTS / "applications.html").exists()
     prefill = {"company": company, "title": title, "url": url, "kind": kind or ("applied" if url else "")}
     return page(request, "applications", exists=exists, prefill=prefill, kinds=manual_apps.KINDS,
@@ -257,32 +260,33 @@ def applications_page(request: Request, company: str = "", title: str = "", url:
 
 
 @app.get("/cv", response_class=HTMLResponse, include_in_schema=False)
-def cv_page(request: Request):
+def cv_page(request: Request) -> HTMLResponse:
     return page(request, "cv", cvs=recent_cvs())
 
 
 @app.get("/cover", response_class=HTMLResponse, include_in_schema=False)
-def cover_page(request: Request):
+def cover_page(request: Request) -> HTMLResponse:
     return page(request, "cover")
 
 
-def market_report(day: str = "") -> dict:
+def market_report(day: str = "") -> dict[str, Any]:
     """market_check.analyze + conclusions; recomputed (~10 s) only if the day's vacancies or the CV changed."""
     files = sorted(config.JOBS_ARCHIVE_DIR.glob("*.json"))
     path = next((f for f in files if f.stem == day), files[-1] if files else None)
     cv_files = [config.CV_BASE_FILE, *(Path(p) for p in market_check.geo.S.get("cv", {}).get("files", []))]
     key = [path and path.name, path and path.stat().st_mtime, *(cache.mtime(f) for f in cv_files)]
 
-    def compute():
-        report = market_check.analyze(path.stem if path else "")
+    def compute() -> dict[str, Any]:
+        report: dict[str, Any] = market_check.analyze(path.stem if path else "")
         report["advice"] = market_check.advice(report)
         return report
 
     # a report for another day is opened rarely — it replaces the last one; the last one has the "market" key
-    return cache.cached("market" if path == (files[-1] if files else None) else "market:other", key, compute)
+    report: dict[str, Any] = cache.cached("market" if path == (files[-1] if files else None) else "market:other", key, compute)
+    return report
 
 
-def companies_report() -> dict:
+def companies_report() -> dict[str, Any]:
     """Companies by industry (industry.companies_overview) over all archive days; vacancies without repeats.
 
     Recomputed only when the archive files, companies.txt, applications (the mail cache,
@@ -294,10 +298,10 @@ def companies_report() -> dict:
             Path(industry.__file__)]
     key = [[f.name, f.stat().st_mtime] for f in files] + [cache.mtime(f) for f in deps]
 
-    def compute() -> dict:
+    def compute() -> dict[str, Any]:
         from jobhunter.applications_report import StatusIndex
 
-        unique: dict[str, dict] = {}
+        unique: dict[str, dict[str, Any]] = {}
         for f in files:
             for job in json.loads(f.read_text(encoding="utf-8")):
                 job["day"] = f.stem
@@ -320,7 +324,7 @@ def companies_report() -> dict:
         return {"companies": companies, "counts": counts, "labels": industry.LABELS, "vacancies": len(unique),
                 "market": industry.market_by_industry(unique.values())}
 
-    data = cache.cached("companies_by_industry", key, compute)
+    data: dict[str, Any] = cache.cached("companies_by_industry", key, compute)
     try:
         mapping = json.loads(config.MAPPING_FILE.read_text(encoding="utf-8")) if config.MAPPING_FILE.exists() else {}
     except ValueError:  # a run is writing the file right now
@@ -334,7 +338,8 @@ def companies_report() -> dict:
 def application_companies() -> list[str]:
     """Company hints in the Applications form (parsing all letters takes ~1 s) — until letters or applications change."""
     key = [cache.mtime(config.MANUAL_APPLICATIONS_FILE), cache.mtime(config.MAIL_CACHE_FILE)]
-    return cache.cached("companies", key, manual_apps.companies)
+    companies: list[str] = cache.cached("companies", key, manual_apps.companies)
+    return companies
 
 
 def warm_caches() -> None:
@@ -347,7 +352,7 @@ def warm_caches() -> None:
 
 
 @app.get("/market", response_class=HTMLResponse, include_in_schema=False)
-def market_page(request: Request, day: str = ""):
+def market_page(request: Request, day: str = "") -> HTMLResponse:
     return page(request, "market", r=market_report(day))
 
 
@@ -355,12 +360,12 @@ def market_page(request: Request, day: str = ""):
          description="A local ATS checker: over the fitting vacancies of a report (state/jobs/<date>.json) — which "
                      "technologies are required and where they are in the CV (pdf / base only / nowhere), what the "
                      "vacancies are called and whether the CV headline matches, experience bullet hygiene and conclusions.")
-def api_market(day: str = ""):
+def api_market(day: str = "") -> dict[str, Any]:
     return market_report(day)
 
 
 @app.get("/companies", response_class=HTMLResponse, include_in_schema=False)
-def companies_page(request: Request, industry: str = "", empty: bool = True):
+def companies_page(request: Request, industry: str = "", empty: bool = True) -> HTMLResponse:
     data = companies_report()
     rows = [c for c in data["companies"] if (not industry or industry in c["industries"]) and (c["vacancies"] or empty)]
     return page(request, "companies", d=data, rows=rows, industry=industry, empty=empty)
@@ -370,22 +375,24 @@ def companies_page(request: Request, industry: str = "", empty: bool = True):
          description="Companies from the vacancy archive and the industry lists: industries, vacancies over all days, "
                      "the last day, application status, board link; companies without vacancies — to search by hand; "
                      "and the market by industry (vacancies, remote share, median salary, top technologies).")
-def api_companies():
+def api_companies() -> dict[str, Any]:
     return companies_report()
 
 
 @app.get("/sources", response_class=HTMLResponse, include_in_schema=False)
-def sources_page(request: Request):
+def sources_page(request: Request) -> HTMLResponse:
     return page(request, "sources", **sources_payload())
 
 
 # --- API ---------------------------------------------------------------------------------------
+# Without response_model, FastAPI turns the return annotation into the response model. Endpoints without a model
+# of their own set response_model=None: the annotation is for mypy only, the response is not validated, the schema stays.
 
-@app.get("/api/progress", summary="Run state",
+@app.get("/api/progress", response_model=None, summary="Run state",
          description="Contents of state/progress.json: stages, current source, counters, event feed, "
                      "errors; plus eta_total (seconds to the end based on past runs) and busy. "
                      "If there were no runs yet — null.")
-def api_progress():
+def api_progress() -> dict[str, Any] | None:
     # no response_model: progress.json is written by another process (the run), its fields change together with
     # the stages — a strict schema would give false failures (in schemathesis, and a 500 instead of data)
     return progress_payload()
@@ -394,8 +401,8 @@ def api_progress():
 @app.get("/api/progress/stream", summary="Run state stream (SSE)",
          description="Server-Sent Events: every change of progress.json is sent as a `progress` event "
                      "(at most once a second). The pipeline page listens to this stream.")
-async def api_progress_stream(request: Request):
-    async def events():
+async def api_progress_stream(request: Request) -> StreamingResponse:
+    async def events() -> AsyncIterator[str]:
         last = None
         while not await request.is_disconnected():
             data = progress_payload()
@@ -410,15 +417,15 @@ async def api_progress_stream(request: Request):
 @app.post("/api/runs", responses=errors(400, 409, 422), response_model=RunStarted, status_code=202, summary="Start a run",
           description="Starts the scripts in the background (output goes to last_run.log). 409 if a run is already going on, "
                       "including one started from a terminal or the Task Scheduler.")
-def api_run(body: RunRequest):
+def api_run(body: RunRequest) -> RunStarted:
     return RunStarted(scripts=runner.start(body.kind, body.skip))
 
 
-@app.post("/api/runs/current/skip", responses=errors(400, 409), status_code=202, summary="Skip a stage of the running run",
+@app.post("/api/runs/current/skip", response_model=None, responses=errors(400, 409), status_code=202, summary="Skip a stage of the running run",
           description="Asks the run to stop the current stage: its loop checks the request between steps "
                       "(usually within a second or two), what was collected so far goes on. 409 — no run, "
                       "the stage is no longer running or cannot be skipped.")
-def api_skip(body: SkipRequest):
+def api_skip(body: SkipRequest) -> dict[str, str]:
     data = progress.read()
     if not data or not progress.is_alive(data):
         raise HTTPException(409, "No run is going on")
@@ -431,16 +438,16 @@ def api_skip(body: SkipRequest):
     return {"stage": body.stage}
 
 
-@app.post("/api/runs/current/stop", responses=errors(409), status_code=202, summary="Stop the whole run",
+@app.post("/api/runs/current/stop", response_model=None, responses=errors(409), status_code=202, summary="Stop the whole run",
           description="Ends the running script and does not start the next ones in the queue (the \"everything\" run: mail, then "
                       "vacancies). What this run collected is lost — the reports stay from the previous one. 409 — no run.")
-def api_stop():
+def api_stop() -> dict[str, int]:
     return {"pid": runner.stop()}
 
 
 @app.get("/api/reports", response_model=list[Report], summary="Report list",
          description="Reports reports/jobs_YYYY-MM-DD.html, newest first. Open: /files/reports/<file>.")
-def api_reports():
+def api_reports() -> list[dict[str, Any]]:
     return report_list()
 
 
@@ -448,14 +455,14 @@ def api_reports():
          description="For every source: kind (ats / aggregator / site / career_page), how many vacancies "
                      "it gave, error; for ATS — platform and slug. Plus Telegram channels, freehire queries "
                      "and `gaps` — companies without vacancies in the report, with the reason (board not found, empty, none matching…).")
-def api_sources():
+def api_sources() -> dict[str, Any]:
     return sources_payload()
 
 
 # --- a CV for a vacancy -------------------------------------------------------------------------
 
 
-def resolve_job(body) -> dict:
+def resolve_job(body: CvRequest) -> dict[str, Any]:
     """The vacancy from the request: pasted text, otherwise by link — from the reports, otherwise from the page."""
     if body.text.strip():
         return {"url": body.url, "company": body.company, "title": body.title, "text": body.text, "found_in": "text"}
@@ -474,7 +481,7 @@ def resolve_job(body) -> dict:
           description="Picks achievements, experience bullets and skills from cv/base.toml for the vacancy text "
                       "(technologies, topics, text similarity) and builds a PDF in cv_out/<date>/. "
                       "Invents nothing — only selects and reorders. 404 — the vacancy was not found.")
-def api_cv(body: CvRequest):
+def api_cv(body: CvRequest) -> CvResult:
     job = resolve_job(body)
     company = body.company or job.get("company") or "Company"
     title = body.title or job.get("title") or "Vacancy"
@@ -487,11 +494,11 @@ def api_cv(body: CvRequest):
     )
 
 
-@app.post("/api/cover", responses=errors(400, 404, 422), summary="Cover letter for a vacancy",
+@app.post("/api/cover", response_model=None, responses=errors(400, 404, 422), summary="Cover letter for a vacancy",
           description="From cv/base.toml ([summary] — achievements, [cover] — template and soft skills) for the vacancy text; "
                       "invents nothing. Saved to cv_out/<date>/…_cover_<style>.txt. "
                       "The vacancy is given as for /api/cv (link or text).")
-def api_cover(body: CoverRequest):
+def api_cover(body: CoverRequest) -> dict[str, Any]:
     job = resolve_job(body)
     result = cover_letter.build(body.company or job.get("company") or "Company",
                                 body.title or job.get("title") or "Vacancy", job["text"], body.style)
@@ -500,13 +507,13 @@ def api_cover(body: CoverRequest):
 
 
 @app.get("/api/cv", response_model=list[BuiltCv], summary="Built CVs", description="PDFs from cv_out/, newest first (up to 40).")
-def api_cv_list():
+def api_cv_list() -> list[dict[str, Any]]:
     return recent_cvs()
 
 
 # --- profile skills (relevance score) ---------------------------------------------------------
 
-def skills_payload() -> dict:
+def skills_payload() -> dict[str, Any]:
     """Skills with edits + in how many fitting vacancies of the last report each one appears."""
     import re as _re
 
@@ -550,21 +557,21 @@ def skills_payload() -> dict:
 
 
 @app.get("/skills", response_class=HTMLResponse, include_in_schema=False)
-def skills_page(request: Request):
+def skills_page(request: Request) -> HTMLResponse:
     return page(request, "skills", **skills_payload())
 
 
 @app.get("/api/skills", response_model=SkillsReport, summary="Profile skills",
          description="Skills from profile.toml with edits from profile_overrides.json and the share of fitting vacancies "
                      "of the last report where the skill appears.")
-def api_skills():
+def api_skills() -> dict[str, Any]:
     return skills_payload()
 
 
-@app.put("/api/skills/{name}", responses=errors(400, 404), summary="Change a skill",
+@app.put("/api/skills/{name}", response_model=None, responses=errors(400, 404), summary="Change a skill",
          description="Weight and / or turning off. Written to profile_overrides.json (profile.toml does not change); "
                      "vacancy scores are recomputed on the next run.")
-def api_skill_change(name: str, body: SkillChange):
+def api_skill_change(name: str, body: SkillChange) -> dict[str, Any]:
     if not any(r["name"] == name for r in relevance.skill_table()):
         raise HTTPException(404, "No such skill")
     over = relevance.read_overrides()
@@ -577,10 +584,10 @@ def api_skill_change(name: str, body: SkillChange):
     return next(r for r in relevance.skill_table() if r["name"] == name)
 
 
-@app.post("/api/skills", responses=errors(400, 409, 422), status_code=201, summary="Add your own skill",
+@app.post("/api/skills", response_model=None, responses=errors(400, 409, 422), status_code=201, summary="Add your own skill",
           description="A new skill with a regular expression and a weight (in profile_overrides.json). 422 — an invalid "
                       "regex, 409 — the name already exists.")
-def api_skill_add(body: NewSkill):
+def api_skill_add(body: NewSkill) -> NewSkill:
     import re as _re
     try:
         _re.compile(body.pattern, _re.I)
@@ -594,9 +601,9 @@ def api_skill_add(body: NewSkill):
     return body
 
 
-@app.delete("/api/skills/{name}", summary="Reset an edit or delete your own skill",
+@app.delete("/api/skills/{name}", response_model=None, summary="Reset an edit or delete your own skill",
             description="Your own skill is deleted; a skill from profile.toml gets its weight and on/off state reset.")
-def api_skill_reset(name: str):
+def api_skill_reset(name: str) -> dict[str, str]:
     over = relevance.read_overrides()
     over["skills"].pop(name, None)
     over["added"] = [a for a in over["added"] if a["name"] != name]
@@ -607,10 +614,10 @@ def api_skill_reset(name: str):
 # --- application events ------------------------------------------------------------------------
 
 
-@app.post("/api/applications/events", responses=errors(400, 422), status_code=201, summary="Add an application event",
+@app.post("/api/applications/events", response_model=None, responses=errors(400, 422), status_code=201, summary="Add an application event",
           description="Appends a block to applications_manual.toml and "
                       "rebuilds reports/applications.html from the letter cache — without requests to Gmail.")
-def api_application_event(body: ApplicationEvent):
+def api_application_event(body: ApplicationEvent) -> dict[str, Any]:
     import applications
     try:
         event = manual_apps.add_event(body.company, body.kind, body.note, body.url, body.source, body.date)
@@ -623,7 +630,7 @@ def api_application_event(body: ApplicationEvent):
 # --- interview prep ----------------------------------------------------------------------------
 
 @app.get("/prep", response_class=HTMLResponse, include_in_schema=False)
-def prep_page(request: Request, url: str = "", date: str = ""):
+def prep_page(request: Request, url: str = "", date: str = "") -> HTMLResponse:
     """Interview prep: with ?url= (the "🎤" button in the report) the materials are built at once."""
     result, error = None, ""
     if url:
@@ -638,7 +645,7 @@ def prep_page(request: Request, url: str = "", date: str = ""):
 
 
 @app.post("/prep", response_class=HTMLResponse, include_in_schema=False)
-async def prep_page_text(request: Request):
+async def prep_page_text(request: Request) -> HTMLResponse:
     """Prep from pasted text — for vacancies without a link (a PDF from a recruiter, correspondence).
 
     The form is parsed by hand (urlencoded): python-multipart is not needed for it."""
@@ -656,11 +663,11 @@ async def prep_page_text(request: Request):
     return page(request, "prep", r=result, error=error, url="", form=form)
 
 
-@app.post("/api/prep", responses=errors(400, 404, 422), summary="Interview prep",
+@app.post("/api/prep", response_model=None, responses=errors(400, 404, 422), summary="Interview prep",
           description="From the facts in cv/base.toml for the vacancy: which requirements you meet and how to prove it, what is missing, "
                       "a tell-me-about-yourself draft (EN), stories for behavioural questions, an HR checklist, questions to "
                       "the company, the levels.fyi median. The vacancy is given as for /api/cv (link or text).")
-def api_prep(body: CvRequest):
+def api_prep(body: CvRequest) -> dict[str, Any]:
     job = resolve_job(body)
     return interview_prep.build(body.company or job.get("company") or "Company", body.title or job.get("title") or "Vacancy",
                                 job["text"], job.get("location", ""))

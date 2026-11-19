@@ -4,7 +4,7 @@ import re
 from . import config as c
 
 
-def _python_is_secondary(desc, match):
+def _python_is_secondary(desc: str, match: re.Match[str]) -> bool:
     """Is Python mentioned in a nice-to-have context?"""
     line_start = desc.rfind("\n", 0, match.start()) + 1
     line_end = desc.find("\n", match.end())
@@ -36,7 +36,7 @@ _PLUS_LINE_RX = re.compile(
 )
 
 
-def _required_lang(desc):
+def _required_lang(desc: str) -> str:
     """Another language, if the requirements block names it and does not name Python, otherwise ''.
 
     Example: the tasks say "code in C++ and Python", but "What We Look For" names only C++.
@@ -59,7 +59,7 @@ def _required_lang(desc):
     return found[0] if len(found) == 1 else ""
 
 
-def language_mismatch_text(title, desc):
+def language_mismatch_text(title: str, desc: str) -> str:
     """The same by title and text (for vacancies without a description field — Telegram)."""
     if c.PYTHON_RX.search(title):
         return ""

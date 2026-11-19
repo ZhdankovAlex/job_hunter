@@ -33,12 +33,12 @@ class RobotsDisallowed(FetchError):
 class _Robots:
     """Minimal robots.txt parser with * and $ support (urllib cannot do them)."""
 
-    def __init__(self, text, ua_token):
-        self.rules = []  # (allow: bool, pattern: str)
+    def __init__(self, text: str, ua_token: str) -> None:
+        self.rules: list[tuple[bool, str]] = []  # (allow: bool, pattern: str)
         self.crawl_delay = 0.0
-        groups: dict = {}
-        agents: list = []
-        body: list = []
+        groups: dict[str, list[tuple[str, str]]] = {}
+        agents: list[str] = []
+        body: list[tuple[str, str]] = []
         in_agents = False
         for raw in text.splitlines():
             line = raw.split("#", 1)[0].strip()
@@ -68,17 +68,22 @@ class _Robots:
                     pass
 
     @staticmethod
-    def _matches(pattern, path):
+    def _matches(pattern: str, path: str) -> bool:
         anchored = pattern.endswith("$")
         rx = ".*".join(re.escape(p) for p in pattern.rstrip("$").split("*"))
         return re.match(rx + ("$" if anchored else ""), path) is not None
 
-    def allowed(self, path):
+    def allowed(self, path: str) -> bool:
         best = (0, True)  # the longest rule wins, on a tie — allow
         for allow, pattern in self.rules:
             if self._matches(pattern, path):
                 best = max(best, (len(pattern), allow))
         return best[1]
+
+
+# request params (values: str / int / list) and headers
+Params = dict[str, Any]
+Headers = dict[str, str]
 
 
 class Response(Protocol):
@@ -107,15 +112,15 @@ class HttpClient(Protocol):
     Anything with get() of this signature fits: Http below and FakeHttp in tests/conftest.py.
     """
 
-    def get(self, url: str, params: dict | None = None, timeout: float = 40,
-            headers: dict | None = None) -> Response: ...
+    def get(self, url: str, params: Params | None = None, timeout: float = 40,
+            headers: Headers | None = None) -> Response: ...
 
 
 class HttpPostClient(HttpClient, Protocol):
     """A client that can POST too: for sites whose search is a POST request (Workday)."""
 
     def post(self, url: str, json: Any = None, timeout: float = 40,
-             headers: dict | None = None) -> Response: ...
+             headers: Headers | None = None) -> Response: ...
 
 
 class Http:
@@ -123,29 +128,30 @@ class Http:
     # host with 3 retries x 40 s per company can stretch a run to hours, so stop calling it
     UNREACHABLE_AFTER = 2
 
-    def __init__(self, min_interval=config.MIN_INTERVAL):
+    def __init__(self, min_interval: float = config.MIN_INTERVAL) -> None:
         self.min_interval = min_interval
         self._local = threading.local()
         self._guard = threading.Lock()
-        self._host_locks = {}
-        self._next_slot = {}
-        self._robots = {}
-        self._rate_limited = {}  # host -> how many requests in a row ended with 429
+        self._host_locks: dict[str, threading.Lock] = {}
+        self._next_slot: dict[str, float] = {}
+        self._robots: dict[str, _Robots | None] = {}
+        self._rate_limited: dict[str, int] = {}  # host -> how many requests in a row ended with 429
         self._unreachable: dict[str, int] = {}  # host -> how many requests in a row hit a network error
 
-    def _session(self):
+    def _session(self) -> requests.Session:
         if not hasattr(self._local, "session"):
             s = requests.Session()
             s.headers["User-Agent"] = config.USER_AGENT
             s.headers["Accept"] = "application/json"
             self._local.session = s
-        return self._local.session
+        session: requests.Session = self._local.session
+        return session
 
-    def _host_lock(self, host):
+    def _host_lock(self, host: str) -> threading.Lock:
         with self._guard:
             return self._host_locks.setdefault(host, threading.Lock())
 
-    def _throttle(self, host):
+    def _throttle(self, host: str) -> None:
         with self._host_lock(host):
             delay = self._next_slot.get(host, 0) - time.monotonic()
             if delay > 0 and cancel.wait(delay):
@@ -157,8 +163,9 @@ class Http:
             )
             self._next_slot[host] = time.monotonic() + interval
 
-    def _load_robots(self, scheme, host):
+    def _load_robots(self, scheme: str, host: str) -> _Robots | None:
         r = None
+        error: Exception | None = None
         for _ in range(2):  # one retry on a network failure
             self._throttle(host)
             try:
@@ -176,7 +183,7 @@ class Http:
         log.warning("robots.txt %s returned %s — host skipped", host, r.status_code)
         return None
 
-    def _check_robots(self, url):
+    def _check_robots(self, url: str) -> None:
         parts = urlsplit(url)
         host = parts.netloc
         with self._guard:
@@ -190,8 +197,8 @@ class Http:
         if robots is None or not robots.allowed(path):
             raise RobotsDisallowed(f"robots.txt disallows {url}")
 
-    def get(self, url: str, params: dict | None = None, timeout: float = 40,
-            headers: dict | None = None) -> requests.Response:
+    def get(self, url: str, params: Params | None = None, timeout: float = 40,
+            headers: Headers | None = None) -> requests.Response:
         """GET with the limit and retries. Returns requests.Response (404 included).
 
         headers — extra headers (for example, Accept: text/html for sites that answer 404 to JSON).
@@ -199,15 +206,16 @@ class Http:
         return self._request("GET", url, params=params, timeout=timeout, headers=headers)
 
     def post(self, url: str, json: Any = None, timeout: float = 40,
-             headers: dict | None = None) -> requests.Response:
+             headers: Headers | None = None) -> requests.Response:
         """POST with a JSON body — a vacancy search the site makes with a POST request (Workday).
 
         Same robots.txt, rate limit and retries as get(); sends nothing but the search query.
         """
         return self._request("POST", url, json=json, timeout=timeout, headers=headers)
 
-    def _request(self, method, url, params=None, json=None, timeout=40, headers=None):
-        url = requests.Request(method, url, params=params).prepare().url
+    def _request(self, method: str, url: str, params: Params | None = None, json: Any = None,
+                 timeout: float = 40, headers: Headers | None = None) -> requests.Response:
+        url = requests.Request(method, url, params=params).prepare().url or url
         self._check_robots(url)
         host = urlsplit(url).netloc
         if self._rate_limited.get(host, 0) >= 3:
@@ -215,7 +223,7 @@ class Http:
             raise FetchError(f"{url}: host turned off until the next run (429)")
         if self._unreachable.get(host, 0) >= self.UNREACHABLE_AFTER:
             raise FetchError(f"{url}: host is not responding — skipped until the end of the run")
-        last = None
+        last: str | None = None
         network_error = False
         for attempt in range(3):
             if cancel.is_set():

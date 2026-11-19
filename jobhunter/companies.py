@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 from . import config
 from .models import Company, norm_name
@@ -10,7 +11,7 @@ def _csv(value: str) -> list[str]:
     return [x.strip() for x in value.split(",") if x.strip()]
 
 
-def load_companies(path=config.COMPANIES_FILE) -> list[Company]:
+def load_companies(path: Path = config.COMPANIES_FILE) -> list[Company]:
     """Company | priority | note | industries | brands — the fields after the name are optional."""
     companies: dict[str, Company] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -38,9 +39,9 @@ def load_companies(path=config.COMPANIES_FILE) -> list[Company]:
 _CYRILLIC_LOOKALIKES = str.maketrans("аеорсухкмтвнАЕОРСУХКМТВН", "aeopcyxkmtbhAEOPCYXKMTBH")
 
 
-def slug_candidates(name):
+def slug_candidates(name: str) -> list[str]:
     """Heuristic slugs: 'Grafana Labs' -> grafanalabs, grafana-labs, grafana."""
-    out = []
+    out: list[str] = []
     base = re.sub(r"\(.*?\)", "", name)
     if re.search(r"[A-Za-z]", base):  # "Acme.аi" with a Cyrillic "а": Cyrillic look-alikes of Latin letters
         base = base.translate(_CYRILLIC_LOOKALIKES)
