@@ -301,10 +301,12 @@ skipped on purpose where they would only add layers.
 
 **Known debt**
 
-- `report.render` and `html_report.render` are long functions with a branch per report section (cyclomatic
-  complexity 86 and 58): the next candidates to split, the way `main.run` was.
-- `sites` (30%) and `progress` (26%) have the lowest test coverage; ATS responses are read through `dict.get`
-  chains, not typed models.
+- ATS responses are read through `dict.get` chains, not typed models.
+- The most complex report functions now are `report._table` and `report._new_section` (cyclomatic complexity
+  22 and 21). `report.render` and `html_report.render` are already split: sorting vacancies into sections
+  (`report._split`), the appendix, the summary, the table row and the filter buttons are separate functions.
+- The most complex in the project now are `cvgen.build_markdown` (53), `market_check.advice` (40) and
+  `relevance.Profile.score` (38): each is a long chain of rules; they are the next candidates to split.
 
 ## Where to look next
 

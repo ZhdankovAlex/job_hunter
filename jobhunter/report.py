@@ -1,5 +1,6 @@
 import re
 from collections import Counter
+from dataclasses import dataclass
 
 from . import config, cv_match, geo, outreach, tiers
 from .keys import company_key
@@ -556,157 +557,180 @@ def _compact_appendix(title, groups, link_of, suffix_of=lambda j: ""):
     return lines
 
 
-def render(day, jobs, stats, tg_jobs=None):
-    all_jobs = sorted(jobs, key=sort_key)
-    all_tg = tg_jobs or []
-    # 🚫 local language required — removed from all sections into a separate appendix
-    lang_blocked = [j for j in [*all_jobs, *all_tg] if j.lang_required]
-    all_jobs = [j for j in all_jobs if not j.lang_required]
-    all_tg = [j for j in all_tg if not j.lang_required]
-    staffing = [j for j in all_jobs if j.staffing] + [j for j in all_tg if j.staffing]
-    all_jobs = [j for j in all_jobs if not j.staffing]
-    all_tg = [j for j in all_tg if not j.staffing]
-    # companies with a "Rejected" status — a separate section at the end, not in the main sections or the top
-    refused = [j for j in all_jobs if _was_rejected(j)]
-    refused_tg = [j for j in all_tg if _was_rejected(j)]
-    jobs = [j for j in all_jobs if not _was_rejected(j)]
-    tg_main = [j for j in all_tg if not _was_rejected(j)]
-    manual = [j for j in jobs if j.manual_check]
+@dataclass
+class _Split:
+    """Report vacancies split into sections (render takes from here what goes where)."""
+
+    jobs: list  # the main report: without "local language required", outsourcing and "Rejected before"
+    tg: list  # Telegram, filtered the same way
+    lang_blocked: list  # 🚫 local language required — a separate appendix
+    staffing: list  # outsourcing — a separate appendix
+    refused: list  # companies with a "Rejected" status — a section at the end, not in the main sections or the top
+    refused_tg: list
+    refused_filtered: list  # dropped by filters at companies with a "Rejected" status
+    filtered_out: list  # dropped by filters (the rest)
+    manual: list  # ❓ check by hand
     # everything that passed the location filter without a ❓ mark: home country,
     # Worldwide/Global/EMEA/Europe, or just "Remote" without a region
-    reloc = [j for j in jobs if j.reloc_type]
-    priority = [j for j in jobs if not j.location_check and not j.reloc_type and not j.manual_check]
-    rest = [j for j in jobs if j.location_check and not j.reloc_type]
-    overflow: dict = {}
+    priority: list
+    reloc: list  # 🌍 relocation and remote within a country that allows working from outside it
+    rest: list  # with a ❓ location mark — by company priority
 
+
+def _partition(items: list, pred) -> tuple[list, list]:
+    """(matching, the rest), order kept."""
+    yes: list = []
+    no: list = []
+    for j in items:
+        (yes if pred(j) else no).append(j)
+    return yes, no
+
+
+def _split(jobs: list, tg_jobs: list | None, rejected: list) -> _Split:
+    lang_jobs, rest_jobs = _partition(sorted(jobs, key=sort_key), lambda j: j.lang_required)
+    lang_tg, rest_tg = _partition(tg_jobs or [], lambda j: j.lang_required)
+    staff_jobs, rest_jobs = _partition(rest_jobs, lambda j: j.staffing)
+    staff_tg, rest_tg = _partition(rest_tg, lambda j: j.staffing)
+    refused, main = _partition(rest_jobs, _was_rejected)
+    refused_tg, tg = _partition(rest_tg, _was_rejected)
+    refused_filtered, filtered_out = _partition(rejected, _was_rejected)
+    return _Split(
+        jobs=main, tg=tg, lang_blocked=lang_jobs + lang_tg, staffing=staff_jobs + staff_tg,
+        refused=refused, refused_tg=refused_tg, refused_filtered=refused_filtered, filtered_out=filtered_out,
+        manual=[j for j in main if j.manual_check],
+        priority=[j for j in main if not j.location_check and not j.reloc_type and not j.manual_check],
+        reloc=[j for j in main if j.reloc_type],
+        rest=[j for j in main if j.location_check and not j.reloc_type],
+    )
+
+
+def _header(day, jobs: list) -> list[str]:
     lines = [f"# Vacancies for {day.isoformat()}", ""]
     if not jobs:
         lines += ["No new fitting vacancies.", ""]
+    return lines
 
-    lines += _applications_block(stats)
-    lines += _new_section(jobs, tg_main)
-    lines += _review_section(jobs, tg_main)
-    lines += _skill_gaps_section(jobs, tg_main)
-    lines += _top_section(jobs, tg_main)
-    lines += ["---", "", "# Appendix: all current vacancies", ""]
 
-    if priority:
-        shown = min(len(priority), config.PRIORITY_MAX_ROWS)
-        lines += [f"## {PRIORITY_TITLE} — {len(priority)} (up to {shown} freshest shown)", ""]
-        lines += _table(priority, overflow, config.PRIORITY_MAX_ROWS)
+def _by_company(jobs: list) -> dict:
+    groups: dict = {}
+    for j in jobs:
+        groups.setdefault(j.company, []).append(j)
+    return groups
 
-    if manual:
-        lines += _manual_section(manual)
 
-    if reloc:
-        lines += _relocation_section(reloc, overflow)
-
+def _appendix(s: _Split, stats: dict, with_tg: bool) -> list[str]:
+    """Appendix: all current vacancies by group, then outsourcing, local language, "Rejected before", dropped."""
+    overflow: dict = {}  # what did not fit into the tables — a compact list by company
+    lines = ["---", "", "# Appendix: all current vacancies", ""]
+    if s.priority:
+        shown = min(len(s.priority), config.PRIORITY_MAX_ROWS)
+        lines += [f"## {PRIORITY_TITLE} — {len(s.priority)} (up to {shown} freshest shown)", ""]
+        lines += _table(s.priority, overflow, config.PRIORITY_MAX_ROWS)
+    if s.manual:
+        lines += _manual_section(s.manual)
+    if s.reloc:
+        lines += _relocation_section(s.reloc, overflow)
     for score in (3, 2, 1, 0):
-        group = [j for j in rest if j.score == score]
-        if not group:
-            continue
-        title = f"{FLAGS[score]} Company priority {score}".strip()
-        lines += [f"## {title} — {len(group)}", ""]
-        lines += _table(group, overflow)
-
-    if tg_jobs is not None:
-        lines += _telegram_section(tg_main, stats)
-
+        group = [j for j in s.rest if j.score == score]
+        if group:
+            lines += [f"## {f'{FLAGS[score]} Company priority {score}'.strip()} — {len(group)}", ""]
+            lines += _table(group, overflow)
+    if with_tg:
+        lines += _telegram_section(s.tg, stats)
     if overflow:
         lines += _compact_appendix("Appendix: remaining vacancies by company", overflow, lambda j: j.url)
-
-    if staffing:
-        groups: dict = {}
-        for j in staffing:
-            groups.setdefault(j.company, []).append(j)
+    if s.staffing:
         lines += _compact_appendix(
-            f"Appendix: Staffing/outsourcing — {len(staffing)}", groups,
+            f"Appendix: Staffing/outsourcing — {len(s.staffing)}", _by_company(s.staffing),
             lambda j: j.url or j.post_url, lambda j: f" ({j.staffing})",
         )
-
-    if lang_blocked:
-        groups = {}
-        for j in lang_blocked:
-            groups.setdefault(j.company, []).append(j)
+    if s.lang_blocked:
         lines += _compact_appendix(
-            f"Appendix: Local language required — {len(lang_blocked)}", groups,
+            f"Appendix: Local language required — {len(s.lang_blocked)}", _by_company(s.lang_blocked),
             lambda j: j.url or j.post_url,
         )
+    if s.refused or s.refused_tg or s.refused_filtered:
+        lines += _previously_rejected_section(s.refused, s.refused_tg, s.refused_filtered)
+    if s.filtered_out:
+        lines += _rejected_section(s.filtered_out)
+    return lines
 
-    all_rejected = stats.get("rejected", [])
-    refused_filtered = [j for j in all_rejected if _was_rejected(j)]
-    filtered_out = [j for j in all_rejected if not _was_rejected(j)]
-    if refused or refused_tg or refused_filtered:
-        lines += _previously_rejected_section(refused, refused_tg, refused_filtered)
 
-    if filtered_out:
-        lines += _rejected_section(filtered_out)
-
-    by_score = Counter(j.score for j in jobs)
-    by_country = Counter(j.reloc_country for j in reloc)
-    confirmed = Counter(j.reloc_country for j in reloc if j.reloc_type == geo.RELOCATION)
-    referral_lines = []
-    must_lines = []
+def _companies_lines(stats: dict, shown: list) -> list[str]:
+    """Companies tracked separately (must_report, referral): how many found and passed the filters."""
+    lines = []
     for name, found, passed, reason in stats.get("must_report", []):
         if reason:
-            must_lines.append(f"- {name}: ATS board not found, see errors.log (reason: {reason})")
+            lines.append(f"- {name}: ATS board not found, see errors.log (reason: {reason})")
         else:
-            must_lines.append(
-                f"- {name}: vacancies found on the board — {found}, passed the filters — {passed}"
-                + ("" if passed else " (no Python vacancies right now)")
-            )
+            lines.append(f"- {name}: vacancies found on the board — {found}, passed the filters — {passed}"
+                         + ("" if passed else " (no Python vacancies right now)"))
     reported = {company_key(row[0]) for row in stats.get("must_report", [])}
     for name, has_board in stats.get("referral", []):
         if company_key(name) in reported:
             continue
-        if not any(company_key(j.company) == company_key(name) for j in [*jobs, *tg_main]):
-            referral_lines.append(
-                f"- {name}: no Python vacancies right now"
-                + ("" if has_board else " (ATS board not found — check the career site by hand)")
-            )
-    lines += [
+        if not any(company_key(j.company) == company_key(name) for j in shown):
+            lines.append(f"- {name}: no Python vacancies right now"
+                         + ("" if has_board else " (ATS board not found — check the career site by hand)"))
+    return lines
+
+
+def _freehire_lines(stats: dict) -> list[str]:
+    """Summary lines about freehire — if it was in the run."""
+    lines = []
+    if (fh := stats.get("freehire")) and fh["enabled"]:
+        lines.append(
+            f"- freehire: received {fh['fetched']} (network requests {fh['requests']}, from cache {fh['cache_hits']}; "
+            "by query: " + ", ".join(f"{k} — {v}" for k, v in fh["totals"].items()) + "), "
+            f"new added {fh['added']}, matched other sources {fh['twins']}, "
+            f"full texts received {fh['described']} of {fh.get('candidates', 0)}, "
+            f"failed the check {fh['dropped']}")
+        lines += [f"- freehire, query {name} returned 0: {text}" for name, text in fh.get("diagnosis", {}).items()]
+    return lines
+
+
+def _salary_lines(stats: dict) -> list[str]:
+    if (sal := stats.get("salary")) and sal["samples"]:
+        return [f"- Salary range base: {sal['samples']} vacancies with a stated salary (EUR/month, medians). "
+                + " | ".join(sal["summary"])]
+    return []
+
+
+def _summary(s: _Split, stats: dict, with_tg: bool) -> list[str]:
+    by_score = Counter(j.score for j in s.jobs)
+    by_country = Counter(j.reloc_country for j in s.reloc)
+    confirmed = Counter(j.reloc_country for j in s.reloc if j.reloc_type == geo.RELOCATION)
+    refused_total = len(s.refused) + len(s.refused_tg) + len(s.refused_filtered)
+    return [
         "## Summary",
         "",
         f"- Found in total (passed the filter): **{stats['matched']}**",
         f"- Already applied (hidden): {stats['in_applied']}",
         f"- Duplicates merged (one vacancy in several locations): {stats.get('merged', 0)}",
-        *(
-            [f"- freehire: received {fh['fetched']} (network requests {fh['requests']}, from cache {fh['cache_hits']}; "
-             f"by query: " + ", ".join(f"{k} — {v}" for k, v in fh['totals'].items()) + "), "
-             f"new added {fh['added']}, matched other sources {fh['twins']}, "
-             f"full texts received {fh['described']} of {fh.get('candidates', 0)}, "
-             f"failed the check {fh['dropped']}",
-             *(f"- freehire, query {name} returned 0: {text}" for name, text in fh.get("diagnosis", {}).items())]
-            if (fh := stats.get("freehire")) and fh["enabled"] else []
-        ),
-        f"- Rejected before (separate section): {len(refused) + len(refused_tg) + len(refused_filtered)}",
-        f"- ❓ Check by hand: {len(manual)}",
-        f"- Rejected by filters (fitting role): {len(filtered_out)} — full list in state/rejected_latest.tsv",
-        *(
-            [f"- Salary range base: {sal['samples']} vacancies with a stated salary (EUR/month, medians). "
-             + " | ".join(sal["summary"])]
-            if (sal := stats.get("salary")) and sal["samples"] else []
-        ),
+        *_freehire_lines(stats),
+        f"- Rejected before (separate section): {refused_total}",
+        f"- ❓ Check by hand: {len(s.manual)}",
+        f"- Rejected by filters (fitting role): {len(s.filtered_out)} — full list in state/rejected_latest.tsv",
+        *_salary_lines(stats),
         f"- Dropped as older than {stats.get('max_age_days', 30)} days: {stats.get('stale', 0)}",
-        f"- Moved to Staffing/outsourcing: {len(staffing)}",
-        f"- In the main report: **{len(jobs)}**, of them first seen today: "
-        f"{sum(j.is_new_today for j in jobs)}",
-        f"- {PRIORITY_TITLE} (confirmed by the text): **{len(priority)}** vacancies",
-        f"- In the 🌍 section: **{len(reloc)}** vacancies"
+        f"- Moved to Staffing/outsourcing: {len(s.staffing)}",
+        f"- In the main report: **{len(s.jobs)}**, of them first seen today: "
+        f"{sum(j.is_new_today for j in s.jobs)}",
+        f"- {PRIORITY_TITLE} (confirmed by the text): **{len(s.priority)}** vacancies",
+        f"- In the 🌍 section: **{len(s.reloc)}** vacancies"
         + (" — " + ", ".join(
             f"{c}: {n} (confirmed relocation: {confirmed.get(c, 0)})" for c, n in by_country.items()
-        ) if reloc else ""),
+        ) if s.reloc else ""),
         f"- Remote within a country that allows working from outside it: "
-        f"{sum(j.reloc_type == geo.REMOTE_OK for j in reloc)}",
-        f"- Dropped for language (🚫 local language required): {len(lang_blocked)}",
-        *must_lines,
-        *referral_lines,
-        "- By company priority: " + ", ".join(f"{s} → {by_score.get(s, 0)}" for s in (3, 2, 1, 0)),
-        f"- Marked ⚠️ language mismatch: {sum(j.language_mismatch_warning for j in jobs)}",
+        f"{sum(j.reloc_type == geo.REMOTE_OK for j in s.reloc)}",
+        f"- Dropped for language (🚫 local language required): {len(s.lang_blocked)}",
+        *_companies_lines(stats, [*s.jobs, *s.tg]),
+        "- By company priority: " + ", ".join(f"{n} → {by_score.get(n, 0)}" for n in (3, 2, 1, 0)),
+        f"- Marked ⚠️ language mismatch: {sum(j.language_mismatch_warning for j in s.jobs)}",
         *(
-            [f"- Telegram channels: {len(tg_main)} vacancies, of them ✅ — "
-             f"{sum(j.label.startswith('✅') for j in tg_main)}"]
-            if tg_jobs is not None else []
+            [f"- Telegram channels: {len(s.tg)} vacancies, of them ✅ — "
+             f"{sum(j.label.startswith('✅') for j in s.tg)}"]
+            if with_tg else []
         ),
         f"- Companies with a found ATS board: {stats['mapped']} of {stats['companies']} "
         f"(the rest are in errors.log)",
@@ -715,4 +739,17 @@ def render(day, jobs, stats, tg_jobs=None):
         f"Sources: {SOURCE_LINKS}.",
         "",
     ]
+
+
+def render(day, jobs, stats, tg_jobs=None):
+    """Markdown report: header, applications, "New", top etc., an appendix with all vacancies, a summary."""
+    s = _split(jobs, tg_jobs, stats.get("rejected", []))
+    lines = _header(day, s.jobs)
+    lines += _applications_block(stats)
+    lines += _new_section(s.jobs, s.tg)
+    lines += _review_section(s.jobs, s.tg)
+    lines += _skill_gaps_section(s.jobs, s.tg)
+    lines += _top_section(s.jobs, s.tg)
+    lines += _appendix(s, stats, tg_jobs is not None)
+    lines += _summary(s, stats, tg_jobs is not None)
     return "\n".join(lines)

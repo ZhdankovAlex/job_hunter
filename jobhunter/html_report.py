@@ -263,111 +263,146 @@ def _applications_html(stats: dict) -> str:
     return "".join(parts)
 
 
-def render(day: date, jobs: list, stats: dict, tg_jobs: list | None = None) -> str:
-    """HTML report page. The sections are the same as in the Markdown report."""
-    tg = [j for j in (tg_jobs or []) if not j.lang_required and not j.staffing]
-    main = [j for j in jobs if not j.lang_required and not j.staffing]
-    staffing = [j for j in [*jobs, *(tg_jobs or [])] if j.staffing and not j.lang_required]
-    refused = [j for j in [*main, *tg] if report._was_rejected(j)]
-    main = [j for j in main if not report._was_rejected(j)]
-    tg = [j for j in tg if not report._was_rejected(j)]
-    top_ids = {id(j) for j, _ in report.pick_review(main, tg)}
+def _main_row(j, day: date, is_top: bool) -> str:
+    """A row of the main table; data-* are for the filter buttons above the table."""
+    status = report._status(j)
+    is_new = j.is_new_today and not report._blocked(j)
+    marks = "; ".join(j.marks) if hasattr(j, "channel") else report._marks(j)
+    marks = "; ".join(m for m in marks.split("; ") if m and m != "🆕" and not m.startswith(("💰", "🧩")))
+    fit = cv_match.summary(j)
+    fit_class = "ok" if j.cv_full else ""
+    low_pay = salary.below_min(j)
+    pay_attr = ' class="warn" title="the range in the vacancy is below the [salary] min_monthly_eur threshold"' if low_pay else ""
+    tags = ('<span class="tag new">new</span>' if is_new else "") + ('<span class="tag top">top</span>' if is_top else "")
+    score = getattr(j, "score", 0)  # company priority from companies.txt
+    roots = f' <span class="tag" title="company priority (companies.txt)">{"★" * score}</span>' if score else ""
+    roots += _industry_tags(j)
+    status_class = "ok" if status.startswith("✅") else "warn"
+    contact = f' <span class="small">{_e(j.contact)}</span>' if getattr(j, "contact", "") and not j.url else ""
+    return (
+        f'<tr data-new="{int(is_new)}" data-top="{int(is_top)}" data-ok="{int(status.startswith("✅"))}" '
+        f'data-check="{int(status.startswith("❓"))}" data-reloc="{int(status.startswith("🌍"))}" '
+        f'data-fit="{int(bool(j.cv_full))}" data-prio="{int(score > 0)}" data-fit80="{int(j.cv_fit >= 80)}" '
+        f'data-pay="{int(salary.meets_min(j))}">'
+        f'<td data-sort="{j.tier}">{_e(tiers.NAMES[j.tier])}</td>'
+        f'<td class="n">{j.relevance}</td>'
+        f"{_fit_cell(j)}"
+        f'<td data-sort="{"jmsl".find(j.grade[:1]) if j.grade else 9}">{_e(salary.GRADE_NAMES.get(j.grade, "—"))}</td>'
+        f"<td>{_e(j.company)}{roots}</td>"
+        f'<td>{tags}<a href="{_e(_link(j))}" target="_blank" rel="noopener">{_e(j.title)}</a>{contact}'
+        f'{_cv_link(j, day)}{_contacts_html(j)}{_outreach_html(j) if is_top else ""}</td>'
+        f"<td>{_e(j.location or 'Remote')}</td>"
+        f'<td class="{status_class}">{_e(status)}</td>'
+        f"<td{pay_attr}>"
+        f"{_e(j.salary_note)}{_levels(j)}</td>"
+        f"<td>{_e(_date(j))}</td>"
+        f'<td class="small">{_e(report._source(j))}</td>'
+        f'<td class="small {fit_class}">{_e(fit)}</td>'
+        f'<td class="small">{_e(_missing(j))}</td>'
+        f'<td class="small">{_linkify(_e(marks))}</td></tr>'
+    )
 
-    ordered = sorted([*main, *tg], key=tiers.sort_key)
-    rows = []
-    for j in ordered:
-        status = report._status(j)
-        is_new = j.is_new_today and not report._blocked(j)
-        is_top = id(j) in top_ids
-        marks = "; ".join(j.marks) if hasattr(j, "channel") else report._marks(j)
-        marks = "; ".join(m for m in marks.split("; ") if m and m != "🆕" and not m.startswith(("💰", "🧩")))
-        fit = cv_match.summary(j)
-        fit_class = "ok" if j.cv_full else ""
-        low_pay = salary.below_min(j)
-        pay_attr = ' class="warn" title="the range in the vacancy is below the [salary] min_monthly_eur threshold"' if low_pay else ""
-        tags = ('<span class="tag new">new</span>' if is_new else "") + ('<span class="tag top">top</span>' if is_top else "")
-        score = getattr(j, "score", 0)  # company priority from companies.txt
-        roots = f' <span class="tag" title="company priority (companies.txt)">{"★" * score}</span>' if score else ""
-        roots += _industry_tags(j)
-        status_class = "ok" if status.startswith("✅") else "warn"
-        contact = f' <span class="small">{_e(j.contact)}</span>' if getattr(j, "contact", "") and not j.url else ""
-        rows.append(
-            f'<tr data-new="{int(is_new)}" data-top="{int(is_top)}" data-ok="{int(status.startswith("✅"))}" '
-            f'data-check="{int(status.startswith("❓"))}" data-reloc="{int(status.startswith("🌍"))}" '
-            f'data-fit="{int(bool(j.cv_full))}" data-prio="{int(score > 0)}" data-fit80="{int(j.cv_fit >= 80)}" '
-            f'data-pay="{int(salary.meets_min(j))}">'
-            f'<td data-sort="{j.tier}">{_e(tiers.NAMES[j.tier])}</td>'
-            f'<td class="n">{j.relevance}</td>'
-            f"{_fit_cell(j)}"
-            f'<td data-sort="{"jmsl".find(j.grade[:1]) if j.grade else 9}">{_e(salary.GRADE_NAMES.get(j.grade, "—"))}</td>'
-            f"<td>{_e(j.company)}{roots}</td>"
-            f'<td>{tags}<a href="{_e(_link(j))}" target="_blank" rel="noopener">{_e(j.title)}</a>{contact}'
-            f'{_cv_link(j, day)}{_contacts_html(j)}{_outreach_html(j) if is_top else ""}</td>'
-            f"<td>{_e(j.location or 'Remote')}</td>"
-            f'<td class="{status_class}">{_e(status)}</td>'
-            f"<td{pay_attr}>"
-            f"{_e(j.salary_note)}{_levels(j)}</td>"
-            f"<td>{_e(_date(j))}</td>"
-            f'<td class="small">{_e(report._source(j))}</td>'
-            f'<td class="small {fit_class}">{_e(fit)}</td>'
-            f'<td class="small">{_e(_missing(j))}</td>'
-            f'<td class="small">{_linkify(_e(marks))}</td></tr>'
-        )
-    new_count = sum('data-new="1"' in r for r in rows)
-    ok_count = sum('data-ok="1"' in r for r in rows)
-    check_count = sum('data-check="1"' in r for r in rows)
-    reloc_count = sum('data-reloc="1"' in r for r in rows)
-    fit_count = sum('data-fit="1"' in r for r in rows)
-    prio_count = sum('data-prio="1"' in r for r in rows)
-    fit80_count = sum('data-fit80="1"' in r for r in rows)
-    pay_count = sum('data-pay="1"' in r for r in rows)
-    pay_min = salary.min_monthly()
 
-    refused_rows = [
-        f"<tr><td>{_e(j.company)}</td>"
-        f'<td><a href="{_e(_link(j))}" target="_blank" rel="noopener">{_e(j.title)}</a></td>'
+def _vacancy_link(j) -> str:
+    return f'<a href="{_e(_link(j))}" target="_blank" rel="noopener">{_e(j.title)}</a>'
+
+
+def _refused_rows(refused: list) -> list[str]:
+    return [
+        f"<tr><td>{_e(j.company)}</td><td>{_vacancy_link(j)}</td>"
         f"<td>{_e(j.location)}</td><td>{_e(_date(j))}</td>"
         f'<td class="small">{_e("; ".join(filter(None, [j.applied_status, *j.history_marks])))}</td></tr>'
         for j in sorted(refused, key=lambda j: j.company.lower())
     ]
-    rejected = [j for j in stats.get("rejected", []) if not report._was_rejected(j)]
-    rejected_rows = [
-        f'<tr><td class="n">{j.relevance}</td><td>{_e(j.company)}</td>'
-        f'<td><a href="{_e(_link(j))}" target="_blank" rel="noopener">{_e(j.title)}</a></td>'
+
+
+def _rejected_rows(rejected: list) -> list[str]:
+    return [
+        f'<tr><td class="n">{j.relevance}</td><td>{_e(j.company)}</td><td>{_vacancy_link(j)}</td>'
         f"<td>{_e(j.reject)}</td><td class=\"small\">{_e(j.reject_quote)}</td>"
         f'<td class="small">{_e(report._source(j))}</td></tr>'
         for j in report.pick_rejected(rejected)
     ]
-    staffing_rows = [
-        f"<tr><td>{_e(j.company)}</td>"
-        f'<td><a href="{_e(_link(j))}" target="_blank" rel="noopener">{_e(j.title)}</a></td>'
+
+
+def _staffing_rows(staffing: list) -> list[str]:
+    return [
+        f"<tr><td>{_e(j.company)}</td><td>{_vacancy_link(j)}</td>"
         f"<td>{_e(j.location)}</td><td class=\"small\">{_e(j.staffing)}</td></tr>"
         for j in sorted(staffing, key=lambda j: j.company.lower())
     ]
+
+
+def _skill_gaps_html(main: list, tg: list) -> list[str]:
+    gaps = report.skill_gaps(main, tg)
+    if not gaps["total"]:
+        return []
+    nice, total = dict(gaps["nice"]), gaps["total"]
+    gap_rows = []
+    for name, n in gaps["core"]:
+        extra = nice.pop(name, 0)
+        extra_cell = f"{extra} ({round(100 * extra / total)}%)" if extra else "—"
+        gap_rows.append(f'<tr><td>{_e(name)}</td><td class="n">{n} ({round(100 * n / total)}%)</td>'
+                        f'<td class="n">{extra_cell}</td></tr>')
+    return [f"<details><summary><h2>📊 Skills missing most often — over {gaps['total']} fitting "
+            "vacancies (Backend, ML / AI)</h2></summary>",
+            _table(["Skill", "Key (not in the CV)", "Nice-to-have"], gap_rows, num=(1, 2)), "</details>"]
+
+
+def _filter_bar(rows: list[str], top: int) -> list[str]:
+    """Filter buttons above the table: the number in brackets is how many rows have that mark (data-*)."""
+    n = {key: sum(f'data-{key}="1"' in r for r in rows) for key in
+         ("new", "ok", "check", "reloc", "fit", "prio", "fit80", "pay")}
+    pay_min = salary.min_monthly()
+    return [
+        '<div class="bar">',
+        f'<button data-mode="all" class="on">All ({len(rows)})</button>',
+        f'<button data-mode="new">🆕 New ({n["new"]})</button>',
+        f'<button data-mode="top">⭐ Top ({top})</button>',
+        (f'<button data-mode="prio" title="companies with priority 1–3 in companies.txt">★ Priority ({n["prio"]})</button>'
+         if n["prio"] else ""),
+        f'<button data-mode="ok">✅ Confirmed ({n["ok"]})</button>',
+        f'<button data-mode="fit80">Fit ≥ 80% ({n["fit80"]})</button>',
+        f'<button data-mode="fit">✔ Full match ({n["fit"]})</button>',
+        (f'<button data-mode="pay" title="Only vacancies whose text states a range with an upper bound of at least {pay_min} '
+         f'EUR/month; the base estimate and levels.fyi do not count">💶 Range ≥ {pay_min / 1000:g}k ({n["pay"]})</button>' if pay_min else ""),
+        f'<button data-mode="reloc">🌍 Relocation ({n["reloc"]})</button>',
+        f'<button data-mode="check">❓ Check ({n["check"]})</button>',
+        '<input id="q" type="search" placeholder="Search: company, role, skill, location…">',
+        '<span class="count" id="count"></span></div>',
+    ]
+
+
+def _listed(j) -> bool:
+    """In the main table: not "local language required" and not outsourcing (they have their own sections)."""
+    return not j.lang_required and not j.staffing
+
+
+def render(day: date, jobs: list, stats: dict, tg_jobs: list | None = None) -> str:
+    """HTML report page. The sections are the same as in the Markdown report."""
+    tg_jobs = tg_jobs or []
+    staffing = [j for j in [*jobs, *tg_jobs] if j.staffing and not j.lang_required]
+    refused, main = report._partition([j for j in jobs if _listed(j)], report._was_rejected)
+    refused_tg, tg = report._partition([j for j in tg_jobs if _listed(j)], report._was_rejected)
+    refused += refused_tg
+    top_ids = {id(j) for j, _ in report.pick_review(main, tg)}
+    rows = [_main_row(j, day, id(j) in top_ids) for j in sorted([*main, *tg], key=tiers.sort_key)]
+    rejected = [j for j in stats.get("rejected", []) if not report._was_rejected(j)]
+    refused_rows, rejected_rows, staffing_rows = _refused_rows(refused), _rejected_rows(rejected), _staffing_rows(staffing)
+
+    def count(key: str) -> int:
+        return sum(f'data-{key}="1"' in r for r in rows)
 
     parts = [
         "<!doctype html>", '<html lang="en"><head><meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         f"<title>Vacancies {day.isoformat()}</title><style>{_CSS}</style></head><body>",
         f"<h1>Vacancies for {day.isoformat()}</h1>",
-        f'<div class="sub">Total {len(rows)} · new {new_count} · in the top {len(top_ids)} · '
-        f"✅ {ok_count} · 🌍 {reloc_count} · ❓ {check_count} · rejected before {len(refused)} · rejected by filters {len(rejected)}</div>",
+        f'<div class="sub">Total {len(rows)} · new {count("new")} · in the top {len(top_ids)} · '
+        f"✅ {count('ok')} · 🌍 {count('reloc')} · ❓ {count('check')} · rejected before {len(refused)} · "
+        f"rejected by filters {len(rejected)}</div>",
         _applications_html(stats),
-        '<div class="bar">',
-        f'<button data-mode="all" class="on">All ({len(rows)})</button>',
-        f'<button data-mode="new">🆕 New ({new_count})</button>',
-        f'<button data-mode="top">⭐ Top ({len(top_ids)})</button>',
-        (f'<button data-mode="prio" title="companies with priority 1–3 in companies.txt">★ Priority ({prio_count})</button>'
-         if prio_count else ""),
-        f'<button data-mode="ok">✅ Confirmed ({ok_count})</button>',
-        f'<button data-mode="fit80">Fit ≥ 80% ({fit80_count})</button>',
-        f'<button data-mode="fit">✔ Full match ({fit_count})</button>',
-        (f'<button data-mode="pay" title="Only vacancies whose text states a range with an upper bound of at least {pay_min} '
-         f'EUR/month; the base estimate and levels.fyi do not count">💶 Range ≥ {pay_min / 1000:g}k ({pay_count})</button>' if pay_min else ""),
-        f'<button data-mode="reloc">🌍 Relocation ({reloc_count})</button>',
-        f'<button data-mode="check">❓ Check ({check_count})</button>',
-        '<input id="q" type="search" placeholder="Search: company, role, skill, location…">',
-        '<span class="count" id="count"></span></div>',
+        *_filter_bar(rows, len(top_ids)),
         _table(["Category", "Score", "Fit %", "Grade", "Company", "Vacancy", "Location", "Status", "Salary, EUR/month", "Date", "Source",
                 "Match with the CV", "Missing", "Marks"],
                rows, "main", num=(1,)),
@@ -379,18 +414,7 @@ def render(day: date, jobs: list, stats: dict, tg_jobs: list | None = None) -> s
         parts += [f"<details><summary><h2>Rejected by filters — {len(rejected)} (shown {len(rejected_rows)})</h2></summary>",
                   '<div class="small">Full list — state/rejected_latest.tsv</div>',
                   _table(["Raw score", "Company", "Vacancy", "Reason", "Quote", "Source"], rejected_rows, num=(0,)), "</details>"]
-    gaps = report.skill_gaps(main, tg)
-    if gaps["total"]:
-        nice, total = dict(gaps["nice"]), gaps["total"]
-        gap_rows = []
-        for name, n in gaps["core"]:
-            extra = nice.pop(name, 0)
-            extra_cell = f"{extra} ({round(100 * extra / total)}%)" if extra else "—"
-            gap_rows.append(f'<tr><td>{_e(name)}</td><td class="n">{n} ({round(100 * n / total)}%)</td>'
-                            f'<td class="n">{extra_cell}</td></tr>')
-        parts += [f"<details><summary><h2>📊 Skills missing most often — over {gaps['total']} fitting "
-                  "vacancies (Backend, ML / AI)</h2></summary>",
-                  _table(["Skill", "Key (not in the CV)", "Nice-to-have"], gap_rows, num=(1, 2)), "</details>"]
+    parts += _skill_gaps_html(main, tg)
     if staffing_rows:
         parts += [f"<details><summary><h2>Staffing / outsourcing — {len(staffing_rows)}</h2></summary>",
                   _table(["Company", "Vacancy", "Location", "Reason"], staffing_rows), "</details>"]
