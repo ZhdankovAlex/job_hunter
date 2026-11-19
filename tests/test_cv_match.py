@@ -79,3 +79,32 @@ def test_mypy_is_a_known_technology(text):
     (optional skills are picked by a TECH_RX match)."""
     assert cv_match.TECH_RX["mypy"].search(text)
     assert cv_match._TECH_ANY_RX.search(text)
+
+
+@pytest.mark.parametrize("text", [
+    "Важен опыт с любым фреймворком кроме django.",
+    "Any web framework except Django is fine.",
+    "You will build REST services, not Django admin pages.",
+])
+def test_negated_tech_is_not_required(profile, text):
+    """"Any framework except django" — Django is neither a requirement nor a gap in the CV."""
+    holder = job()
+    profile.analyze(holder, text)
+    assert "Django" not in holder.cv_core_missing and "Django" not in holder.cv_missing
+
+
+def test_negation_does_not_hide_other_clauses(profile):
+    """The caveat works only after "except" in its own part: Scala before it stays a requirement,
+    "not only … but also" is not a negation."""
+    holder = job()
+    profile.analyze(holder, "Strong Scala skills; any framework except Django.\nNot only Python but also Rust.")
+    assert {"Scala", "Rust"} <= set(holder.cv_core_missing)
+    assert "Django" not in holder.cv_core_missing
+
+
+def test_industry_field_is_not_a_missing_skill(profile):
+    """The label "Industry: Sports Trading" is an industry, not a skill (was: Sports among the gaps, Fit 91%)."""
+    holder = job(title="Python Developer (Sports)")
+    profile.analyze(holder, "Industry: Sports Trading\nLocation: Remote\nRequirements: Python and PostgreSQL. "
+                            "Sports data feeds. Sports odds. Sports markets.")
+    assert "Sports" not in holder.cv_core_missing and "Trading" not in holder.cv_core_missing

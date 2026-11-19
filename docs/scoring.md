@@ -48,10 +48,13 @@ for example FastAPI → Pydantic, S3 → AWS (partially).
 
 `cv_match.fit_percent`: dictionary skills are **key** (title and normal requirements) or **nice-to-have** (only
 next to "nice to have", "a plus", "preferred"); a skill required anywhere without a caveat is key. Alternatives
-("Python, Go or Java") do not penalise if you have one of them. Fit = 85% × share of covered key skills +
+("Python, Go or Java") do not penalise if you have one of them. A technology after "except", "excluding",
+"other than", "not" (or Russian «кроме») in the same part of a sentence is not a requirement: "any framework
+except Django" does not make Django a gap. Fit = 85% × share of covered key skills +
 15% × share of covered nice-to-have; a key skill weighs by the number of mentions (1–10). Terms outside the
 dictionary also count: a capitalised word in the middle of a sentence that appears 3+ times or is in the title
-is a key skill (except the company, generic words from `_GENERIC_TERMS` and what your CV has). Minus 15 for each
+is a key skill (except the company, generic words from `_GENERIC_TERMS` — industries such as Sports or Betting
+included —, field labels like "Industry: …" or "Location: …" and what your CV has). Minus 15 for each
 mismatch and 3 for a partial match. In HTML — a "Fit %" bar (green from 85, light green from 70, yellow from 50,
 red below; hover for the breakdown) and the "Fit ≥ 80%" filter.
 

@@ -90,7 +90,11 @@ _NICE_RX = re.compile(
     r"nice[\s-]to[\s-]have|bonus|\ba plus\b|is a plus|preferred|desirable|advantage|optional|familiarity|"
     r"exposure to|good to have|would be great|ideally|будет плюсом|желательно|приветствуется", _I)
 _ALTERNATIVES_RX = re.compile(r"\bor\b|\be\.g\.|such as|similar|equivalent|like\b|/|или|аналог", _I)
-_CLAUSE_SPLIT_RX = re.compile(r"\band\b(?!\s*/)|\bas well as\b|\bplus\b|;| и ", re.I)
+# "any framework except Django", "кроме django", "not Django": a technology after such a word in the same part
+# of a sentence is not a requirement. Russian «не» and «без» are left out: «не менее 3 лет Python» ("at least
+# 3 years of Python") and «без Python не рассматриваем» ("no Python, no interview") still require Python
+_NEGATION_RX = re.compile(r"\b(?:except|excluding|other than|no need for|not(?!\s+only))\b|кроме|за исключением", _I)
+_CLAUSE_SPLIT_RX =re.compile(r"\band\b(?!\s*/)|\bas well as\b|\bplus\b|;| и ", re.I)
 _SENTENCE_RX = re.compile(r"[^\n.!?;•]+")
 _ENGLISH_HIGH_RX = re.compile(r"\b(?:c1|c2)\b[^.\n]{0,25}english|english[^.\n]{0,25}\b(?:c1|c2|native|mother tongue)\b|"
                               r"native[\s-]level english|native english", _I)
@@ -136,7 +140,11 @@ _BOILERPLATE_RX = re.compile(
     r"benefits|health (?:insurance|care)|401\(?k|paid time off|parental leave|stock options?|equity",
     re.I,
 )
-_MIDSENTENCE_TERM_RX = re.compile(r"(?<=[a-z0-9,;:(/] )([A-Z][A-Za-z0-9+#]{1,30}|[A-Z]{2,}[a-z]?)(?=[\s.,;:)/-]|$)")
+# field labels of a vacancy card: "Industry: Sports Trading", "Location: …" — an industry and a place, not skills
+_FIELD_LINE_RX = re.compile(
+    r"\s*(?:industry|sector|domain|location|salary|employment|schedule|company|отрасль|сфера|локация|"
+    r"зарплата|занятость|график|компания)\s*:", re.I)
+_MIDSENTENCE_TERM_RX =re.compile(r"(?<=[a-z0-9,;:(/] )([A-Z][A-Za-z0-9+#]{1,30}|[A-Z]{2,}[a-z]?)(?=[\s.,;:)/-]|$)")
 _TITLE_TERM_RX = re.compile(r"\b([A-Z][A-Za-z0-9+#]{1,30})\b")
 _LINK_TOKEN_RX = re.compile(r"\S\.(?:sh|com|io|ai|org|net|dev|app)|https?://")  # "odoo.sh", "github.com/…", links
 # words written with a capital letter that are neither technologies nor skills
@@ -151,7 +159,7 @@ clients mobile web api apis ui ux ceo cto cpo coo hr it qa ci cd sre saas b2b b2
 pto ai ml monday tuesday wednesday thursday friday january february march april may june july august september
 october november december key core new about who what why how join apply benefits requirements responsibilities
 mission vision values equal opportunity employer diversity inclusion health insurance salary bonus equity stock
-fintech igaming crypto trading market markets marketing sales legal compliance security research design
+fintech igaming crypto trading sports sport sportsbook betting gaming casino market markets marketing sales legal compliance security research design
 architecture scientist science analyst analytics interview interviews case cases assurance integration
 integrations stack officer specialist executive relationship people brand reporting acquisition risk payments
 events creative producer designer counsel safety construction balance did north south east west african indian
@@ -220,7 +228,7 @@ class CvProfile:
         """Technical terms outside the dictionary that are missing from the CV: {term: how many times in the text}."""
         company = (getattr(job, "company", "") or "").lower()
         # boilerplate lines (salary, benefits, equal opportunity) are not about skills
-        lines = [line for line in text.splitlines() if not _BOILERPLATE_RX.search(line)]
+        lines = [line for line in text.splitlines() if not _BOILERPLATE_RX.search(line) and not _FIELD_LINE_RX.match(line)]
         text = "\n".join(lines)
         mid = Counter(_norm_term(m) for m in _MIDSENTENCE_TERM_RX.findall(text))
         # requirement lines: "Experience with Temporal" — one mention is enough
@@ -275,11 +283,14 @@ class CvProfile:
             def clause_of(name, sentence=sentence, cuts=cuts):  # called right here, in this iteration
                 m = TECH_RX[name].search(sentence)
                 pos = m.start() if m else 0
-                return next(i for i, (a, b) in enumerate(zip(cuts, cuts[1:])) if a <= pos < b)
+                idx = next(i for i, (a, b) in enumerate(zip(cuts, cuts[1:])) if a <= pos < b)
+                return idx, bool(_NEGATION_RX.search(sentence, cuts[idx], pos))
 
             by_clause: dict[int, list[str]] = {}
             for name in hits:
-                by_clause.setdefault(clause_of(name), []).append(name)
+                idx, negated = clause_of(name)
+                if not negated:
+                    by_clause.setdefault(idx, []).append(name)
             for idx, names in by_clause.items():
                 clause = clauses[idx]
                 nice = header_nice or bool(_NICE_RX.search(clause))

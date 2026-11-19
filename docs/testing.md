@@ -34,7 +34,7 @@ after `pytest`, `git status` is clean.
 | `tests/test_mail.py` | Letter type: application, stage, rejection, offer. Conditional phrases and caveats ("If your profile fits…", "may not be the right fit"), typographic apostrophes, quoted old letters, speed on a long letter, company from the sender and the subject, `[mail.sender_company]` |
 | `tests/test_applications_report.py` | Application status and the funnel: a new application after a rejection, cancelled meetings, "declined", rejection after silence, events in the future |
 | `tests/test_relevance.py` | The vacancy score: skills and their order by weight, title-only adjustments, outsourcing, Russian language, Go vs "Python not primary", JVM and 8+ years, CV gaps with a floor, freehire data (an EUR range from 60k), location, company priority, skill edits from the UI and broken patterns |
-| `tests/test_cv_match.py` | Fit %: key and nice-to-have skills, "Python, Go or Java", years of experience, new terms; the combined technology pattern answers the same as the separate ones |
+| `tests/test_cv_match.py` | Fit %: key and nice-to-have skills, "Python, Go or Java", years of experience, new terms, "except Django" and "Industry: …" labels are not requirements; the combined technology pattern answers the same as the separate ones |
 | `tests/test_sources.py` | Parsing fin.dev (JSON-LD), career pages (the `links` setting, the title from `aria-label`), Teamtailor RSS — on saved pages from `tests/fixtures/`; `[manual_jobs]` entries with `company` / `location`; `Http` and `FakeHttp` fit the `HttpClient` protocol |
 | `tests/test_filters.py` | Selection by role, employment type and the presence of a link |
 | `tests/test_verify.py` | Full-text checks: on-site, country binding, JVM, Russia-only remote, AI trainer; 7+ and 8+ years are a penalty, not hiding; manual check |
@@ -43,6 +43,7 @@ after `pytest`, `git status` is clean.
 | `tests/test_freehire.py` | API record → vacancy (utm, salary, preview), prefilter (role, experience, `part_time`), relocation from freehire's markup |
 | `tests/test_telegram.py` | Posts of every channel format (markup as on t.me), telegra.ph, reading a channel page, labels and filtering |
 | `tests/test_cvgen_report.py` | A CV for a vacancy (headline for the title, one-page version, HTML); the report: sections and staffing in the appendix |
+| `tests/test_vacancy_lookup.py` | A vacancy by link: the company from JobPosting, or from the domain when JobPosting names the career site ("Career Hub") |
 | `tests/test_api_schema.py` | The whole web API against its OpenAPI schema (schemathesis): no 500s, responses and codes as in the schema, invalid input is rejected — see below |
 | `tests/test_main_run.py` | The whole `main.run` without network: one company on Greenhouse via `FakeHttp`, the order of stages, reports and the vacancies JSON; a write outside `tmp_path` fails the test |
 | `tests/test_web.py` | Web UI pages open on empty data; the "Skills" cache; reports are served with `Cache-Control: no-cache` |
