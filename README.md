@@ -148,6 +148,7 @@ Daily runs via Task Scheduler / cron or Docker: [docs/pipeline.md](docs/pipeline
 | [docs/docker.md](docs/docker.md) | Running in Docker |
 | [docs/configuration.md](docs/configuration.md) | Where things are: settings, code, data, personal files and examples |
 | [docs/testing.md](docs/testing.md) | Tests, property-based API check (schemathesis), linter, mypy and CI on every pull request |
+| [docs/claude-code.md](docs/claude-code.md) | Developing with Claude Code: CLAUDE.md, project skills, hooks and why there are so few |
 | [RELEASE_NOTES.md](RELEASE_NOTES.md) | What was added or fixed and when — built from the git history after every push to main |
 
 ## Development

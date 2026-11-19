@@ -323,3 +323,4 @@ skipped on purpose where they would only add layers.
 | Settings and personal files | [configuration.md](configuration.md) |
 | Tests, CI and the API check | [testing.md](testing.md), `tests/test_api_schema.py` |
 | Running in Docker | [docker.md](docker.md) |
+| Working with Claude Code: rules, skills, hooks | [claude-code.md](claude-code.md) |
