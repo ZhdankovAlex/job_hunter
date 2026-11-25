@@ -2,6 +2,19 @@
 
 Built from the git history automatically after a push to main (`python -m jobhunter.release_notes`). Newest changes first.
 
+## 2026-11-25
+
+### Design system: shared tokens, page macros, a light / dark theme toggle (#29)
+
+- web/static/tokens.css: one palette (light and dark), fonts, the size scale 12 · 13 · 14 · 16 · 20 px, weights, radii, the spacing scale 4 · 8 · 12 · 16 · 24 · 32 px, control height and shadows. The UI loads it before app.css, the pages in reports/ embed it in full (html_report.TOKENS_CSS) and still open without the server
+- app.css rebuilt on the tokens: components (buttons of one height, fields styled in one place, forms, page and card headers, tables, chips and badges, empty states, statuses), one page rhythm; html_report and applications_report use the same tokens instead of their own palette and font sizes
+- web/templates/_ui.html: macros page_head, card_head, form_actions, field, empty; every regular page starts with ui.page_head, inline styles are gone from templates
+- Theme toggle "system / light / dark" at the bottom of the left panel: stored in localStorage and applied to <html data-theme> before rendering; reports in a frame follow it via THEME_JS and the storage event
+- tests/test_styles.py: font sizes only from the scale, the palette only in tokens.css, all variables defined, one control height, --on-accent, no style= in templates, both dark palettes match, the theme script in <head>; tests/test_web.py: the rendered page header and the empty state
+- docs: web-ui.md — "One style base", "One header and one rhythm", "Design system: how to build a new page"; testing.md — test_styles.py
+
+<sub>e5e83d3</sub>
+
 ## 2026-11-19
 
 ### Tests for the web run launcher, levels.fyi and Telegram, a levels.fyi parsing bug (#27)
