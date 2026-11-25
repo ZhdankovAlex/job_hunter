@@ -1,11 +1,12 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Reports · job-hunter{% endblock %}
 {% block main_class %}split{% endblock %}
 {% block content %}
 <aside class="side">
-  <h2>Reports <span class="muted small">{{ reports|length }}</span></h2>
+  {{ ui.card_head("Reports", reports|length) }}
   {% if not reports %}
-  <p class="muted">No reports yet — start a run on the Pipeline page.</p>
+  {{ ui.empty("No reports yet", "Start a run on the Pipeline page.") }}
   {% endif %}
   <ul class="report-list">
     {% for r in reports %}
@@ -27,6 +28,7 @@
     <button class="side-toggle" id="side-toggle" type="button" title="Hide / show the report list">
       <span class="nav-ic" aria-hidden="true">«</span><span>Report list</span></button>
     <span class="muted small">{{ current or '' }}</span>
+    {% if current %}<div class="page-actions"><a class="btn" href="/files/reports/{{ current }}" target="_blank">↗ Open in a new tab</a></div>{% endif %}
   </div>
   {% if current %}
   <iframe class="viewer" src="/files/reports/{{ current }}" title="Report {{ current }}"></iframe>

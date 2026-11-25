@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime
 from urllib.parse import quote
 
 from . import geo, mail
-from .html_report import _CSS, _JS, _e, _table
+from .html_report import _CSS, _JS, THEME_JS, _e, _table
 
 # Final statuses and row colours
 OFFER, ACTIVE, WAITING, DECLINED, REJECTED = "offer", "active", "waiting", "declined", "rejected"
@@ -113,11 +113,13 @@ def funnel_line(stages: list[str]) -> str:
 
 
 _CSS_COLORS = """
-tr.c-green { background: rgba(34,197,94,.13); } tr.c-yellow { background: rgba(234,179,8,.15); }
-tr.c-orange { background: rgba(249,115,22,.17); } tr.c-red { background: rgba(239,68,68,.11); }
+/* status colors — from the tokens.css palette; orange ("declined by you") is a mix of --warn and --bad */
+.c-green { background: var(--ok-soft); } .c-yellow { background: var(--warn-soft); }
+.c-orange { background: color-mix(in srgb, color-mix(in srgb, var(--warn), var(--bad)) 16%, transparent); }
+.c-red { background: var(--bad-soft); }
 tbody tr.c-green:hover, tbody tr.c-yellow:hover, tbody tr.c-orange:hover, tbody tr.c-red:hover { filter: brightness(.97); }
-.legend span { display: inline-block; padding: 1px 8px; border-radius: 6px; margin-right: 6px; }
-.funnel { font-size: 15px; margin: 6px 0 10px; }
+.legend span { display: inline-block; padding: 1px 8px; border-radius: var(--r-pill); margin-right: 6px; font-size: var(--fs-sm); }
+.funnel { font-size: var(--fs-lg); margin: 0 0 var(--sp-2); }
 """
 
 
@@ -274,16 +276,16 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
     buttons += [(s, f"{STATUS[s][0]} ({counts[s]})") for s in order if counts.get(s)]
     legend = (
         '<div class="sub legend">'
-        '<span class="c-green" style="background:rgba(34,197,94,.13)">green — stages, offer</span>'
-        f'<span style="background:rgba(234,179,8,.15)">yellow — waiting for an answer, up to {TIMEOUT_DAYS} days</span>'
-        '<span style="background:rgba(249,115,22,.17)">orange — declined by you</span>'
-        f'<span style="background:rgba(239,68,68,.11)">red — rejected: a letter, a mark or {TIMEOUT_DAYS}+ days of silence</span>'
+        '<span class="c-green">green — stages, offer</span>'
+        f'<span class="c-yellow">yellow — waiting for an answer, up to {TIMEOUT_DAYS} days</span>'
+        '<span class="c-orange">orange — declined by you</span>'
+        f'<span class="c-red">red — rejected: a letter, a mark or {TIMEOUT_DAYS}+ days of silence</span>'
         "</div>"
     )
     parts = [
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>",
         "<meta name='viewport' content='width=device-width, initial-scale=1'>",
-        f"<title>Applications — {day.isoformat()}</title><style>{_CSS}{_CSS_COLORS}</style></head><body>",
+        f"<title>Applications — {day.isoformat()}</title>{THEME_JS}<style>{_CSS}{_CSS_COLORS}</style></head><body>",
         f"<h1>Applications from correspondence — {day.isoformat()}</h1>",
         f'<div class="warning">⚠️ {_e(warning)}</div>' if warning else "",
         f'<div class="sub">Mail {_e(address)} and applications_manual.toml (Telegram, LinkedIn) · companies {len(rows)} · '

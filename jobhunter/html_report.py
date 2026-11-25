@@ -6,27 +6,41 @@ from datetime import date
 from html import escape
 from urllib.parse import quote
 
-from . import cv_match, industry, outreach, report, salary, tiers
+from . import config, cv_match, industry, outreach, report, salary, tiers
 
-_CSS = """
-:root { color-scheme: light dark; --bg:#fff; --fg:#1b1f24; --muted:#667085; --line:#e4e7ec; --row:#f8fafc;
-        --accent:#2563eb; --ok:#15803d; --warn:#b45309; --chip:#eef2f6; }
-@media (prefers-color-scheme: dark) {
-  :root { --bg:#14171c; --fg:#e6e8eb; --muted:#98a2b3; --line:#2b313a; --row:#1b2027; --accent:#7aa7ff;
-          --ok:#4ade80; --warn:#fbbf24; --chip:#252b34; } }
+# The shared style base (colors, fonts, the size scale) — the same as the web UI's: the file is embedded into the page
+# in full, so the report also opens without the server
+TOKENS_CSS = (config.ROOT / "web" / "static" / "tokens.css").read_text(encoding="utf-8")
+
+# Theme — the choice from the web UI toggle (localStorage "theme", see base.html). A page in a frame is served from the
+# same origin and reads it before rendering, and the storage event switches it together with the UI; a page opened from
+# disk (file:) follows the system. Goes into <head> of every page in reports/
+THEME_JS = (
+    "<script>(function(){if(location.protocol==='file:')return;var r=document.documentElement;"
+    "function a(t){if(t==='light'||t==='dark')r.dataset.theme=t;else delete r.dataset.theme;}"
+    "try{a(localStorage.getItem('theme'));}catch(e){}"
+    "addEventListener('storage',function(e){if(e.key==='theme'||e.key===null)a(e.newValue);});})();</script>"
+)
+
+_CSS = TOKENS_CSS + """
 * { box-sizing: border-box; }
-body { margin: 0; padding: 20px 24px 60px; background: var(--bg); color: var(--fg);
-       font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 0; display: inline; }
-.sub { color: var(--muted); margin-bottom: 14px; }
-.warning { border: 2px solid #d33; border-radius: 6px; padding: 8px 12px; margin-bottom: 14px; font-weight: bold; }
-.bar { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 10px 0; display: flex; gap: 8px;
+body { margin: 0; padding: var(--sp-5) var(--sp-5) 60px; background: var(--bg); color: var(--fg);
+       font: var(--fs-md)/var(--lh) var(--font-sans); }
+h1 { font-size: var(--fs-xl); margin: 0 0 var(--sp-2); } h2 { font-size: var(--fs-lg); margin: 0; display: inline; }
+.sub { color: var(--muted); margin-bottom: var(--sp-4); }
+.warning { border: 1px solid var(--bad); background: var(--bad-soft); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3);
+           margin-bottom: var(--sp-4); font-weight: var(--fw-medium); }
+/* filters and search — the same pills and field as in the UI (web/static/app.css: .toggles, input) */
+.bar { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: var(--sp-2) 0; display: flex; gap: var(--sp-1);
        flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--line); }
-.bar button { border: 1px solid var(--line); background: var(--chip); color: var(--fg); padding: 6px 12px;
-              border-radius: 999px; cursor: pointer; font: inherit; }
-.bar button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-.bar input { flex: 1; min-width: 220px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 8px;
-             background: var(--bg); color: var(--fg); font: inherit; }
+.bar button { display: inline-flex; align-items: center; height: var(--ctl-h-sm); padding: 0 10px; border: 1px solid var(--line);
+              background: var(--chip); color: var(--fg); border-radius: var(--r-pill); cursor: pointer; font: inherit;
+              font-size: var(--fs-sm); white-space: nowrap; }
+.bar button:hover { border-color: var(--accent); }
+.bar button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.bar input { flex: 1; min-width: 220px; height: var(--ctl-h); margin-left: var(--sp-1); padding: 0 10px; border: 1px solid var(--line);
+             border-radius: var(--r-md); background: var(--card); color: var(--fg); font: inherit; }
+.bar input:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus); }
 .count { color: var(--muted); white-space: nowrap; }
 .wrap { overflow-x: auto; }
 /* the main table has its own scroll, one screen high: the horizontal bar is always at the bottom of the window,
@@ -38,29 +52,38 @@ h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 0; displa
            background: var(--bg); border-top: 1px solid var(--line); }
 .hscroll div { height: 1px; }
 /* the table's own horizontal bar is hidden — the floating .hscroll replaces it; the vertical one stays */
-.main-wrap::-webkit-scrollbar { height: 0; width: 10px; } .main-wrap::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; }
+.main-wrap::-webkit-scrollbar { height: 0; width: 10px; } .main-wrap::-webkit-scrollbar-thumb { background: var(--line); border-radius: var(--r-sm); }
 .main-wrap thead th { position: sticky; top: 0; z-index: 1; background: var(--bg); }
 .main-wrap td.small { min-width: 140px; max-width: 280px; }
 table { border-collapse: collapse; width: 100%; margin-top: 8px; }
 th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { cursor: pointer; user-select: none; white-space: nowrap; color: var(--muted); font-weight: 600; }
+th { cursor: pointer; user-select: none; white-space: nowrap; color: var(--muted); font-weight: var(--fw-medium); }
 th:hover { color: var(--fg); }
 tbody tr:hover { background: var(--row); }
-td.n { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+td.n { font-variant-numeric: tabular-nums; font-weight: var(--fw-bold); text-align: right; }
 th.n { text-align: right; }
-td.small, .small { color: var(--muted); font-size: 12.5px; }
+td.small, .small { color: var(--muted); font-size: var(--fs-sm); }
 a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
-.tag { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--chip); font-size: 12px;
+.tag { display: inline-block; padding: 1px 7px; border-radius: var(--r-pill); background: var(--chip); font-size: var(--fs-xs);
        margin-right: 4px; white-space: nowrap; }
-.tag.ind { color: var(--accent); } .tag.new { background: var(--accent); color: #fff; } .tag.top { background: #f59e0b; color: #1b1f24; }
+.tag.ind { color: var(--accent); } .tag.new { background: var(--accent); color: var(--on-accent); }
+.tag.top { background: var(--warn-soft); color: var(--warn); }
 .ok { color: var(--ok); } .warn { color: var(--warn); }
 details { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 14px; }
-.fit { position: relative; min-width: 74px; height: 20px; border-radius: 5px; background: var(--chip); overflow: hidden; }
+.fit { position: relative; min-width: 74px; height: 20px; border-radius: var(--r-sm); background: var(--chip); overflow: hidden; }
 .fit i { position: absolute; inset: 0 auto 0 0; display: block; }
-.fit b { position: relative; display: block; text-align: center; line-height: 20px; font-size: 12.5px; }
+.fit b { position: relative; display: block; text-align: center; line-height: 20px; font-size: var(--fs-sm); }
 summary { cursor: pointer; }
-.reach { margin-top: 4px; font-size: 12.5px; }
+.reach { margin-top: 4px; font-size: var(--fs-sm); }
 button.copy { border: 1px solid var(--line); background: var(--chip); color: var(--fg); cursor: pointer; font: inherit; }
+button.copy:hover { border-color: var(--accent); }
+/* a hover hint: data-tip="…" (like the tip component in web/static/app.css). The native title does not pop up
+   in embedded browsers or waits a second — this one shows at once; with tabindex="0" — also on keyboard focus */
+[data-tip] { position: relative; cursor: help; }
+[data-tip]:hover::after, [data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; left: 0;
+  top: calc(100% + 6px); z-index: 10; width: max-content; max-width: 320px; padding: var(--sp-2) var(--sp-3);
+  background: var(--fg); color: var(--bg); font-size: var(--fs-sm); font-weight: normal; line-height: 1.4;
+  white-space: normal; border-radius: var(--r-md); box-shadow: var(--sh-2); pointer-events: none; }
 """
 
 _JS = """
@@ -396,7 +419,7 @@ def render(day: date, jobs: list, stats: dict, tg_jobs: list | None = None) -> s
     parts = [
         "<!doctype html>", '<html lang="en"><head><meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        f"<title>Vacancies {day.isoformat()}</title><style>{_CSS}</style></head><body>",
+        f"<title>Vacancies {day.isoformat()}</title>{THEME_JS}<style>{_CSS}</style></head><body>",
         f"<h1>Vacancies for {day.isoformat()}</h1>",
         f'<div class="sub">Total {len(rows)} · new {count("new")} · in the top {len(top_ids)} · '
         f"✅ {count('ok')} · 🌍 {count('reloc')} · ❓ {count('check')} · rejected before {len(refused)} · "

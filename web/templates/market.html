@@ -1,24 +1,23 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}CV vs market · job-hunter{% endblock %}
 {% set where_text = {"pdf": "in the CV", "base": "base only", "": "no"} %}
 {% block content %}
-<div class="table-head">
-  <h1>CV vs market</h1>
+{% set lead %}A local ATS checker: the CV is compared with the fitting vacancies of the day (backend, Python, software, AI by title) —
+  not with an abstract skill list. Nothing is sent anywhere.{% endset %}
+{% call ui.page_head("CV vs market", lead=lead) %}
   {% if r.days %}
-  <form method="get" class="day-pick">
-    <label class="muted small">vacancies of
-      <select name="day" onchange="this.form.submit()">
-        {% for d in r.days %}<option value="{{ d }}" {{ 'selected' if d == r.day }}>{{ d }}</option>{% endfor %}
-      </select>
-    </label>
+  <form method="get" class="day-pick form-inline">
+    <label class="muted small" for="day">vacancies of</label>
+    <select name="day" id="day" onchange="this.form.submit()">
+      {% for d in r.days %}<option value="{{ d }}" {{ 'selected' if d == r.day }}>{{ d }}</option>{% endfor %}
+    </select>
   </form>
   {% endif %}
-</div>
-<p class="muted">A local ATS checker: the CV is compared with the fitting vacancies of the day (backend, Python, software, AI by title) —
-  not with an abstract skill list. Nothing is sent anywhere.</p>
+{% endcall %}
 
 {% if not r.relevant %}
-<p class="card">No data: at least one run with the new script version is needed (vacancy texts are saved in <code>state/jobs/</code>).</p>
+{{ ui.empty("No data yet", "At least one run is needed: vacancy texts are saved in state/jobs/.") }}
 {% else %}
 <section class="tiles wide" style="--n: 4">
   <div class="tile"><b>{{ r.relevant }}</b><span>fitting vacancies of {{ r.total }}</span></div>

@@ -1,12 +1,13 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Cover letter · job-hunter{% endblock %}
 {% block content %}
-<h1>Cover letter</h1>
-<p class="muted">Achievements and soft skills are picked from <code>cv/base.toml</code> for the vacancy text
-  (template and wording — the <code>[cover]</code> section) — nothing is invented. The "✉️" button in the report builds the same.</p>
+{% set lead %}Achievements and soft skills are picked from <code>cv/base.toml</code> for the vacancy text
+  (template and wording — the <code>[cover]</code> section) — nothing is invented. The "✉️" button in the report builds the same.{% endset %}
+{{ ui.page_head("Cover letter", lead=lead) }}
 
 <section class="grid two cv-grid">
-  <form class="card cv-form" id="cover-form">
+  <form class="card form" id="cover-form">
     <label>Link to the vacancy
       <input name="url" type="url" placeholder="https://… — from a report or any other">
     </label>
@@ -17,20 +18,19 @@
     <label>Or the vacancy text
       <textarea name="text" rows="9" placeholder="Paste the text if the page cannot be read (LinkedIn, closed sites)"></textarea>
     </label>
-    <div class="form-foot">
-      <span class="style-pick">
-        <label class="inline"><input type="radio" name="style" value="short" checked> short, bulleted</label>
-        <label class="inline"><input type="radio" name="style" value="full"> full, in paragraphs</label>
+    {% call ui.form_actions("cover-status") %}
+      <span class="form-opts">
+        <label class="check"><input type="radio" name="style" value="short" checked> short, bulleted</label>
+        <label class="check"><input type="radio" name="style" value="full"> full, in paragraphs</label>
       </span>
       <button class="primary" type="submit">✉️ Build letter</button>
-    </div>
-    <div class="muted small" id="cover-status"></div>
+    {% endcall %}
   </form>
 
   <div class="card" id="cover-result" hidden>
-    <div class="result-head">
+    <div class="card-head">
       <div><h2 id="r-title"></h2><div class="muted small" id="r-meta"></div></div>
-      <div class="actions"><button class="primary" id="r-copy" type="button">Copy</button><a class="btn" id="r-file" target="_blank">.txt</a></div>
+      <div class="actions"><a class="btn" id="r-file" target="_blank">.txt</a><button class="primary" id="r-copy" type="button">Copy</button></div>
     </div>
     <textarea class="cover-text" id="r-text" rows="18" spellcheck="true"></textarea>
     <div class="muted small">You can edit the text right here before copying.</div>

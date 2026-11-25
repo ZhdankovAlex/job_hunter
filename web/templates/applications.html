@@ -1,11 +1,13 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Applications · job-hunter{% endblock %}
 {% block main_class %}full{% endblock %}
 {% block content %}
 <div class="toolbar">
-  <span class="muted"></span>
-  <button id="toggle-form">＋ Event</button>
-  <button data-run="applications" class="primary">↻ Update mail</button>
+  <div class="page-actions">
+    <button id="toggle-form">＋ Event</button>
+    <button data-run="applications" class="primary">↻ Update mail</button>
+  </div>
 </div>
 <form class="event-form" id="event-form" {{ '' if prefill.company or prefill.url else 'hidden' }}>
   <input name="company" list="companies" placeholder="Company" required value="{{ prefill.company }}">
@@ -17,13 +19,12 @@
   <input name="url" placeholder="Link to the vacancy (optional)" value="{{ prefill.url }}" class="grow">
   <input name="source" placeholder="Where: site, LinkedIn, Telegram…">
   <input name="date" type="datetime-local" title="now by default">
-  <button class="primary" type="submit">Save</button>
-  <span class="small muted" id="event-status"></span>
+  {% call ui.form_actions("event-status") %}<button class="primary" type="submit">Save</button>{% endcall %}
 </form>
 {% if exists %}
 <iframe class="viewer" id="viewer" src="/files/reports/applications.html" title="Applications"></iframe>
 {% else %}
-<p class="page muted">There is no applications page yet — click "Update mail".</p>
+<div class="page">{{ ui.empty("There is no applications page yet", 'Click "Update mail" — it is built from the mail and the manual events.') }}</div>
 {% endif %}
 {% endblock %}
 {% block scripts %}
