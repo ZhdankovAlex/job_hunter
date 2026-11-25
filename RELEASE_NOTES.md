@@ -4,6 +4,46 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-25
 
+### Build(deps): Bump the python group across 1 directory with 5 updates (#31)
+
+Updates the requirements on [google-auth](https://github.com/googleapis/google-cloud-python), [pypdf](https://github.com/py-pdf/pypdf), [fastapi](https://github.com/fastapi/fastapi), [ruff](https://github.com/astral-sh/ruff) and [schemathesis](https://github.com/schemathesis/schemathesis) to permit the latest version.
+
+Updates `google-auth` to 2.63.1
+
+Updates `pypdf` to 7.1.1
+
+Updates `fastapi` to 0.165.0
+
+Updates `ruff` to 0.17.6
+
+Updates `schemathesis` to 4.34.0
+
+--- updated-dependencies:
+
+...
+
+- [Release notes](https://github.com/googleapis/google-cloud-python/releases)
+- [Changelog](https://github.com/googleapis/google-cloud-python/blob/main/packages/google-cloud-documentai/CHANGELOG.md)
+- [Commits](https://github.com/googleapis/google-cloud-python/compare/google-auth-v2.62.2...google-auth-v2.63.1)
+- [Release notes](https://github.com/py-pdf/pypdf/releases)
+- [Changelog](https://github.com/py-pdf/pypdf/blob/main/CHANGELOG.md)
+- [Commits](https://github.com/py-pdf/pypdf/compare/7.1.0...7.1.1)
+- [Release notes](https://github.com/fastapi/fastapi/releases)
+- [Commits](https://github.com/fastapi/fastapi/compare/0.163.1...0.165.0)
+- [Release notes](https://github.com/astral-sh/ruff/releases)
+- [Changelog](https://github.com/astral-sh/ruff/blob/main/CHANGELOG.md)
+- [Commits](https://github.com/astral-sh/ruff/compare/0.17.5...0.17.6)
+- [Release notes](https://github.com/schemathesis/schemathesis/releases)
+- [Changelog](https://github.com/schemathesis/schemathesis/blob/master/CHANGELOG.md)
+- [Commits](https://github.com/schemathesis/schemathesis/compare/v4.33.4...v4.34.0)
+- dependency-name: google-auth dependency-version: 2.63.1 dependency-type: direct:production dependency-group: python
+- dependency-name: pypdf dependency-version: 7.1.1 dependency-type: direct:production dependency-group: python
+- dependency-name: fastapi dependency-version: 0.165.0 dependency-type: direct:production dependency-group: python
+- dependency-name: ruff dependency-version: 0.17.6 dependency-type: direct:development dependency-group: python
+- dependency-name: schemathesis dependency-version: 4.34.0 dependency-type: direct:development dependency-group: python
+
+<sub>f06f886</sub>
+
 ### Profile page: edit the CV base from the browser (#30)
 
 - /profile with four tabs: Header (name, email, phone, location, links), Summary (intro, closing, achievements), Experience (workplaces with bullets) and Education (degree, university, years, thesis, languages, publications). An item is a compact row with its topics; a click opens editing, Esc cancels, ⋮⋮ drags, 📌 pins; under Topics — hints from the same TOPICS dictionary the generator applies to a vacancy. One Save button right of the tabs
