@@ -53,11 +53,13 @@ class Runner:
                 raise HTTPException(422, "Nothing to run: mail is turned off and there are no other scripts in the queue")
             flags = [self.SKIP_FLAGS[k] for k in skip if k in self.SKIP_FLAGS]
             commands = [[s, *flags] if s == "main.py" else [s] for s in scripts]
-            self.queue = [" ".join(c) for c in commands]
+            started = [" ".join(c) for c in commands]
+            self.queue = list(started)
             self.stopping = False
             self.thread = threading.Thread(target=self._run, args=(commands,), daemon=True)
             self.thread.start()
-            return list(self.queue)
+            # not self.queue: the thread may already have run the queue and emptied it
+            return started
 
     def _run(self, commands: list[list[str]]) -> None:
         python = self.root / ".venv" / "Scripts" / "python.exe"

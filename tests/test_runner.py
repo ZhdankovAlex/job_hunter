@@ -67,6 +67,14 @@ def test_start_skip_mail_drops_applications(runner: Runner) -> None:
     _finish(runner)
 
 
+def test_start_returns_queue_even_if_it_finishes_at_once(runner: Runner, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The queue thread may finish before start() returns (a fast machine, a script that exits at once): start()
+    must still answer with the started commands, not with the already emptied queue. CI once got []."""
+    monkeypatch.setattr(runner_mod.threading.Thread, "start", lambda self: self.run())  # the thread runs to the end
+    assert runner.start("all", ["mail"]) == ["main.py"]
+    assert runner.queue == []
+
+
 def test_start_nothing_to_run(runner: Runner) -> None:
     with pytest.raises(HTTPException) as e:
         runner.start("applications", ["mail"])
