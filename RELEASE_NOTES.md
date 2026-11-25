@@ -4,6 +4,17 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-25
 
+### Profile page: edit the CV base from the browser (#30)
+
+- /profile with four tabs: Header (name, email, phone, location, links), Summary (intro, closing, achievements), Experience (workplaces with bullets) and Education (degree, university, years, thesis, languages, publications). An item is a compact row with its topics; a click opens editing, Esc cancels, ⋮⋮ drags, 📌 pins; under Topics — hints from the same TOPICS dictionary the generator applies to a vacancy. One Save button right of the tabs
+- jobhunter/cv_profile.py: replaces only the name, contacts and links lines of cv/base.toml; jobhunter/cv_base.py writes the rest through tomlkit (new dependency): only changed values change, comments, key order and CRLF stay, a save without edits leaves the file byte for byte; a comment before the next section no longer moves under a new item. No cv/base.toml yet — the first save creates it from the example
+- API: GET|PUT /api/profile, /api/cv-base/summary, /api/cv-base/experience, /api/cv-base/other, POST /api/cv-base/topics; field patterns in the schema use an explicit whitespace set (\s differs between JSON Schema, pydantic and Python)
+- CV: empty publications no longer give an empty Publications header; the thesis is in every CV except the one-page variant
+- tests: test_cv_profile.py, test_cv_base.py (each in CRLF and LF), the CV base copy in the schemathesis writes fixture, /profile in test_page_head_rendered
+- docs: web-ui.md — the Profile page and endpoints; cv.md, architecture.md, testing.md
+
+<sub>10c3670</sub>
+
 ### Design system: shared tokens, page macros, a light / dark theme toggle (#29)
 
 - web/static/tokens.css: one palette (light and dark), fonts, the size scale 12 · 13 · 14 · 16 · 20 px, weights, radii, the spacing scale 4 · 8 · 12 · 16 · 24 · 32 px, control height and shadows. The UI loads it before app.css, the pages in reports/ embed it in full (html_report.TOKENS_CSS) and still open without the server
