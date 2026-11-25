@@ -28,6 +28,8 @@ from jobhunter import (
     config,
     cover_letter,
     coverage,
+    cv_base,
+    cv_profile,
     cvgen,
     industry,
     interview_prep,
@@ -44,10 +46,18 @@ from web.models import (
     BuiltCv,
     CompaniesReport,
     CoverRequest,
+    CvExperience,
+    CvExperienceUpdate,
+    CvOther,
+    CvOtherUpdate,
     CvRequest,
     CvResult,
+    CvSummary,
+    CvSummaryUpdate,
     MarketReport,
     NewSkill,
+    Profile,
+    ProfileUpdate,
     Report,
     RunRequest,
     RunStarted,
@@ -55,6 +65,8 @@ from web.models import (
     SkillsReport,
     SkipRequest,
     SourcesReport,
+    TopicsRequest,
+    TopicsSuggestion,
     errors,
 )
 from web.runner import Runner, daily_scheduler
@@ -128,6 +140,7 @@ async def no_cache_reports(request: Request, call_next: Callable[[Request], Awai
 # (key, label, icon) — the icon is visible in the collapsed left panel too
 # (address, label, emoji icon; the same icons as the report buttons: 📬 applications, 📄 CV, 🎤 prep)
 NAV = [("pipeline", "Pipeline", "⚙️"), ("reports", "Reports", "📋"), ("applications", "Applications", "📬"),
+       ("profile", "Profile", "👤"),
        ("cv", "CV", "📄"), ("cover", "Cover letter", "✉️"), ("prep", "Interview prep", "🎤"), ("market", "CV vs market", "⚖️"), ("companies", "Companies", "🏢"),
        ("skills", "Skills", "🛠️"), ("sources", "Sources", "🌐")]
 
@@ -636,6 +649,92 @@ def api_application_event(body: ApplicationEvent) -> dict[str, Any]:
         raise HTTPException(422, str(e))
     applications.build_page()
     return event
+
+
+# --- profile: the CV base ---------------------------------------------------------------------
+
+@app.get("/profile", response_class=HTMLResponse, include_in_schema=False)
+def profile_page(request: Request) -> HTMLResponse:
+    """Name, contacts, links, Summary, experience and education from cv/base.toml — what every CV is built from."""
+    return page(request, "profile", p=cv_profile.read(), summary=cv_base.read_summary(),
+                experience=cv_base.read_experience(), other=cv_base.read_other())
+
+
+@app.get("/api/profile", response_model=Profile, summary="Profile for the CV header",
+         description="The name, contacts and links keys from cv/base.toml; contacts is split into email, phone and location.")
+def api_profile() -> dict[str, Any]:
+    return cv_profile.read()
+
+
+@app.put("/api/profile", response_model=Profile, responses=errors(400, 422), summary="Save the profile",
+         description="Replaces only the name, contacts and links lines in cv/base.toml — the rest of the file and its "
+                     "comments are untouched. No base.toml of your own — it is created from base.example.toml. "
+                     "Visible in the next CV.")
+def api_profile_save(body: ProfileUpdate) -> dict[str, Any]:
+    try:
+        return cv_profile.save(body.name, body.email, body.phone, body.location,
+                               [link.model_dump() for link in body.links])
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
+@app.get("/api/cv-base/summary", response_model=CvSummary, summary="Summary and achievements from the CV base",
+         description="[summary] from cv/base.toml: intro, closing, max_achievements and [[summary.achievements]].")
+def api_cv_summary() -> dict[str, Any]:
+    return cv_base.read_summary()
+
+
+@app.put("/api/cv-base/summary", response_model=CvSummary, responses=errors(400, 422), summary="Save the Summary",
+         description="Items are matched with the file by position: only changed values are written, comments stay "
+                     "(tomlkit). Visible in the next CV, cover letter and interview prep.")
+def api_cv_summary_save(body: CvSummaryUpdate) -> dict[str, Any]:
+    try:
+        return cv_base.save_summary(body.intro, body.closing, body.max_achievements,
+                                    [a.model_dump() for a in body.achievements])
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
+@app.get("/api/cv-base/other", response_model=CvOther, summary="Education, languages, publications",
+         description="[education], [languages] and [publications] from cv/base.toml — the bottom sections of the CV.")
+def api_cv_other() -> dict[str, Any]:
+    return cv_base.read_other()
+
+
+@app.put("/api/cv-base/other", response_model=CvOther, responses=errors(400, 422),
+         summary="Save education, languages, publications",
+         description="Only these values change (tomlkit), comments and the rest of the base stay. An empty thesis "
+                     "removes the thesis_ai key.")
+def api_cv_other_save(body: CvOtherUpdate) -> dict[str, Any]:
+    try:
+        return cv_base.save_other(body.education.model_dump(), body.languages, body.publications)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
+@app.post("/api/cv-base/topics", response_model=TopicsSuggestion, responses=errors(400),
+          summary="Topics for an item text",
+          description="A hint in the Profile editor: which topics from TOPICS (cvgen.py) the generator would find in "
+                      "the text. Writes nothing.")
+def api_cv_topics(body: TopicsRequest) -> dict[str, list[str]]:
+    return {"topics": cv_base.suggest_topics(body.text)}
+
+
+@app.get("/api/cv-base/experience", response_model=CvExperience, summary="Experience from the CV base",
+         description="[[experience]] from cv/base.toml with [[experience.bullets]].")
+def api_cv_experience() -> dict[str, Any]:
+    return cv_base.read_experience()
+
+
+@app.put("/api/cv-base/experience", response_model=CvExperience, responses=errors(400, 422),
+         summary="Save the experience",
+         description="Workplaces and bullets are matched with the file by position: only changed values are written, "
+                     "comments stay (tomlkit). Visible in the next CV, cover letter and interview prep.")
+def api_cv_experience_save(body: CvExperienceUpdate) -> dict[str, Any]:
+    try:
+        return cv_base.save_experience([j.model_dump() for j in body.jobs])
+    except ValueError as e:
+        raise HTTPException(422, str(e))
 
 
 # --- interview prep ----------------------------------------------------------------------------

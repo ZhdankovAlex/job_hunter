@@ -50,7 +50,7 @@ def test_reports_are_not_cached_by_browser(client):
     assert "cache-control" not in http.get("/pipeline").headers
 
 
-@pytest.mark.parametrize("path", ["/cv", "/cover", "/prep", "/market", "/companies", "/skills", "/sources"])
+@pytest.mark.parametrize("path", ["/profile", "/cv", "/cover", "/prep", "/market", "/companies", "/skills", "/sources"])
 def test_page_head_rendered(client, path):
     """The ui.page_head macro: a page starts with the standard header with h1 — on empty data too."""
     http, _, _ = client

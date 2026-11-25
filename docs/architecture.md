@@ -92,7 +92,7 @@ Modules in `jobhunter/` by purpose:
   (company industry; does not change the score).
 - **Results:** `report`, `html_report`, `cvgen`, `cover_letter`, `interview_prep`, `outreach`, `market_check`,
   `mail`, `applications_report`, `applied`, `manual_apps`, `vacancy_lookup`, `coverage` (why a source gave
-  nothing).
+  nothing), `cv_profile` / `cv_base` (editing `cv/base.toml` from the Profile page).
 
 A source only returns vacancies and knows nothing about filters and reports. To add one, write a function that
 returns vacancies and add it to the source list (`SOURCES` in `aggregators.py` or `sites.py`).

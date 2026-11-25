@@ -2,9 +2,21 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictFloat,
+    StrictStr,
+    field_validator,
+    model_validator,
+)
+
+from jobhunter import cv_profile
 
 
 class ErrorDetail(BaseModel):
@@ -352,3 +364,185 @@ class ApplicationEvent(ApiModel):
         if value is not None and not isinstance(value, str | datetime):
             raise ValueError("the date is an ISO 8601 string, e.g. 2026-11-18T10:00")
         return value
+
+
+class ProfileLink(BaseModel):
+    label: str = Field(description="Label in the CV: github.com/example")
+    url: str = Field(description="Address: https://github.com/example")
+
+
+class Profile(BaseModel):
+    """The CV header from cv/base.toml: name, contacts (email · phone · location) and links."""
+    name: str = Field(description="Name — the first line of the CV")
+    email: str = Field(description="Email from the contacts line")
+    phone: str = Field(description="Phone from the contacts line")
+    location: str = Field(description="The rest of contacts: city, time zone, work format")
+    links: list[ProfileLink] = Field(description="Links under the contacts, in the same order")
+    file: str = Field(description="The base file it was read from: base.toml or base.example.toml")
+
+
+class ProfileLinkIn(ApiModel):
+    label: str = Field("", description="Label; empty — the address without https://")
+    url: str = Field(pattern=f"^{cv_profile.URL_PATTERN}$", description="Address: http(s)://, no spaces")
+
+
+class ProfileUpdate(ApiModel):
+    """New name, contacts and links: they replace the name, contacts and links keys in cv/base.toml, the rest is untouched."""
+    name: str = Field(pattern=cv_profile.NAME_PATTERN, description="Name")
+    email: str = Field("", pattern=f"^({cv_profile.EMAIL_PATTERN})?$", description="Email; empty — remove from contacts")
+    phone: str = Field("", pattern=f"^({cv_profile.PHONE_PATTERN})?$",
+                       description="Phone: digits (at least 6), spaces, + ( ) -; empty — remove from contacts")
+    location: str = Field("", description="City / time zone; empty — remove from contacts")
+    links: list[ProfileLinkIn] = Field(default_factory=list, description="Links in display order")
+
+
+# --- CV base: Summary with achievements and experience (cv/base.toml) ---------------------------------------
+
+_TEXT = Field(pattern=cv_profile.NAME_PATTERN, description="Item text (Markdown: **bold** — the first words)")
+_TOPICS: Any = Field(default_factory=list, description="Item topics for matching to a vacancy — TOPICS keys from cvgen.py")
+_REQUIRES: Any = Field(default_factory=list, description="Item only for AI roles or vacancies that have these topics")
+_EXTRA_OUT: Any = Field(default_factory=dict, description="Other keys of the item (the form does not show them) — as in the file")
+_EXTRA_IN: Any = Field(default_factory=dict, description="Other keys of the item — send back as they came from GET; "
+                                                    "keys edited by form fields are ignored here")
+
+
+def _json_int(value: object) -> object:
+    """An integer from JSON: 18 and 18.0 — yes (the same thing for JSON Schema), true and "18" — no (pydantic in
+    lax mode takes them, the schema does not; schemathesis catches both)."""
+    if isinstance(value, bool | str):
+        raise ValueError("an integer is required")
+    return value
+
+
+JsonInt = Annotated[int, BeforeValidator(_json_int)]
+TomlInt = Annotated[JsonInt, Field(ge=-(2**63), le=2**63 - 1)]
+ExtraValue = StrictStr | StrictBool | TomlInt | Annotated[StrictFloat, Field(allow_inf_nan=False)] | list[StrictStr]
+ExtraKey = Annotated[str, Field(min_length=1, max_length=64)]
+Variant = Literal["backend", "ai"]
+
+
+class Achievement(BaseModel):
+    """An achievement for the Summary: [[summary.achievements]]."""
+    text: str = _TEXT
+    pin: bool = Field(False, description="In every version of the CV")
+    topics: list[str] = _TOPICS
+    summary_for: list[str] = Field(default_factory=list, description="In the base CV of this variant: backend / ai")
+    requires: list[str] = _REQUIRES
+    extra: dict[str, Any] = _EXTRA_OUT
+
+
+class CvSummary(BaseModel):
+    """[summary]: Summary = intro + 2–3 achievements that fit the vacancy best + closing."""
+    intro: str = Field(description="The first sentence of the Summary")
+    closing: str = Field(description="The last sentence of the Summary")
+    max_achievements: int = Field(description="At most this many achievements in the Summary")
+    achievements: list[Achievement]
+    file: str = Field(description="The base file: base.toml or base.example.toml")
+
+
+class Bullet(BaseModel):
+    """An experience bullet: [[experience.bullets]]."""
+    text: str = _TEXT
+    pin: bool = Field(False, description="In every version of the CV")
+    topics: list[str] = _TOPICS
+    generic: list[str] = Field(default_factory=list, description="Only in the base CV of this variant: backend / ai")
+    requires: list[str] = _REQUIRES
+    extra: dict[str, Any] = _EXTRA_OUT
+
+
+class Job(BaseModel):
+    """A workplace: [[experience]]."""
+    title: str = Field(description="Job title")
+    company: str = Field(description="Company")
+    dates: str = Field(description="Dates: Jan 2022 – Present")
+    bullets_max: int = Field(6, description="At most this many bullets in the CV")
+    intro: list[str] = Field(default_factory=list, description="Paragraphs under the workplace header")
+    tech: list[str] = Field(default_factory=list, description="Stack; the CV shows those in the vacancy and the main ones")
+    tech_always: list[str] = Field(default_factory=list, description="Technologies always shown")
+    bullets: list[Bullet]
+    extra: dict[str, Any] = _EXTRA_OUT
+
+
+class CvExperience(BaseModel):
+    jobs: list[Job]
+    file: str = Field(description="The base file: base.toml or base.example.toml")
+
+
+class AchievementIn(ApiModel):
+    text: str = _TEXT
+    pin: StrictBool = False
+    topics: list[str] = _TOPICS
+    summary_for: list[Variant] = Field(default_factory=list, description="backend / ai")
+    requires: list[str] = _REQUIRES
+    extra: dict[ExtraKey, ExtraValue] = _EXTRA_IN
+
+
+class CvSummaryUpdate(ApiModel):
+    """A new [summary]: items are matched with the file by position, comments in the file stay."""
+    intro: str = Field("", description="The first sentence of the Summary")
+    closing: str = Field("", description="The last sentence of the Summary")
+    max_achievements: JsonInt = Field(3, ge=1, le=10, description="At most this many achievements in the Summary")
+    achievements: list[AchievementIn] = Field(min_length=1, description="Achievements in display order")
+
+
+class BulletIn(ApiModel):
+    text: str = _TEXT
+    pin: StrictBool = False
+    topics: list[str] = _TOPICS
+    generic: list[Variant] = Field(default_factory=list, description="backend / ai")
+    requires: list[str] = _REQUIRES
+    extra: dict[ExtraKey, ExtraValue] = _EXTRA_IN
+
+
+class JobIn(ApiModel):
+    title: str = Field(pattern=cv_profile.NAME_PATTERN, description="Job title")
+    company: str = Field(pattern=cv_profile.NAME_PATTERN, description="Company")
+    dates: str = Field(pattern=cv_profile.NAME_PATTERN, description="Dates")
+    bullets_max: JsonInt = Field(6, ge=1, le=30, description="At most this many bullets in the CV")
+    intro: list[str] = Field(default_factory=list, description="Paragraphs under the header")
+    tech: list[str] = Field(default_factory=list, description="Stack")
+    tech_always: list[str] = Field(default_factory=list, description="Technologies always shown")
+    bullets: list[BulletIn] = Field(min_length=1, description="Bullets in display order")
+    extra: dict[ExtraKey, ExtraValue] = _EXTRA_IN
+
+
+class CvExperienceUpdate(ApiModel):
+    """New experience: workplaces and bullets are matched with the file by position, comments in the file stay."""
+    jobs: list[JobIn] = Field(min_length=1, description="Workplaces top to bottom, as in the CV")
+
+
+class TopicsRequest(ApiModel):
+    text: str = Field(max_length=5000, description="Item text")
+
+
+class TopicsSuggestion(BaseModel):
+    topics: list[str] = Field(description="Topics from TOPICS (cvgen.py) found in the text")
+
+
+class Education(BaseModel):
+    degree: str = Field(description="Degree: B.Sc. in Computer Science")
+    years: str = Field(description="Years: 2016 – 2020")
+    school: str = Field(description="University")
+    thesis_ai: str = Field("", description="Thesis — a line under the university (except the one-page CV); empty — none")
+
+
+class CvOther(BaseModel):
+    """The bottom sections of the CV: Education, Languages, Publications."""
+    education: Education
+    languages: str = Field(description="[languages].text: English — C1 · German — B2")
+    publications: str = Field(description="[publications].text; the one-page CV variant has no such section")
+    file: str = Field(description="The base file: base.toml or base.example.toml")
+
+
+class EducationIn(ApiModel):
+    degree: str = Field("", max_length=300, description="Degree")
+    years: str = Field("", max_length=100, description="Years")
+    school: str = Field("", max_length=300, description="University")
+    thesis_ai: str = Field("", max_length=1000, description="Thesis; empty — remove")
+
+
+class CvOtherUpdate(ApiModel):
+    """New education, languages and publications; the rest of the base is untouched."""
+    education: EducationIn
+    languages: str = Field("", max_length=1000, description="Languages in one line")
+    publications: str = Field("", max_length=3000, description="Publications in one line")
