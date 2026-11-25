@@ -4,6 +4,13 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-26
 
+### Screenshots: all pages retaken on demo data, Progress and Profile added (#34)
+
+- docs/img: all 12 pages after the design system, the Progress page and the Profile page; demo data only — public vacancies from a short run, made-up applications, the Jane Doe example CV
+- README: Progress and Profile in the screenshot table
+
+<sub>edf17ef</sub>
+
 ### Runner: start() returns the started commands, not the live queue (#33)
 
 The queue thread could run a script that exits at once and empty self.queue before start() returned list(self.queue) — the API answered with [] and test_start_skip_mail_drops_applications failed on CI. start() now returns its own copy; a test runs the thread synchronously to show the race.
