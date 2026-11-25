@@ -57,9 +57,9 @@ def test_interface_loads_tokens_before_app_css():
 
 TEMPLATES_DIR = config.ROOT / "web" / "templates"
 TEMPLATES = sorted(p for p in TEMPLATES_DIR.glob("*.html") if not p.name.startswith("_"))
-# pages with their own layout: "Pipeline" — the run card instead of a header; reports and "Applications" —
+# pages with their own layout: "Pipeline" — the run card instead of a header; reports, "Applications" and "Progress" —
 # a ready page from reports/ in a frame (it has its own h1 and .sub with the same spacing)
-OWN_LAYOUT = {"base.html", "pipeline.html", "reports.html", "applications.html"}
+OWN_LAYOUT = {"base.html", "pipeline.html", "reports.html", "applications.html", "progress.html"}
 
 
 @pytest.mark.parametrize("path", [p for p in TEMPLATES if p.name not in OWN_LAYOUT], ids=lambda p: p.name)

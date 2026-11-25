@@ -140,7 +140,7 @@ async def no_cache_reports(request: Request, call_next: Callable[[Request], Awai
 # (key, label, icon) — the icon is visible in the collapsed left panel too
 # (address, label, emoji icon; the same icons as the report buttons: 📬 applications, 📄 CV, 🎤 prep)
 NAV = [("pipeline", "Pipeline", "⚙️"), ("reports", "Reports", "📋"), ("applications", "Applications", "📬"),
-       ("profile", "Profile", "👤"),
+       ("progress", "Progress", "🏆"), ("profile", "Profile", "👤"),
        ("cv", "CV", "📄"), ("cover", "Cover letter", "✉️"), ("prep", "Interview prep", "🎤"), ("market", "CV vs market", "⚖️"), ("companies", "Companies", "🏢"),
        ("skills", "Skills", "🛠️"), ("sources", "Sources", "🌐")]
 
@@ -281,6 +281,12 @@ def applications_page(request: Request, company: str = "", title: str = "", url:
     prefill = {"company": company, "title": title, "url": url, "kind": kind or ("applied" if url else "")}
     return page(request, "applications", exists=exists, prefill=prefill, kinds=manual_apps.KINDS,
                 companies=application_companies())
+
+
+@app.get("/progress", response_class=HTMLResponse, include_in_schema=False)
+def progress_page(request: Request) -> HTMLResponse:
+    """Rank, badges and activity — reports/progress.html, built together with the Applications page."""
+    return page(request, "progress", exists=(REPORTS / "progress.html").exists())
 
 
 @app.get("/cv", response_class=HTMLResponse, include_in_schema=False)

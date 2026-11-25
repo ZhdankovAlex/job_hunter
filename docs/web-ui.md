@@ -15,6 +15,7 @@ The interface is in Russian.
 | **Pipeline** | A live run: stages with bars, "processing now", sources in progress with seconds, ETA of the stage and the whole run, counters, "what we reject" and "where vacancies come from" charts, an event feed of the whole run with counters on its filters (found / rejected with a reason / source totals), warnings grouped as "🛠 needs action" (a board is gone, a company has no board, a list was cut by a limit), "🐞 code problems" (a response format changed, exceptions — with the traceback under "details") and "🌐 site failures" (HTTP errors, SSL, timeouts — usually pass by themselves). Buttons: run everything (like `run_daily.bat`), vacancies only, mail only, "⏹ Stop run" |
 | **Reports** | All `reports/jobs_*.html` by date; any opens inside the page, with a link to the Markdown |
 | **Applications** | `reports/applications.html`, an "update mail" button and a "＋ Event" form (applied / stage / rejected / offer / note) — appends a block to `applications_manual.toml` and rebuilds the page from the mail cache at once. The "✅ applied" button in the report opens the form pre-filled; the vacancy link is remembered and later reports mark it "🔁" |
+| **Progress** | `reports/progress.html` — gamification of the search: the main block (rank, XP, streak, message of the day), one next step of the week, recent wins within 30 days, a badge collection with rarities (up to 8 in view, the rest collapsed, "new" — since the last visit), a collapsed activity heatmap. XP only for your own actions. Built together with the Applications page (`applications.build_page`); Applications does not duplicate it — it has the conversion on top. Details — [applications.md](applications.md#gamification-the-progress-page) |
 | **Profile** | Four tabs (the open one is kept in the address: `#head`, `#summary`, `#exp`, `#edu`). List items are compact rows with topics and marks; a click on a row opens editing (Done or a click outside the item — collapse with the edits, Cancel or Esc — restore as it was, a new item is then removed; only Save writes the file), 📌 pins, ⋮⋮ on the left — drag up or down (the order of workplaces and the order of bullets in the base CV), ✕ — delete; while editing an item, under the Topics field there are "found in the text: + topic" hints: topics from the `TOPICS` dictionary (`cvgen.py`) the generator would find in the item text (`POST /api/cv-base/topics`); a click adds the topic. A topic gives an item a point when the vacancy has the same topic; "only if topics" is a filter: the item is taken only for AI roles or vacancies with these topics; a click on a workplace header opens its title, dates and stack; unsaved changes are marked "● not saved"; there is one Save button — right of the tabs, it saves the open tab. The CV **Header**: name, email, phone, city / time zone and links — the `name`, `contacts` and `links` keys in `cv/base.toml` (`jobhunter/cv_profile.py`). The `contacts` line ("email · phone · location") is split into fields and joined back in the previous order of parts; an empty field removes its part. Saving replaces only the lines of these three keys — the rest of the base and its comments are untouched, line endings (CRLF) are kept. No `cv/base.toml` of your own — the first save creates it from `cv/base.example.toml`. **Summary** (intro, closing, max achievements; each achievement has text, 📌 "always", topics, base CV variants backend / ai, "only if topics") and **Experience** (workplaces with title, dates, intro, stack and bullets — bullets have the same fields). Items can be added, deleted and reordered. `jobhunter/cv_base.py` writes through tomlkit: items are matched with the file by position, only changed values change, comments stay in place; keys the form does not show (`industries` etc.) are kept as they were. **Education**: degree, university, years, thesis (a line under the university in every CV except the one-page variant; empty — the `thesis_ai` key is removed), languages and publications (empty — no Publications section in the CV) — `[education]`, `[languages]`, `[publications]`. Visible in the next CV, cover letter and interview prep |
 | **CV** | A CV for any vacancy: by link (from a report or any) or by text, full or one page; "why these bullets"; the list of built CVs (see [cv.md](cv.md)). Until there is a result, the form takes the whole width |
 | **Cover letter** | A cover letter for a vacancy ("✉️" in the report, a link or pasted text): "short, bulleted" or "full, in paragraphs"; an editable text with a copy button, "why these points", which key skills you lack (see [cv.md](cv.md#cover-letters)) |
@@ -61,7 +62,7 @@ Pages are built by the server, there is no separate frontend and no build step:
 - **One style base.** `web/static/tokens.css` holds the palette (light and dark theme), fonts, the size scale
   `--fs-xs` 12 · `--fs-sm` 13 · `--fs-md` 14 · `--fs-lg` 16 · `--fs-xl` 20 px, font weights, radii and the spacing
   scale `--sp-1`…`--sp-6` (4 · 8 · 12 · 16 · 24 · 32 px). The UI loads it before `app.css`, and the HTML pages in
-  `reports/` (the report, "Applications") embed the same file into `<style>` in full (`html_report.TOKENS_CSS`), so
+  `reports/` (the report, "Applications", "Progress") embed the same file into `<style>` in full (`html_report.TOKENS_CSS`), so
   they also open without the server. A font size in CSS is only a step of the scale, the palette lives only here:
   `tests/test_styles.py` checks this. The PDF CV (template styles in `cvgen.py`) is print layout in pt and is not
   part of the base. Reports built earlier keep their old styles until the next run.
@@ -69,7 +70,7 @@ Pages are built by the server, there is no separate frontend and no build step:
   the `.page-title` row (h1 and, if any, toggles, filters, a `.count` counter) and the `.lead` under it, `--sp-2` apart.
   `main.page` is a column of blocks with a `--sp-4` gap and `--sp-5` padding; top-level blocks lose their own vertical
   margins (`.page > *` at the end of `app.css`), so "header → first block → next one" spacing is the same everywhere.
-  "Pipeline" (the run card) and the pages in a frame (the report, "Applications" — they have their own h1 and `.sub`
+  "Pipeline" (the run card) and the pages in a frame (the report, "Applications", "Progress" — they have their own h1 and `.sub`
   with the same spacing) keep their own layout. Checked by `tests/test_styles.py`.
 - **Heavy computations are cached** in `state/web_cache.json` (see "Speed" above). Board links are not part of the
   key: a run rewrites `ats_mapping.json` all the time, so they are added on every request.
@@ -91,7 +92,7 @@ and `--ctl-h-sm` (26 px), shadows `--sh-1` (a card) and `--sh-2` (the selected t
 a `data-theme` attribute on `<html>` the palette follows `prefers-color-scheme`; `data-theme="light"` and `"dark"`
 are the user's choice and override the system. A script in `<head>` (`base.html`, and `html_report.THEME_JS` in the
 pages of `reports/`) sets the attribute from `localStorage` before rendering, so the page does not flash. Reports and
-"Applications" in a frame switch together with the UI (the `storage` event); opened from disk they always follow
+"Applications" and "Progress" in a frame switch together with the UI (the `storage` event); opened from disk they always follow
 the system. The dark palette is written twice in `tokens.css` — for `data-theme="dark"` and for the system dark
 theme; add a new color to both blocks, `tests/test_styles.py` checks that they match.
 
@@ -150,7 +151,7 @@ theme; add a new color to both blocks, `tests/test_styles.py` checks that they m
 Then add an item to `NAV` (`web/app.py`). Check it in a preview in the light and dark theme and on a narrow screen
 (375 px): the page must not scroll horizontally.
 
-The pages in `reports/` (the report, "Applications") embed the same tokens, and their filters, search field and
+The pages in `reports/` (the report, "Applications", "Progress") embed the same tokens, and their filters, search field and
 badges repeat the UI components (`html_report._CSS`), so they do not look foreign inside a frame. A new look in a
 report — also only through tokens.
 

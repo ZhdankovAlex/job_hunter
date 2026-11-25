@@ -279,10 +279,6 @@ def _applications_html(stats: dict) -> str:
         f"🟠 declined by you {c.get('declined', 0)} · 🔴 rejected {c.get('rejected', 0)} — "
         '<a href="applications.html">all applications</a></div>'
     ]
-    if digest["nudge"]:
-        items = "".join(f"<li><b>{_e(company)}</b> — {days} days without an answer after a stage; last: {_e(subject)}</li>"
-                        for company, days, subject in digest["nudge"])
-        parts.append(f'<div class="small"><b>Follow up:</b><ul>{items}</ul></div>')
     return "".join(parts)
 
 

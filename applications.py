@@ -8,7 +8,7 @@ import logging
 import sys
 from datetime import date
 
-from jobhunter import applications_report, applied, config, mail, progress
+from jobhunter import applications_report, applied, config, gamification, mail, progress
 
 STAGES = [
     ("mail", "Gmail: new letters"),
@@ -78,6 +78,10 @@ def build_page(messages: list[dict] | None = None, address: str = "(from the let
     page = applications_report.render(date.today(), apps, unknown, address, index, mail.stale_warning())
     out = config.REPORTS_DIR / "applications.html"
     out.write_text(page, encoding="utf-8")
+    # the Progress page: rank, badges and activity — from the same applications and funnel stages
+    staged = [(a, applications_report.funnel_stage(a, index.company_statuses(a.company) if index else ""))
+              for a in apps]
+    (config.REPORTS_DIR / "progress.html").write_text(gamification.page(date.today(), staged), encoding="utf-8")
     return out, apps, unknown
 
 

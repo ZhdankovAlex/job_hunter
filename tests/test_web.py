@@ -20,7 +20,7 @@ def client(tmp_path, monkeypatch):
     return TestClient(web.app), web, jobs
 
 
-@pytest.mark.parametrize("path", ["/pipeline", "/applications", "/skills", "/api/skills", "/cv", "/cover", "/prep",
+@pytest.mark.parametrize("path", ["/pipeline", "/applications", "/progress", "/skills", "/api/skills", "/cv", "/cover", "/prep",
                                   "/reports", "/market", "/api/market", "/companies", "/api/companies"])
 def test_pages_open_without_data(client, path):
     http, _, _ = client
@@ -59,7 +59,7 @@ def test_page_head_rendered(client, path):
     assert "<h1>" in main.split("</header>", 1)[0]
 
 
-@pytest.mark.parametrize("path", ["/market"])  # "Applications" reads reports/ — not substituted here
+@pytest.mark.parametrize("path", ["/market"])  # "Applications" and "Progress" read reports/ — not substituted here
 def test_empty_state_without_data(client, path):
     """No data — the ui.empty state with a hint on what to do, not a bare line."""
     http, _, _ = client

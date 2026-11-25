@@ -239,7 +239,8 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
         status, why = effective_status(app, in_applied, now)
         items.append((app, in_applied, status, why))
     # live ones on top: stages, waiting; rejections below; freshest first within each
-    items.sort(key=lambda x: (order.index(x[2]), -x[0].last.when.timestamp()))
+    # the freshest events on top; by status — a click on the column header or the filter buttons
+    items.sort(key=lambda x: -x[0].last.when.timestamp())
     rows, stages = [], []
     counts: dict[str, int] = {}
     stage_names = dict(FUNNEL) | {"applied": "applied"}
@@ -288,12 +289,13 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
         f"<title>Applications — {day.isoformat()}</title>{THEME_JS}<style>{_CSS}{_CSS_COLORS}</style></head><body>",
         f"<h1>Applications from correspondence — {day.isoformat()}</h1>",
         f'<div class="warning">⚠️ {_e(warning)}</div>' if warning else "",
-        f'<div class="sub">Mail {_e(address)} and applications_manual.toml (Telegram, LinkedIn) · companies {len(rows)} · '
-        f"status — from correspondence and manual events · mail is only read, "
-        f"nothing was sent</div>",
+        # on top — conversion: how many companies got to each stage (progress and goals — on the Progress page)
         f'<div class="funnel" title="How many companies got at least to a stage. The stage comes from words in the letter subject or note: '
         f'tech / technical / live coding / take-home / with the team — technical; final / CTO / founder — final; the rest — screening">'
         f"📊 {funnel_line(stages)}</div>",
+        f'<div class="sub">Mail {_e(address)} and applications_manual.toml (Telegram, LinkedIn) · companies {len(rows)} · '
+        f"status — from correspondence and manual events · mail is only read, "
+        f"nothing was sent</div>",
         legend,
         '<div class="bar">',
         *(f'<button data-mode="{m}"{" class=on" if m == "all" else ""}>{_e(t)}</button>' for m, t in buttons),

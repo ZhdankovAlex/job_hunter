@@ -1,4 +1,6 @@
 """Application status and funnel: a repeated process, cancelled meetings, "declined by you", days of silence."""
+from datetime import UTC, datetime, timedelta
+
 from jobhunter import applications_report as ar, mail
 from jobhunter.mail import APPLIED, DECLINED, INTERVIEW, OTHER, REJECTED, Application, Event
 
@@ -104,3 +106,12 @@ def test_manual_stage_survives_cancelled_series(at):
     for e in a.events[:3]:
         e.thread = "t1"  # letters from mail have a thread, manual events do not
     assert ar.funnel_stage(a) == ar.SCREEN
+
+
+def test_render_sorts_by_latest_event():
+    """By default the freshest events are on top, not groups by status: a fresh rejection is above an old stage."""
+    now = datetime.now(UTC)  # render computes the status from the real "now"
+    old_stage = Application("Globex", [Event(now - timedelta(days=9), INTERVIEW, "Screen Call", "x", "")])
+    fresh_reject = Application("Acme", [Event(now - timedelta(days=1), REJECTED, "Rejected", "x", "")])
+    page = ar.render(now.date(), [old_stage, fresh_reject], [], "me@example.com")
+    assert page.index("Acme") < page.index("Globex")
