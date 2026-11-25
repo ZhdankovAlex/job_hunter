@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}Progress · job-hunter{% endblock %}
+{% block main_class %}full{% endblock %}
+{% block content %}
+{% if exists %}
+<iframe class="viewer" src="/files/reports/progress.html" title="Progress"></iframe>
+{% else %}
+<div class="page">{{ ui.empty("There is no progress page yet", 'It is built together with Applications: click "Update mail" there.') }}</div>
+{% endif %}
+{% endblock %}

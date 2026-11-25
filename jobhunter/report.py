@@ -227,11 +227,6 @@ def _applications_block(stats):
     ]
     if digest.get("warning"):
         lines += [f"> ⚠️ **{_cell(digest['warning'])}**", ""]
-    if digest["nudge"]:
-        lines += ["**Follow up** (silence after a stage):", ""]
-        lines += [f"- **{_cell(company)}** — {days} days without an answer; last: {_cell(subject)}"
-                  for company, days, subject in digest["nudge"]]
-        lines.append("")
     return lines
 
 

@@ -248,6 +248,11 @@ auto_max = 0        # at most this many CVs per run (0 — auto-build is off)
 pitch = "Backend Engineer with Python and PostgreSQL experience"  # "I'm a …" in the draft
 based_in = ""   # for example "Based in Portugal (WET)."; empty — from [home].country
 
+# --- Gamification: the Progress page (reports/progress.html) ---------------------------------
+[gamification]
+# the weekly goal: applications (one company on one day — one application); a week with the goal met gets a ⭐
+weekly_goal = 8
+
 # --- Application statuses from mail (applications.py -> reports/applications.html) -----------
 [mail]
 # which letters to read (Gmail search syntax); access is read-only

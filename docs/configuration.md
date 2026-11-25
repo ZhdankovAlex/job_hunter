@@ -65,6 +65,9 @@ disabled = ["habr career", "hirehi", "aiven", "bolt", …]   # site adapters not
 [telegram]
 enabled = false
 channels = ["pythonrabota", "job_python"]
+
+[gamification]
+weekly_goal = 8               # the weekly application goal on the Progress page
 ```
 
 All keys are commented in `settings.example.toml`.
@@ -89,6 +92,7 @@ All keys are commented in `settings.example.toml`.
 | `keys.py` | Normalised keys: vacancy URL, IDs in a URL, company name, ATS board from a link |
 | `applied.py` | Vacancies and companies you already applied to (`applications_manual.toml`) |
 | `mail.py`, `applications_report.py` | Gmail (read-only), letter parsing, the applications page |
+| `gamification.py` | The Progress page (`reports/progress.html`): rank and XP, streak, the next step of the week, wins, badges |
 | `cv_match.py`, `relevance.py`, `tiers.py`, `salary.py`, `levels.py` | Fit % to the CV, score, category, grade, salary ranges, levels.fyi |
 | `cvgen.py` | CV builder: picks bullets for a vacancy, one-page version, Markdown → HTML → PDF via headless Chrome |
 | `cover_letter.py` | Cover letter for a vacancy from `cv/base.toml` (`[summary]`, `[cover]`) |

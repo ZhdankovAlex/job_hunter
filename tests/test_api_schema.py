@@ -76,7 +76,7 @@ def data(tmp_path, monkeypatch):
 def writes(data, tmp_path, monkeypatch):
     """Everything the write endpoints touch goes to tmp; processes and network are stubbed."""
     reports = tmp_path / "reports"
-    monkeypatch.setattr(config, "REPORTS_DIR", reports)  # applications.build_page -> reports/applications.html
+    monkeypatch.setattr(config, "REPORTS_DIR", reports)  # applications.build_page -> reports/applications.html, progress.html
     monkeypatch.setattr(config, "MAIL_SYNC_FILE", tmp_path / "mail_sync.json")
     monkeypatch.setattr(relevance, "OVERRIDES_FILE", tmp_path / "profile_overrides.json")
     monkeypatch.setattr(progress, "HISTORY_FILE", tmp_path / "progress_history.json")
@@ -219,6 +219,7 @@ def test_old_event_date_does_not_break_page():
                                  json={"company": "Acme", "kind": "applied", "date": "0001-01-01T00:00:00"})
     assert r.status_code == 201, r.text
     assert (config.REPORTS_DIR / "applications.html").exists()
+    assert (config.REPORTS_DIR / "progress.html").exists()  # Progress is built together with Applications
 
 
 def test_read_only_endpoints_are_covered():
