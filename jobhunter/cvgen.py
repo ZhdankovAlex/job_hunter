@@ -382,11 +382,15 @@ def build_markdown(base: dict, company: str, title: str, text: str, url: str = "
         md += ["", f"_{' · '.join(tech)}_"]
     md += _projects(base, vac, limits, picks) if not generic else []
     edu = base["education"]
+    publications = base.get("publications", {}).get("text", "").strip()  # empty — no section, no empty header
+    # the thesis goes into every CV except the one-page variant; the thesis_ai key keeps its historical name
+    # (the line used to be in the AI version only), there is no need to rename it in the base
+    thesis = edu.get("thesis_ai", "").strip() if limits.publications else ""
     md += [
-        *(["", "## Publications", base["publications"]["text"]] if limits.publications else []),
+        *(["", "## Publications", publications] if limits.publications and publications else []),
         "", "## Education", f"**{edu['degree']}** · {edu['years']}  ",
-        edu["school"] + ("  " if vac.is_ai and limits.publications else ""),
-        *([edu["thesis_ai"]] if vac.is_ai and limits.publications and edu.get("thesis_ai") else []),  # the one-page variant has no thesis topic
+        edu["school"] + ("  " if thesis else ""),
+        *([thesis] if thesis else []),
         "", "## Languages", base["languages"]["text"], "",
     ]
     return "\n".join(md)

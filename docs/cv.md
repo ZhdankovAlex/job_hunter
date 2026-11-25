@@ -30,7 +30,7 @@ Real embeddings (sentence-transformers) are not used: ~2 GB of dependencies (PyT
 ## One-page version
 
 `one_page` / `--one-page`: denser layout, one company description, 2 achievements in the summary, no
-Publications section and thesis topic, one pet-project bullet. After the build the PDF pages are counted (pypdf); if more than one,
+Publications section and thesis topic (an empty `[publications].text` drops the section in any CV), one pet-project bullet. After the build the PDF pages are counted (pypdf); if more than one,
 it shrinks step by step (`Limits.shrink`): first the skill groups least matching the vacancy (down to 5), then
 experience bullets (the latest job down to 3, the previous one down to 1, older ones down to 1), then the
 summary — until it fits. The file is `…_1p.pdf`.
@@ -58,7 +58,8 @@ python cvgen.py --render cv_out/<date>/<file>.md             # rebuild the PDF a
 
 The result is `cv_out/<date>/<company>_<vacancy>[_1p].md`, `.html` and `.pdf` (headless Chrome; the Chrome path
 is `settings.toml` → `[cv].chrome` or the `JOBHUNTER_CHROME` variable). Read it before sending; edit the `.md` and
-`--render`. Facts change only in `cv/base.toml`.
+`--render`. Facts change only in `cv/base.toml` — by hand or on the Profile page of the web UI
+(header, Summary with achievements, experience with bullets, education; see [web-ui.md](web-ui.md)).
 
 Base CVs without a vacancy: `python cvgen.py --base backend` and `--base ai` →
 `cv_out/<First_Last>_Backend_CV.pdf` and `<First_Last>_Backend_AI_CV.pdf` (the name comes from `name` in

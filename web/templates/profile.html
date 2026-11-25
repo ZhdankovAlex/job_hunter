@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}Profile · job-hunter{% endblock %}
+{% block content %}
+{% set lead %}CV base — <code>cv/{{ p.file }}</code>{% if p.file != "base.toml" %} (an example: the first save creates <code>cv/base.toml</code>){% endif %}.
+  Visible in the next CV, cover letter and interview prep.{% endset %}
+{% call ui.page_head("Profile", lead=lead) %}
+  <nav class="pf-tabs">
+    <button type="button" data-tab="head">Header</button>
+    <button type="button" data-tab="summary">Summary <span class="pf-count">{{ summary.achievements|length }}</span></button>
+    <button type="button" data-tab="exp">Experience <span class="pf-count">{{ experience.jobs|length }}</span></button>
+    <button type="button" data-tab="edu">Education</button>
+  </nav>
+  <div class="page-actions pf-save">  <!-- one Save for the open tab: profile.js shows the pair with its data-for -->
+    <span class="status" id="profile-status" data-for="head"></span><button class="primary" type="submit" form="profile-form" data-for="head">Save</button>
+    <span class="status" id="summary-status" data-for="summary"></span><button class="primary" type="submit" form="summary-form" data-for="summary">Save</button>
+    <span class="status" id="experience-status" data-for="exp"></span><button class="primary" type="submit" form="experience-form" data-for="exp">Save</button>
+    <span class="status" id="other-status" data-for="edu"></span><button class="primary" type="submit" form="other-form" data-for="edu">Save</button>
+  </div>
+{% endcall %}
+
+<section data-pane="head" hidden>
+<form class="card form" id="profile-form">
+  <p class="muted small">The header of every CV: name, contacts in one line separated by " · ", and links.</p>
+  <label>Name <input name="name" required value="{{ p.name }}" placeholder="JANE DOE"></label>
+  <div class="row3">
+    <label>Email <input name="email" type="email" value="{{ p.email }}" placeholder="jane@example.com"></label>
+    <label>Phone <input name="phone" type="tel" value="{{ p.phone }}" placeholder="+000 00 000 0000"></label>
+    <label>City / time zone <input name="location" value="{{ p.location }}" placeholder="Springfield · CET"></label>
+  </div>
+  <div class="muted small">An empty field removes that part from the contacts line.</div>
+  <h3 class="pf-h">Links</h3>
+  <div id="links">
+    {% for l in p.links %}
+    <div class="link-row"><input name="label" value="{{ l.label }}" placeholder="github.com/example">
+      <input name="url" type="url" value="{{ l.url }}" placeholder="https://github.com/example">
+      <button type="button" class="pf-icon del" title="Remove">✕</button></div>
+    {% endfor %}
+  </div>
+  <template id="link-tpl"><div class="link-row"><input name="label" placeholder="github.com/example">
+    <input name="url" type="url" placeholder="https://github.com/example">
+    <button type="button" class="pf-icon del" title="Remove">✕</button></div></template>
+  <div><button type="button" id="add-link">＋ Link</button></div>
+</form>
+</section>
+
+<section data-pane="summary" hidden>
+<form class="card form" id="summary-form">
+  <p class="muted small">Summary = intro + up to <b id="max-label"></b> achievements that fit the vacancy best + closing.
+      📌 — in every version of the CV.</p>
+  <label>Intro <textarea name="intro" rows="2"></textarea></label>
+  <div class="pf-row-fields">
+    <label class="grow">Closing <input name="closing"></label>
+    <label>Max achievements <input name="max_achievements" type="number" min="1" max="10"></label>
+  </div>
+  <h3 class="pf-h">Achievements</h3>
+  <ol class="pf-list" id="achievements"></ol>
+  <div><button type="button" id="add-achievement">＋ Achievement</button></div>
+</form>
+</section>
+
+<section data-pane="exp" hidden>
+<form class="form" id="experience-form">
+  <p class="muted small">Workplaces top to bottom, as in the CV. Bullets are picked for the vacancy, 📌 — always there.</p>
+  <div class="pf-jobs" id="jobs"></div>
+  <div><button type="button" id="add-job">＋ Workplace</button></div>
+</form>
+</section>
+
+<section data-pane="edu" hidden>
+<form class="card form" id="other-form">
+  <p class="muted small">The bottom sections of every CV: Education, Languages and Publications.</p>
+  <h3 class="pf-h">Education</h3>
+  <div class="row3">
+    <label>Degree <input name="degree" value="{{ other.education.degree }}" placeholder="B.Sc. in Computer Science"></label>
+    <label>University <input name="school" value="{{ other.education.school }}" placeholder="Example University"></label>
+    <label>Years <input name="years" value="{{ other.education.years }}" placeholder="2016 – 2020"></label>
+  </div>
+  <label>Thesis
+    <input name="thesis_ai" value="{{ other.education.thesis_ai }}" placeholder="Thesis: …"></label>
+  <h3 class="pf-h">Languages</h3>
+  <input name="languages" value="{{ other.languages }}" placeholder="English — C1 · German — B2">
+  <h3 class="pf-h">Publications</h3>
+  <textarea name="publications" rows="2" placeholder="empty — no Publications section in the CV">{{ other.publications }}</textarea>
+</form>
+</section>
+
+<script id="cv-data" type="application/json">{{ {"summary": summary, "experience": experience, "other": other}|tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script src="/static/profile.js?v={{ v }}"></script>
+{% endblock %}

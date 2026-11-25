@@ -105,7 +105,7 @@ text = ""
 degree = "B.Sc. in Computer Science"
 years = "2016 – 2020"
 school = "Example University"
-# thesis line shown under the school in the CV for AI / LLM vacancies (not in the one-page variant)
+# thesis line shown under the school in every CV except the one-page variant; empty or absent — no line
 thesis_ai = "Thesis: text classification with neural networks"
 
 [languages]

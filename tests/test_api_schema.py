@@ -84,6 +84,11 @@ def writes(data, tmp_path, monkeypatch):
     monkeypatch.setattr(levels, "CACHE_FILE", tmp_path / "levels_cache.json")
     monkeypatch.setattr(cv_match, "CACHE_FILE", tmp_path / "cv_text.json")  # CV PDF text cache
     monkeypatch.setattr(cvgen, "OUT_DIR", tmp_path / "cv_out")  # cover letters too: cover_letter.save puts them there
+    base = tmp_path / "cv_base" / "base.toml"  # PUT /api/profile and /api/cv-base/* edit the CV base — a copy of it
+    base.parent.mkdir()
+    base.write_bytes(cvgen.BASE_FILE.read_bytes())
+    monkeypatch.setattr(cvgen, "BASE_FILE", base)
+    monkeypatch.setattr(config, "CV_BASE_FILE", base)
     runner = web.Runner(web.ROOT, tmp_path / "last_run.log")  # the log is in tmp
     monkeypatch.setattr(runner, "_run", lambda commands: None)  # the queue is accepted, scripts do not start
     monkeypatch.setattr(web, "runner", runner)
