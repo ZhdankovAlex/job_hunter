@@ -5,10 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}job-hunter{% endblock %}</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
+<link rel="stylesheet" href="/static/tokens.css?v={{ v }}">
 <link rel="stylesheet" href="/static/app.css?v={{ v }}">
 <script>
   // before rendering, so the panel does not "jump": is it collapsed (the user's choice in localStorage)
   try { if (localStorage.getItem('nav-collapsed') === '1') document.documentElement.classList.add('nav-collapsed'); } catch (e) {}
+  // the theme — also before rendering, or the page flashes the system one: light / dark from localStorage, no entry — system
+  try { const t = localStorage.getItem('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
 </script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -26,6 +29,9 @@
   </nav>
   <div class="sidenav-foot">
     <span class="run-pill" id="run-pill" hidden><i class="pulse"></i><span class="nav-label" id="run-pill-text"></span></span>
+    <button class="nav-toggle" id="theme-toggle" type="button" title="Theme: system / light / dark" aria-label="Theme: system / light / dark">
+      <span class="nav-ic" aria-hidden="true" id="theme-ic">◐</span><span class="nav-label" id="theme-label">Theme: system</span>
+    </button>
     <button class="nav-toggle" id="nav-toggle" type="button" title="Collapse / expand the panel" aria-label="Collapse / expand the panel">
       <span class="nav-ic" aria-hidden="true">«</span><span class="nav-label">Collapse</span>
     </button>
@@ -39,6 +45,29 @@ document.getElementById('nav-toggle').addEventListener('click', () => {
   const on = document.documentElement.classList.toggle('nav-collapsed');
   try { localStorage.setItem('nav-collapsed', on ? '1' : '0'); } catch (e) {}
 });
+// theme: cycles system → light → dark; reports in frames (reports/*.html) catch the storage event and
+// switch together with the UI
+(() => {
+  const THEMES = { system: ['◐', 'system'], light: ['☀', 'light'], dark: ['☾', 'dark'] };
+  const ORDER = ['system', 'light', 'dark'];
+  const root = document.documentElement;
+  const show = () => {
+    const [ic, name] = THEMES[root.dataset.theme || 'system'];
+    document.getElementById('theme-ic').textContent = ic;
+    document.getElementById('theme-label').textContent = 'Theme: ' + name;
+  };
+  const apply = (t) => {
+    if (t === 'light' || t === 'dark') root.dataset.theme = t; else delete root.dataset.theme;
+    show();
+  };
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    const next = ORDER[(ORDER.indexOf(root.dataset.theme || 'system') + 1) % ORDER.length];
+    apply(next);
+    try { if (next === 'system') localStorage.removeItem('theme'); else localStorage.setItem('theme', next); } catch (e) {}
+  });
+  addEventListener('storage', (e) => { if (e.key === 'theme' || e.key === null) apply(e.newValue); });
+  show();
+})();
 </script>
 <script src="/static/pill.js?v={{ v }}"></script>
 {% block scripts %}{% endblock %}

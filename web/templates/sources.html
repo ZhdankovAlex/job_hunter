@@ -1,10 +1,11 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Sources · job-hunter{% endblock %}
 {% set kind_names = {"ats": "Company ATS boards", "aggregator": "Aggregators", "site": "Sites without an ATS", "career_page": "Career pages"} %}
 {% block content %}
-<h1>Sources</h1>
-<p class="muted">{% if built %}From the last run ({{ built }}).{% else %}The data appears after the first run with the new script version.{% endif %}
-  How many vacancies each source gave before the filters.</p>
+{% set lead %}{% if built %}From the last run ({{ built }}).{% else %}The data appears after the first run with the new script version.{% endif %}
+  How many vacancies each source gave before the filters.{% endset %}
+{{ ui.page_head("Sources", lead=lead) }}
 
 <section class="tiles wide" style="--n: {{ kinds|length + 3 }}">
   {% for kind, k in kinds.items() %}
@@ -34,7 +35,7 @@
           {% if q.skipped %}<span class="small">not run</span>
           {% elif q.fetched is not none %}<span class="small">received <b>{{ q.fetched }}</b>{% if q.total %} of {{ q.total }} on the site{% endif %}</span>{% endif %}
         </div>
-        <div class="chips">{% for k, v in q.params.items() if k not in ("limit", "sort", "order", "description_format", "offset") and v != "" %}<span class="chip small">{{ k }}: {{ v }}</span>{% endfor %}</div>
+        <div class="chips">{% for k, v in q.params.items() if k not in ("limit", "sort", "order", "description_format", "offset") and v != "" %}<span class="chip">{{ k }}: {{ v }}</span>{% endfor %}</div>
       </li>
       {% endfor %}
     </ul>
@@ -72,13 +73,14 @@
           {% for g in gaps.groups if g.key not in not_read %}<button data-reason="{{ g.key }}" title="{{ g.hint }}">{{ g.title }} {{ g.count }}</button>{% endfor %}
         </div>
       </div>
-      <div class="feed-filter">
+      <div class="toggles">
         <span class="filter-sep">search:</span>
         <input id="q" class="filter-search" type="search" placeholder="Source name…">
       </div>
     </div>
   </div>
   <p class="muted small" id="reason-hint"></p>
+  <div class="table-wrap">
   <table class="data" id="sources">
     <thead><tr><th>Source</th><th>Kind</th><th>ATS / board</th><th class="num">Vacancies</th><th>Why empty</th><th>Checked</th></tr></thead>
     <tbody>
@@ -94,6 +96,7 @@
     {% endfor %}
     </tbody>
   </table>
+  </div>
   <p class="muted small">Sites and Telegram channels that are not connected at all (closed in robots.txt, vacancies are collected by a script…)
     are listed with the reasons in <code>docs/sources.md</code>.</p>
 </details>

@@ -56,10 +56,104 @@ Pages are built by the server, there is no separate frontend and no build step:
 - **Filters are URL parameters.** On "Companies" the industry and "only with vacancies" are
   `?industry=fintech&empty=0`. A click changes the address, the server returns an already filtered page, and the
   link can be saved. JavaScript (`web/static/`, no build) is used only where there is no other way: run progress
-  over SSE, the CV, cover letter and event forms, skill edits, the collapsed panel.
+  over SSE, the CV, cover letter and event forms, skill edits, the collapsed panel and the theme.
+- **One style base.** `web/static/tokens.css` holds the palette (light and dark theme), fonts, the size scale
+  `--fs-xs` 12 · `--fs-sm` 13 · `--fs-md` 14 · `--fs-lg` 16 · `--fs-xl` 20 px, font weights, radii and the spacing
+  scale `--sp-1`…`--sp-6` (4 · 8 · 12 · 16 · 24 · 32 px). The UI loads it before `app.css`, and the HTML pages in
+  `reports/` (the report, "Applications") embed the same file into `<style>` in full (`html_report.TOKENS_CSS`), so
+  they also open without the server. A font size in CSS is only a step of the scale, the palette lives only here:
+  `tests/test_styles.py` checks this. The PDF CV (template styles in `cvgen.py`) is print layout in pt and is not
+  part of the base. Reports built earlier keep their old styles until the next run.
+- **One header and one rhythm.** A page starts with a header — the `ui.page_head` macro (`<header class="page-head">`):
+  the `.page-title` row (h1 and, if any, toggles, filters, a `.count` counter) and the `.lead` under it, `--sp-2` apart.
+  `main.page` is a column of blocks with a `--sp-4` gap and `--sp-5` padding; top-level blocks lose their own vertical
+  margins (`.page > *` at the end of `app.css`), so "header → first block → next one" spacing is the same everywhere.
+  "Pipeline" (the run card) and the pages in a frame (the report, "Applications" — they have their own h1 and `.sub`
+  with the same spacing) keep their own layout. Checked by `tests/test_styles.py`.
 - **Heavy computations are cached** in `state/web_cache.json` (see "Speed" above). Board links are not part of the
   key: a run rewrites `ats_mapping.json` all the time, so they are added on every request.
 - **Responses and errors** — see "Responses" below.
+
+## Design system: how to build a new page
+
+Tokens are in `web/static/tokens.css`, components in `web/static/app.css` (the "components" section), markup in the
+macros of `web/templates/_ui.html`. Do not invent sizes, colors or field styles on a page: if a new look is needed,
+add a component or a token first, then the page. `tests/test_styles.py` checks the rules.
+
+**Tokens.** Light and dark theme colors (`--bg`, `--card`, `--fg`, `--muted`, `--line`, `--chip`, `--accent`,
+`--ok`, `--warn`, `--bad` and their `-soft` variants for backgrounds; text on an accent fill — `--on-accent`), fonts,
+sizes `--fs-xs`…`--fs-xl`, spacing `--sp-1`…`--sp-6`, radii `--r-xs`…`--r-pill`, control height `--ctl-h` (34 px)
+and `--ctl-h-sm` (26 px), shadows `--sh-1` (a card) and `--sh-2` (the selected tab), the focus ring `--focus`.
+
+**Theme.** The theme button sits at the bottom of the left panel, above "Collapse": it cycles "system" → "light" →
+"dark". The choice is stored in the browser (`localStorage`, key `theme`); "system" follows the OS setting. Without
+a `data-theme` attribute on `<html>` the palette follows `prefers-color-scheme`; `data-theme="light"` and `"dark"`
+are the user's choice and override the system. A script in `<head>` (`base.html`, and `html_report.THEME_JS` in the
+pages of `reports/`) sets the attribute from `localStorage` before rendering, so the page does not flash. Reports and
+"Applications" in a frame switch together with the UI (the `storage` event); opened from disk they always follow
+the system. The dark palette is written twice in `tokens.css` — for `data-theme="dark"` and for the system dark
+theme; add a new color to both blocks, `tests/test_styles.py` checks that they match.
+
+**Components.**
+
+| What | Class / macro | When |
+|---|---|---|
+| Button | `button`, `<a class="btn">` | One height `--ctl-h`. `.primary` — the main action (one per form or toolbar), `.danger` — stops or deletes, `.ghost` — secondary, no border, `.sm` — only actions in table and list rows |
+| Toggle filters | `.toggles` with `button`, the selected one `.on` | A row of pills above a list or a table (on "Pipeline" `.feed-filter` looks the same) |
+| Field | `input`, `select`, `textarea` | Shared styles, a form sets nothing of its own. A label above the field — `<label class="field">` (inside `.form` — a plain `<label>`), a checkbox with a label — `<label class="check">` |
+| Form | `.form`, `ui.form_actions(status_id)` | A column of fields with a `--sp-3` step; field rows — `.row2`, `.row3` (a column on a narrow screen) |
+| One-line form | `.form-inline` | A link or search and a button in one row |
+| Page header | `ui.page_head(title, count, lead)` | The first row of every page except the pages in a frame and "Pipeline" |
+| Toolbar | `.toolbar` | The strip above a report in a frame ("Reports", "Applications") |
+| Card | `.card`, `ui.card_head(title, count)` | A page block; on the right of the card header — search or the card's actions |
+| Table | `<div class="table-wrap"><table class="data">` | The wrapper scrolls the table on a narrow screen; numbers — `.num` |
+| Chip, badge | `.chip` (`.on`), `.tag` (`.accent`, `.ok`, `.warn`, `.bad`) | A chip is a clickable filter or topic, a badge is a short mark next to text ("own", "draft") |
+| Empty state | `ui.empty(text, hint)` | "No data" and what to do to get some |
+| Status | `<span class="status">` | "Saving…", "✔ saved", "⚠️ error" next to a button; takes no space when empty |
+
+**Where buttons go.**
+- Whole-page actions (refresh, save) — on the right of the title row: the body of `{% call ui.page_head(...) %}`
+  in `<div class="page-actions">`. Pages with a report in a frame — on the right of `.toolbar`.
+- Form actions — at the bottom of the form, pushed right (`ui.form_actions`): the status, then the buttons, the
+  main `.primary` one last. Build options (checkboxes, radios) — in `<span class="form-opts">` inside the same block,
+  they go to the left.
+- A one-line form — the button on the right in the same row (`.form-inline`).
+- Card actions — on the right of its header (`ui.card_head`), actions of a list item or a table row — `.sm` at the
+  end of the row.
+
+**A new page.**
+
+```jinja
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}Example · job-hunter{% endblock %}
+{% block content %}
+{% set lead %}What the page shows and where the data comes from — <code>state/example.json</code>.{% endset %}
+{% call ui.page_head("Example", items|length, lead) %}
+  <div class="page-actions"><button class="primary" id="refresh">↻ Refresh</button></div>
+{% endcall %}
+
+<form class="card form" id="example-form">
+  <label>Name <input name="name" required></label>
+  {% call ui.form_actions("example-status") %}<button class="primary" type="submit">Save</button>{% endcall %}
+</form>
+
+<section class="card">
+  {% call ui.card_head("Records", items|length) %}<input id="q" type="search" placeholder="Search…">{% endcall %}
+  {% if items %}<div class="table-wrap"><table class="data">…</table></div>
+  {% else %}{{ ui.empty("No records yet", "Add the first one with the form above.") }}{% endif %}
+</section>
+{% endblock %}
+```
+
+Then add an item to `NAV` (`web/app.py`). Check it in a preview in the light and dark theme and on a narrow screen
+(375 px): the page must not scroll horizontally.
+
+The pages in `reports/` (the report, "Applications") embed the same tokens, and their filters, search field and
+badges repeat the UI components (`html_report._CSS`), so they do not look foreign inside a frame. A new look in a
+report — also only through tokens.
+
+## Code and API
 
 Code: `web/app.py` (FastAPI: pages and API), `web/models.py` (Pydantic models of requests and responses),
 `web/runner.py` (starting runs and the schedule), `web/cache.py` (cache of slow pages), `web/templates/` (Jinja2), `web/static/` (CSS and JS without a build).

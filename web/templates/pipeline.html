@@ -13,7 +13,7 @@
         <button class="primary" data-run="all" data-skips="mail telegram freehire aggregators" title="Like run_daily.bat: mail first, then vacancies">▶ Start run</button>
         <button data-run="main" data-skips="telegram freehire aggregators" title="The &quot;no mail&quot; checkbox does not apply here">Vacancies only</button>
         <button data-run="applications" data-skips="" title="The &quot;no …&quot; checkboxes do not apply here">Mail only</button>
-        <button class="stop-btn" id="stop-btn" hidden title="End the whole run, including the next scripts in the queue. What this run collected will not be saved">⏹ Stop run</button>
+        <button class="danger" id="stop-btn" hidden title="End the whole run, including the next scripts in the queue. What this run collected will not be saved">⏹ Stop run</button>
       </div>
       <div class="skip-opts" title="Turn stages off in advance. Only the ones that fit the button apply: for &quot;Vacancies only&quot; — all but mail; for &quot;Mail only&quot; — none">
         <span class="muted small">no:</span>
@@ -38,8 +38,8 @@
 
   <div class="col">
     <div class="card now">
-      <div class="now-head"><h2>Now</h2>
-        <button class="skip-btn" id="skip-btn" hidden title="Stop the stage: what was collected so far goes on">⏭ Skip stage</button>
+      <div class="card-head"><h2>Now</h2>
+        <button class="sm skip-btn" id="skip-btn" hidden title="Stop the stage: what was collected so far goes on">⏭ Skip stage</button>
       </div>
       <div class="now-title" id="now-title">—</div>
       <div class="big-bar"><i id="now-fill"></i><span id="now-count"></span></div>
@@ -50,7 +50,7 @@
     <div class="tiles" id="tiles"></div>
 
     <div class="card">
-      <h2>What we reject <span class="muted small" id="rejects-total"></span></h2>
+      <h2>What we reject <span class="count" id="rejects-total"></span></h2>
       <div class="hbars" id="rejects"></div>
     </div>
 

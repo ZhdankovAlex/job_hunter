@@ -1,25 +1,26 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% set labels = {"initiative": "initiative", "early_detection": "noticed before others", "pushback": "proposed another way",
                  "research": "unfamiliar topic", "incident": "incident", "ownership": "ownership"} %}
 {% block title %}Interview prep · job-hunter{% endblock %}
 {% block content %}
-<h1>Interview prep</h1>
-<form method="get" class="add-skill">
-  <input name="url" type="url" placeholder="Link to the vacancy — from a report or any" value="{{ url }}" style="flex:1;min-width:320px">
+{% set lead %}Only facts from <code>cv/base.toml</code> — nothing is invented. Stories come from the <code>[[stories]]</code> section
+  of the same file (drafts: check the wording).{% endset %}
+{{ ui.page_head("Interview prep", lead=lead) }}
+<form method="get" class="form-inline">
+  <input name="url" type="url" placeholder="Link to the vacancy — from a report or any" value="{{ url }}">
   <button class="primary" type="submit">🎤 Build</button>
 </form>
-<p class="muted small">Only facts from <code>cv/base.toml</code> — nothing is invented. Stories come from the <code>[[stories]]</code> section
-  of the same file (drafts: check the wording).</p>
 <details class="card paste-job"{% if form %} open{% endif %}>
   <summary>No link (a PDF from a recruiter, correspondence) — paste the vacancy text</summary>
-  <form method="post" class="paste-form">
+  <form method="post" class="form paste-form">
     <div class="row2">
-      <input name="company" placeholder="Company" value="{{ form.company if form else '' }}">
-      <input name="title" placeholder="Vacancy" value="{{ form.title if form else '' }}">
+      <label>Company <input name="company" value="{{ form.company if form else '' }}"></label>
+      <label>Vacancy <input name="title" value="{{ form.title if form else '' }}"></label>
     </div>
-    <input name="location" placeholder="Location / format (optional)" value="{{ form.location if form else '' }}">
-    <textarea name="text" rows="8" placeholder="Vacancy text">{{ form.text if form else '' }}</textarea>
-    <div><button class="primary" type="submit">🎤 Build from the text</button></div>
+    <label>Location / format <input name="location" placeholder="optional" value="{{ form.location if form else '' }}"></label>
+    <label>Vacancy text <textarea name="text" rows="8">{{ form.text if form else '' }}</textarea></label>
+    {% call ui.form_actions() %}<button class="primary" type="submit">🎤 Build from the text</button>{% endcall %}
   </form>
 </details>
 {% if error %}<p class="bad">⚠️ {{ error }}</p>{% endif %}
@@ -53,7 +54,7 @@
     <div class="card">
       <h2>Stories closest to the vacancy</h2>
       {% for s in r.stories %}
-      <details {{ 'open' if loop.first }}><summary><b>{{ s.title }}</b>{% if s.draft %} <span class="tag">draft</span>{% endif %}
+      <details {{ 'open' if loop.first }}><summary><b>{{ s.title }}</b>{% if s.draft %} <span class="tag warn">draft</span>{% endif %}
         <span class="small muted">{% for q in s.questions %}{{ labels.get(q, q) }}{{ ", " if not loop.last }}{% endfor %}</span></summary>
         <p class="small"><b>Situation.</b> {{ s.situation }}<br><b>Action.</b> {{ s.action }}<br><b>Result.</b> {{ s.result }}</p>
       </details>

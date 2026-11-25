@@ -1,0 +1,55 @@
+/* The shared style base of job-hunter: colors, fonts, the size scale, radii.
+   Used by the web UI (base.html, before app.css) and by the HTML pages in reports/ — reports and "Applications":
+   html_report embeds this file into every page in full, so the page also opens without the server.
+   Font size — only a step of the var(--fs-*) scale, color — only a variable; tests/test_styles.py checks this.
+   The PDF CV (template styles in cvgen.py) is print layout in pt and is not covered here. */
+:root {
+  color-scheme: light dark;
+  /* palette */
+  --bg: #f6f7f9; --card: #fff; --fg: #18202b; --muted: #687385; --line: #e3e7ed; --chip: #eef1f5; --row: #eceff3;
+  --accent: #2563eb; --accent-soft: rgba(37, 99, 235, .12); --ok: #16a34a; --ok-soft: rgba(22, 163, 74, .14);
+  --bad: #dc2626; --bad-soft: rgba(220, 38, 38, .12); --warn: #d97706; --warn-soft: rgba(217, 119, 6, .14);
+  --track: #e9edf2;
+  --on-accent: #fff;  /* text on an --accent fill (a .primary button, a selected filter) */
+  /* fonts */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, Consolas, monospace;
+  --lh: 1.5;
+  /* size scale: captions and labels — xs, secondary text — sm, body — md, subheadings — lg, page title — xl */
+  --fs-xs: 12px; --fs-sm: 13px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px;
+  --fw-medium: 600; --fw-bold: 700;
+  /* spacing: 4 · 8 · 12 · 16 · 24 · 32 px. Page header — title and lead --sp-2 apart, between page blocks —
+     --sp-4, page padding — --sp-5 */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  /* radii */
+  --r-xs: 4px; --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-pill: 999px;
+  /* controls: buttons, inputs and selects share the height --ctl-h; --ctl-h-sm — only toggle filters
+     and actions inside table and list rows */
+  --ctl-h: 34px; --ctl-h-sm: 26px; --ctl-px: 12px;
+  /* shadows: --sh-1 — a card, --sh-2 — something floating (the selected tab, a menu) */
+  --sh-1: 0 1px 2px rgba(16, 24, 40, .05); --sh-2: 0 2px 8px rgba(16, 24, 40, .12);
+  --focus: 0 0 0 3px var(--accent-soft);
+}
+/* theme: no data-theme attribute on <html> — follow the system (prefers-color-scheme), data-theme="light" / "dark" —
+   the user's choice (the toggle in base.html, stored in localStorage "theme"). The dark palette is written twice —
+   for the system and for the choice; tests/test_styles.py makes sure the two blocks match */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1216; --card: #171b21; --fg: #e5e8ec; --muted: #8b95a5; --line: #262c35; --chip: #20262e; --row: #1b2027;
+  --accent: #6d9eff; --accent-soft: rgba(109, 158, 255, .16); --ok: #4ade80; --ok-soft: rgba(74, 222, 128, .14);
+  --bad: #f87171; --bad-soft: rgba(248, 113, 113, .14); --warn: #fbbf24; --warn-soft: rgba(251, 191, 36, .14);
+  --track: #232a33;
+  --on-accent: #0b1220;  /* a light --accent in the dark theme: white text on it is unreadable */
+  --sh-1: none; --sh-2: 0 2px 8px rgba(0, 0, 0, .5);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --card: #171b21; --fg: #e5e8ec; --muted: #8b95a5; --line: #262c35; --chip: #20262e; --row: #1b2027;
+    --accent: #6d9eff; --accent-soft: rgba(109, 158, 255, .16); --ok: #4ade80; --ok-soft: rgba(74, 222, 128, .14);
+    --bad: #f87171; --bad-soft: rgba(248, 113, 113, .14); --warn: #fbbf24; --warn-soft: rgba(251, 191, 36, .14);
+    --track: #232a33;
+    --on-accent: #0b1220;  /* a light --accent in the dark theme: white text on it is unreadable */
+    --sh-1: none; --sh-2: 0 2px 8px rgba(0, 0, 0, .5);
+  }
+}

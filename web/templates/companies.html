@@ -1,20 +1,20 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Companies · job-hunter{% endblock %}
 {% macro q(ind=industry, emp=empty) %}?industry={{ ind }}{{ '' if emp else '&empty=0' }}{% endmacro %}
 {% block content %}
-<div class="table-head">
-  <h1>Companies <span class="muted small">{{ rows|length }}</span></h1>
-</div>
-<p class="muted small">All archive days ({{ d.vacancies }} vacancies without repeats) and your own companies
+{% set lead %}All archive days ({{ d.vacancies }} vacancies without repeats) and your own companies
   (<code>[industry_companies]</code> in settings.toml, the 4th field of companies.txt). The industry comes from those lists
-  or from the company's vacancies. Companies without vacancies — search by hand: the website, chats, HR.</p>
+  or from the company's vacancies. Companies without vacancies — search by hand: the website, chats, HR.{% endset %}
+{{ ui.page_head("Companies", rows|length, lead) }}
 
 {% set by_ind = {} %}{% for m in d.market %}{% set _ = by_ind.update({m.industry: m}) %}{% endfor %}
 {% set inds = d.market|map(attribute='industry')|list %}
 {% set inds = inds + (d.counts.keys()|reject('in', inds)|list) %}
-<section class="card" style="margin-bottom: 12px">
-  <p class="muted small" style="margin-top: 0">Click an industry to filter the list below. Vacancies without repeats by company and title ·
+<section class="card">
+  <p class="muted small card-note">Click an industry to filter the list below. Vacancies without repeats by company and title ·
     remote — among vacancies with a known format · salary — median of the range middle, EUR/month</p>
+  <div class="table-wrap">
   <table class="data industries">
     <thead><tr><th>Industry</th><th class="num">Companies</th><th class="num">Vacancies</th><th class="num">Remote</th><th>Salary</th><th>Most asked for</th></tr></thead>
     <tbody>
@@ -29,13 +29,15 @@
       <tr class="{{ 'on' if not industry }}" onclick="location.href='{{ q(ind='') }}'"><td colspan="6"><a href="{{ q(ind='') }}">all industries</a></td></tr>
     </tbody>
   </table>
+  </div>
 </section>
 
-<div class="chips" style="margin-bottom: 12px">
+<div class="chips">
   <a class="chip {{ 'on' if not empty }}" href="{{ q(emp=not empty) }}">with vacancies only</a>
 </div>
 
 <section class="card">
+  <div class="table-wrap">
   <table class="data">
     <thead><tr><th>Company</th><th>Industry</th><th>Vacancies</th><th>Last</th><th>Application</th><th></th></tr></thead>
     <tbody>
@@ -51,9 +53,10 @@
         <td class="small">{{ c.status }}</td>
         <td class="small">{% if c.board %}<a href="{{ c.board }}" target="_blank" rel="noopener">board ↗</a>{% endif %}</td></tr>
       {% else %}
-      <tr><td colspan="6" class="muted">No companies match the filter.</td></tr>
+      <tr><td colspan="6">{{ ui.empty("No companies match the filter", 'Untick "with vacancies only" or pick another industry.') }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </section>
 {% endblock %}

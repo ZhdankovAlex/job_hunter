@@ -1,12 +1,13 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}CV · job-hunter{% endblock %}
 {% block content %}
-<h1>CV for a vacancy</h1>
-<p class="muted">Bullets, skills and the Summary are picked from <code>cv/base.toml</code> for the vacancy text — nothing is invented,
-  only selection and order. The "📄 CV" button in the report builds the same.</p>
+{% set lead %}Bullets, skills and the Summary are picked from <code>cv/base.toml</code> for the vacancy text — nothing is invented,
+  only selection and order. The "📄 CV" button in the report builds the same.{% endset %}
+{{ ui.page_head("CV for a vacancy", lead=lead) }}
 
 <section class="grid two cv-grid">
-  <form class="card cv-form" id="cv-form">
+  <form class="card form" id="cv-form">
     <label>Link to the vacancy
       <input name="url" type="url" placeholder="https://… — from a report or any other">
     </label>
@@ -17,17 +18,16 @@
     <label>Or the vacancy text
       <textarea name="text" rows="9" placeholder="Paste the text if the page cannot be read (LinkedIn, closed sites)"></textarea>
     </label>
-    <div class="form-foot">
-      <label class="inline"><input type="checkbox" name="one_page"> one page</label>
+    {% call ui.form_actions("cv-status") %}
+      <span class="form-opts"><label class="check"><input type="checkbox" name="one_page"> one page</label></span>
       <button class="primary" type="submit">📄 Build CV</button>
-    </div>
-    <div class="muted small" id="cv-status"></div>
+    {% endcall %}
   </form>
 
   <div class="card" id="cv-result" hidden>
-    <div class="result-head">
+    <div class="card-head">
       <div><h2 id="r-title"></h2><div class="muted small" id="r-meta"></div></div>
-      <div class="actions"><a class="btn primary" id="r-pdf" target="_blank">Open PDF</a><a class="btn" id="r-md" target="_blank">Markdown</a></div>
+      <div class="actions"><a class="btn" id="r-md" target="_blank">Markdown</a><a class="btn primary" id="r-pdf" target="_blank">Open PDF</a></div>
     </div>
     <div id="r-missing"></div>
     <h2 class="sub-h">Why these bullets were picked</h2>
@@ -36,7 +36,9 @@
 </section>
 
 <section class="card">
-  <h2>Built CVs <span class="muted small">{{ cvs|length }}</span></h2>
+  {{ ui.card_head("Built CVs", cvs|length) }}
+  {% if cvs %}
+  <div class="table-wrap">
   <table class="data">
     <thead><tr><th>CV</th><th>Variant</th><th>Built</th><th></th></tr></thead>
     <tbody id="cv-list">
@@ -48,6 +50,10 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
+  {% else %}
+  {{ ui.empty("No built CVs yet", 'Build the first one with the form above or the "📄 CV" button in a report.') }}
+  {% endif %}
 </section>
 {% endblock %}
 {% block scripts %}<script src="/static/cv.js?v={{ v }}"></script>{% endblock %}

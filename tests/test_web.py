@@ -48,3 +48,19 @@ def test_reports_are_not_cached_by_browser(client):
     http, _, _ = client
     assert http.get("/files/reports/no-such-report.html").headers["cache-control"] == "no-cache"
     assert "cache-control" not in http.get("/pipeline").headers
+
+
+@pytest.mark.parametrize("path", ["/cv", "/cover", "/prep", "/market", "/companies", "/skills", "/sources"])
+def test_page_head_rendered(client, path):
+    """The ui.page_head macro: a page starts with the standard header with h1 — on empty data too."""
+    http, _, _ = client
+    main = http.get(path).text.split('<main class="page">', 1)[1].lstrip()
+    assert main.startswith('<header class="page-head">'), main[:200]
+    assert "<h1>" in main.split("</header>", 1)[0]
+
+
+@pytest.mark.parametrize("path", ["/market"])  # "Applications" reads reports/ — not substituted here
+def test_empty_state_without_data(client, path):
+    """No data — the ui.empty state with a hint on what to do, not a bare line."""
+    http, _, _ = client
+    assert '<div class="empty">' in http.get(path).text
