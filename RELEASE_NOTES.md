@@ -4,6 +4,16 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-25
 
+### Progress page: gamification of the job search (#32)
+
+- jobhunter/gamification.py builds reports/progress.html together with the Applications page: a rank with XP, a workday streak (weekends don't break it), one next step of the week (prep for an upcoming interview, follow up where it's been silent for 7+ days, look at Fit >= 80% vacancies from the latest report, or the weekly goal), recent wins within 30 days, a badge collection with rarities and a "new" mark, a collapsed activity heatmap. XP only for your own actions: stages, offers and rejections are memorable events, not points
+- /progress page and a Progress item in the left panel after Applications; weekly_goal in [gamification]
+- Applications: the funnel (conversion by stage) is on top, rows go from the freshest event; the "Follow up" block is gone from the reports — the next step on Progress covers it
+- tests/test_gamification.py; Progress in test_web, test_styles and the schemathesis write fixture
+- docs: applications.md (gamification), web-ui.md, configuration.md, testing.md
+
+<sub>dc2b4fe</sub>
+
 ### Build(deps): Bump the python group across 1 directory with 5 updates (#31)
 
 Updates the requirements on [google-auth](https://github.com/googleapis/google-cloud-python), [pypdf](https://github.com/py-pdf/pypdf), [fastapi](https://github.com/fastapi/fastapi), [ruff](https://github.com/astral-sh/ruff) and [schemathesis](https://github.com/schemathesis/schemathesis) to permit the latest version.
