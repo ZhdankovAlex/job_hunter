@@ -52,8 +52,10 @@ Screenshots are taken on demo data: vacancies are public, applications and the C
 |---|---|
 | ![Pipeline](docs/img/pipeline.png) | ![Report](docs/img/reports.png) |
 | Pipeline: a live run by stages | Report: vacancies with score, Fit % and filters |
-| ![Applications](docs/img/applications.png) | ![CV](docs/img/cv.png) |
-| Applications: statuses from mail and manual events | A CV for a vacancy and why each bullet was picked |
+| ![Applications](docs/img/applications.png) | ![Progress](docs/img/progress.png) |
+| Applications: statuses from mail and manual events, the funnel on top | Progress: rank, streak, the next step of the week, wins and badges |
+| ![Profile](docs/img/profile.png) | ![CV](docs/img/cv.png) |
+| Profile: the CV base edited from the browser | A CV for a vacancy and why each bullet was picked |
 | ![Interview prep](docs/img/prep.png) | ![CV vs market](docs/img/market.png) |
 | Interview preparation | CV vs market |
 | ![Skills](docs/img/skills.png) | ![Sources](docs/img/sources.png) |
