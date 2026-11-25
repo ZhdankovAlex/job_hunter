@@ -2,6 +2,15 @@
 
 Built from the git history automatically after a push to main (`python -m jobhunter.release_notes`). Newest changes first.
 
+## 2026-11-26
+
+### Runner: start() returns the started commands, not the live queue (#33)
+
+The queue thread could run a script that exits at once and empty self.queue before start() returned list(self.queue) — the API answered with [] and test_start_skip_mail_drops_applications failed on CI. start() now returns its own copy; a test runs the thread synchronously to show the race.
+
+
+<sub>6554c45</sub>
+
 ## 2026-11-25
 
 ### Progress page: gamification of the job search (#32)
