@@ -327,76 +327,110 @@ def build_markdown(base: dict, company: str, title: str, text: str, url: str = "
     """
     limits = limits or Limits()
     vac = _generic_vacancy(generic) if generic else Vacancy(title, text, base)
-    summary_cfg = base["summary"]
-    if generic:
-        achievements = [a for a in summary_cfg["achievements"]
-                        if a.get("pin") or generic in a.get("summary_for", [])]
-    else:
-        achievements = _pick([a for a in summary_cfg["achievements"] if _for_variant(a, None)], vac,
-                             min(2, limits.achievements or 2),
-                             limits.achievements or summary_cfg.get("max_achievements", 3))
-        if picks is not None:
-            picks += [{"section": "Summary", "text": a["text"], "pin": bool(a.get("pin")),
-                       **vac.explain(a["text"], a.get("topics", []))} for a in achievements]
-    links = " · ".join(f"[{label}]({href})" for label, href in base["links"])
-    header = ([f"<!-- base CV: {'Backend + AI' if generic == 'ai' else 'Backend'}",
-               "     Build the PDF after editing: python cvgen.py --render <this file> -->"] if generic else [
+    header = (_generic_header(generic) if generic
+              else _vacancy_header(vac, company, title, url, fit, missing))
+    md = [
+        *header,
+        *_contacts(base, vac, title, generic),
+        *_summary(base["summary"], vac, generic, limits, picks),
+        *_skills_section(base, vac, generic, limits),
+        "", "## Experience",
+    ]
+    for position, job in enumerate(base["experience"]):
+        md += _job(base, position, job, vac, generic, limits, picks)
+    md += _projects(base, vac, limits, picks) if not generic else []
+    md += _education(base, limits)
+    return "\n".join(md)
+
+
+def _generic_header(generic: str) -> list[str]:
+    """The comment at the top of a base CV: which variant and how to build the PDF."""
+    return [f"<!-- base CV: {'Backend + AI' if generic == 'ai' else 'Backend'}",
+            "     Build the PDF after editing: python cvgen.py --render <this file> -->"]
+
+
+def _vacancy_header(vac: Vacancy, company: str, title: str, url: str, fit: int, missing: list | None) -> list[str]:
+    """The comment at the top of a CV for a vacancy: the vacancy, Fit, what is missing, what the text mentions."""
+    return [
         f"<!-- vacancy: {company} — {title}" + (f" — {url}" if url else ""),
         f"     Fit: {fit}%" if fit >= 0 else "     Fit: not computed",
         f"     missing key skills: {', '.join(missing)}" if missing else "     key skills from the dictionary are covered",
         f"     vacancy technologies: {', '.join(sorted(vac.techs)) or '—'}; topics: {', '.join(sorted(vac.topics)) or '—'}",
         "     Check the text, edit if needed and build the PDF: python cvgen.py --render <this file> -->",
-    ])
-    md = [
-        *header,
-        "",
-        f"# {base['name']}",
-        (base["headline"]["ai" if vac.is_ai else "backend"] if generic
-         else headline_for(title, base["headline"]["ai" if vac.is_ai else "backend"])),
-        base["contacts"],
-        links,
-        "",
-        "## Summary",
-        " ".join([summary_cfg["intro"], *(a["text"] for a in achievements), summary_cfg["closing"]]),
-        "",
-        "## Skills",
-        *(f"- **{group}:** {_cap_items(items, limits.skill_items)}"
-          for group, items in _top_groups(_skills(base, vac, everything=bool(generic)), vac, limits.skill_groups)),
-        "",
-        "## Experience",
     ]
-    for position, job in enumerate(base["experience"]):
-        high = job.get("bullets_max", 6)
-        cap = limits.bullets.get(position, limits.bullets_rest)
-        high = min(high, cap) if cap is not None else high
-        if generic:
-            bullets = [b for b in job["bullets"] if _allowed(b, vac) and _for_variant(b, generic)]
-            tech = [t for t in job["tech"] if vac.is_ai or t not in ai_only_tech(base)]
-        else:
-            bullets = _pick([b for b in job["bullets"] if _for_variant(b, None)], vac, min(5, high), high)
-            tech = [t for t in job["tech"] if t in core_tech(base) or t in job.get("tech_always", [])
-                    or _techs(t) & vac.techs or (vac.is_ai and t in ai_only_tech(base))]
-            if picks is not None:
-                picks += [{"section": job["company"], "text": b["text"], "pin": bool(b.get("pin")),
-                           **vac.explain(b["text"], b.get("topics", []))} for b in bullets]
-        md += ["", f"### {job['title']} — {job['company']}", f"*{job['dates']}*", ""]
-        md += [*job["intro"][: limits.intro_paragraphs], ""]
-        md += [f"- {b['text']}" for b in bullets]
-        md += ["", f"_{' · '.join(tech)}_"]
-    md += _projects(base, vac, limits, picks) if not generic else []
+
+
+def _contacts(base: dict, vac: Vacancy, title: str, generic: str | None) -> list[str]:
+    """Name, headline (for a vacancy — adjusted to its title), contacts and links."""
+    headline = base["headline"]["ai" if vac.is_ai else "backend"]
+    links = " · ".join(f"[{label}]({href})" for label, href in base["links"])
+    return ["", f"# {base['name']}", headline if generic else headline_for(title, headline),
+            base["contacts"], links]
+
+
+def _explain(section: str, items: list[dict], vac: Vacancy, picks: list | None) -> None:
+    """Adds to picks (if passed) which items of the section were picked and why."""
+    if picks is not None:
+        picks += [{"section": section, "text": i["text"], "pin": bool(i.get("pin")),
+                   **vac.explain(i["text"], i.get("topics", []))} for i in items]
+
+
+def _summary(cfg: dict, vac: Vacancy, generic: str | None, limits: Limits, picks: list | None) -> list[str]:
+    """Summary: intro, achievements (base CV — by summary_for, for a vacancy — the best matching), closing."""
+    if generic:
+        achievements = [a for a in cfg["achievements"] if a.get("pin") or generic in a.get("summary_for", [])]
+    else:
+        achievements = _pick([a for a in cfg["achievements"] if _for_variant(a, None)], vac,
+                             min(2, limits.achievements or 2), limits.achievements or cfg.get("max_achievements", 3))
+        _explain("Summary", achievements, vac, picks)
+    return ["", "## Summary", " ".join([cfg["intro"], *(a["text"] for a in achievements), cfg["closing"]])]
+
+
+def _skills_section(base: dict, vac: Vacancy, generic: str | None, limits: Limits) -> list[str]:
+    """Skills: skill groups (base CV — all, for a vacancy — the matching ones), within the limits."""
+    groups = _top_groups(_skills(base, vac, everything=bool(generic)), vac, limits.skill_groups)
+    return ["", "## Skills", *(f"- **{group}:** {_cap_items(items, limits.skill_items)}" for group, items in groups)]
+
+
+def _job(base: dict, position: int, job: dict, vac: Vacancy, generic: str | None, limits: Limits,
+         picks: list | None) -> list[str]:
+    """One workplace: title, dates, description, bullets and the technology line.
+
+    A base CV gets all bullets of the variant and the whole stack (AI technologies only in "ai"); a CV for a
+    vacancy gets the best matching bullets and technologies: the core ones (core_tech, tech_always) and those in
+    the vacancy. position is the index in [[experience]] (0 — the latest), the bullet limit depends on it.
+    """
+    high = job.get("bullets_max", 6)
+    cap = limits.bullets.get(position, limits.bullets_rest)
+    high = min(high, cap) if cap is not None else high
+    if generic:
+        bullets = [b for b in job["bullets"] if _allowed(b, vac) and _for_variant(b, generic)]
+        tech = [t for t in job["tech"] if vac.is_ai or t not in ai_only_tech(base)]
+    else:
+        bullets = _pick([b for b in job["bullets"] if _for_variant(b, None)], vac, min(5, high), high)
+        tech = [t for t in job["tech"] if t in core_tech(base) or t in job.get("tech_always", [])
+                or _techs(t) & vac.techs or (vac.is_ai and t in ai_only_tech(base))]
+        _explain(job["company"], bullets, vac, picks)
+    return ["", f"### {job['title']} — {job['company']}", f"*{job['dates']}*", "",
+            *job["intro"][: limits.intro_paragraphs], "",
+            *(f"- {b['text']}" for b in bullets),
+            "", f"_{' · '.join(tech)}_"]
+
+
+def _education(base: dict, limits: Limits) -> list[str]:
+    """Publications (if filled in), Education and Languages."""
     edu = base["education"]
     publications = base.get("publications", {}).get("text", "").strip()  # empty — no section, no empty header
     # the thesis goes into every CV except the one-page variant; the thesis_ai key keeps its historical name
     # (the line used to be in the AI version only), there is no need to rename it in the base
     thesis = edu.get("thesis_ai", "").strip() if limits.publications else ""
-    md += [
+    return [
         *(["", "## Publications", publications] if limits.publications and publications else []),
         "", "## Education", f"**{edu['degree']}** · {edu['years']}  ",
         edu["school"] + ("  " if thesis else ""),
         *([thesis] if thesis else []),
         "", "## Languages", base["languages"]["text"], "",
     ]
-    return "\n".join(md)
 
 
 def _projects(base: dict, vac: Vacancy, limits: Limits, picks: list | None) -> list[str]:
@@ -408,9 +442,7 @@ def _projects(base: dict, vac: Vacancy, limits: Limits, picks: list | None) -> l
             continue
         high = limits.project_bullets or proj.get("bullets_max", 3)
         bullets = _pick(proj["bullets"], vac, 1, high)
-        if picks is not None:
-            picks += [{"section": proj["name"], "text": b["text"], "pin": bool(b.get("pin")),
-                       **vac.explain(b["text"], b.get("topics", []))} for b in bullets]
+        _explain(proj["name"], bullets, vac, picks)
         label = re.sub(r"^https?://", "", proj["link"])
         md += ["", f"### {proj['name']} — {proj['kind']}", f"*[{label}]({proj['link']})*", "", proj["intro"], ""]
         md += [f"- {b['text']}" for b in bullets]

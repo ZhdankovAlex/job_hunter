@@ -1,0 +1,53 @@
+[
+ {
+  "pin": true,
+  "score": 2.0,
+  "section": "Summary",
+  "similarity": 0.0,
+  "techs": [],
+  "text": "Designed a job-processing service handling 1M tasks a day.",
+  "topics": [
+   "distributed",
+   "highload"
+  ]
+ },
+ {
+  "pin": false,
+  "score": 2.0,
+  "section": "Summary",
+  "similarity": 0.0,
+  "techs": [],
+  "text": "Cut API p95 latency from 800 ms to 120 ms by fixing N+1 queries.",
+  "topics": [
+   "performance",
+   "sql"
+  ]
+ },
+ {
+  "pin": true,
+  "score": 7.33,
+  "section": "Example Corp",
+  "similarity": 0.334,
+  "techs": [
+   "PostgreSQL",
+   "Redis"
+  ],
+  "text": "**Designed a job-processing service** on PostgreSQL and Redis handling 1M tasks a day.",
+  "topics": [
+   "distributed",
+   "highload"
+  ]
+ },
+ {
+  "pin": false,
+  "score": 2.0,
+  "section": "Example Corp",
+  "similarity": 0.0,
+  "techs": [],
+  "text": "**Cut API p95 latency from 800 ms to 120 ms** by eliminating N+1 queries.",
+  "topics": [
+   "performance",
+   "sql"
+  ]
+ }
+]

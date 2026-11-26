@@ -48,6 +48,8 @@ after `pytest`, `git status` is clean.
 | `tests/test_cv_profile.py` | Profile, the CV header: contacts is split and joined back in the previous order, an edit does not touch the rest of `cv/base.toml` (byte for byte, CRLF and LF), bad input does not write the file, the first save creates `base.toml` from the example |
 | `tests/test_cv_base.py` | Profile, Summary and experience through tomlkit: a save without changes does not change the file, an edit and a revert return it byte for byte, the comment before the next section does not move under a new or deleted item, extra is kept, an edit shows up in the built CV; education, languages, publications (an empty thesis and empty publications leave no lines); topic hints from the text; two threads saving different sections at once keep both edits |
 | `tests/test_cvgen_report.py` | A CV for a vacancy (headline for the title, one-page version, HTML); the report: sections and staffing in the appendix |
+| `tests/test_cvgen_golden.py` | Golden output of `build_markdown` on `cv/base.example.toml` (base variants, for a vacancy, one page, with Projects) and the list of picked bullets — in `tests/fixtures/cv_golden/`; a refactoring of the generator must not change a single line |
+| `tests/test_market_advice.py` | "CV vs market" advice (`market_check.advice`): texts and order on five reports (all rules at once, few numbers, a clean CV, an empty one) — golden file `tests/fixtures/market_advice.json` |
 | `tests/test_vacancy_lookup.py` | A vacancy by link: the company from JobPosting, or from the domain when JobPosting names the career site ("Career Hub"); a bad link is "not found", not an exception |
 | `tests/test_api_schema.py` | The whole web API against its OpenAPI schema (schemathesis): no 500s, responses and codes as in the schema, invalid input is rejected — see below |
 | `tests/test_main_run.py` | The whole `main.run` without network: one company on Greenhouse via `FakeHttp`, the order of stages, reports and the vacancies JSON; a write outside `tmp_path` fails the test |
@@ -201,3 +203,4 @@ Two merges in a row do not fail it: a newer push cancels the older run, and a ru
 | `JOBHUNTER_PROFILE` | Another skills profile instead of `profile.toml` / `profile.example.toml` |
 | `JOBHUNTER_CV_BASE` | Another CV base instead of `cv/base.toml` / `cv/base.example.toml` |
 | `JOBHUNTER_NO_WARM` | The web UI does not precompute "CV vs market" and "Skills" in the background at start (tests need this) |
+| `JOBHUNTER_UPDATE_GOLDEN` | `tests/test_cvgen_golden.py` and `tests/test_market_advice.py` rewrite their golden files instead of comparing — when the output changed on purpose; then review the diff |
