@@ -72,8 +72,8 @@ last letter dates, days of silence, the history and a link to the last letter.
 services: only application events, CVs built in `cv_out/` and the vacancies of the latest report
 (`state/jobs/<date>.json`). Rewards are only for your own actions; employer decisions (a stage, an offer, a rejection)
 are memorable events, without points and without "the goal is an offer". There is no daily quota: it pushes towards
-sending applications blindly. Top to bottom: the main block, the next step, recent wins, badges, a collapsed
-"Activity over 8 weeks". Applications does not duplicate it: it has the conversion on top instead.
+sending applications blindly. Top to bottom: the main block, the next step, "Trend", "Activity over 12 weeks",
+recent wins, badges. Applications does not duplicate it: it has the conversion on top instead.
 
 - **Main block** — the rank, XP with a bar to the next rank, the streak and the 💬 message of the day (explanations —
   on hover).
@@ -107,8 +107,20 @@ sending applications blindly. Top to bottom: the main block, the next step, rece
   streak, close to the goal, the record, a badge or a rank. Urgent situations (an interview, a stage, a rejection)
   win; the choice among the fitting ones is deterministic by date. Once in 3 days a short quote from `QUOTES` goes
   under it.
-- **Activity over 8 weeks** (collapsed) — a heatmap of actions (Mon–Sun in rows, weeks in columns), ⭐ the number of
-  weeks with the goal met and the weekly record.
+- **Trend** (`jobhunter/progress_charts.py`, `daily`) — stacked columns by day: applications, stages and calls,
+  correspondence (recruiter letters in a thread and your own pings), rejections; one company on one day counts once in
+  each series. A 30 / 90-day switch (`PERIODS`); the tiles on top are the sums for the period with an arrow showing
+  the difference from the previous period of the same length, and a click hides the series. The tooltip shows the
+  numbers of the day under the cursor. Columns rather than smoothed areas: a day's count is a whole number, there are
+  no events between days, and a curve over the sum of series drew plateaus where one kind of event gave way to
+  another. The browser draws it (SVG + a little JS, no libraries) from JSON embedded in the page; the series colors
+  are the semantic UI colors (`--accent`, `--ok`, `--warn`, `--bad`), like the statuses on Applications.
+- **Activity over 12 weeks** (`HEX_WEEKS`, `hex_grid`) — hexes: columns are weeks, rows are days Mon–Sun. The color is
+  a shade of `--accent`, more saturated for more of your own actions that day (applications, stages, pings — as in the
+  streak); the levels follow the quartiles of the map's active days (`cuts`), the thresholds are in the legend's
+  tooltip. Hover draws an outline and keeps the fill; today has a dashed outline. Next to it is a summary
+  (`hex_summary`): active days and their share, actions over 12 weeks (the streak is only in the main block), the
+  busiest day, the average per active day, ⭐ weeks with the goal met, the weekly record.
 
 ## One-time Gmail setup
 

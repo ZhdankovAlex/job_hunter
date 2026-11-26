@@ -187,8 +187,8 @@ def test_progress_page_blocks_in_order(monkeypatch, tmp_path):
     monkeypatch.setattr(g, "CV_DIR", tmp_path)
     monkeypatch.setattr(g, "JOBS_DIR", tmp_path)
     page = g.page(day(0), [])
-    order = ['class="game hero"', "<h2>Next step</h2>", "<h2>Recent wins</h2>", 'class="game ach"',
-             '<details class="game"><summary>Activity over 8 weeks']
+    order = ['class="game hero"', "<h2>Next step</h2>", 'id="trend"', "Activity over 12 weeks", "<h2>Recent wins</h2>",
+             'class="game ach"']
     assert [page.index(x) for x in order] == sorted(page.index(x) for x in order)
     assert "Offer" not in page and 'href="/progress"' not in page
     assert "jobhunter.progress.badges" in page  # the "new" mark — via localStorage
@@ -295,10 +295,11 @@ def test_quote_every_few_days():
     assert 30 <= len(g.QUOTES) <= 50 and len(set(g.QUOTES)) == len(g.QUOTES)
 
 
-def test_heatmap_is_eight_weeks_and_future_is_empty():
+def test_heatmap_is_twelve_weeks_and_future_is_empty():
     game = g.build(day(2), staged(Application("Acme", [ev(day(1), APPLIED)])), goal=8, cv_dir=NO_CV, jobs_dir=NO_CV)
-    assert len(game.heat) == 8 and all(len(w) == 7 for w in game.heat)
-    assert game.heat[-1][1] == (day(1), 1) and game.heat[-1][3] is None
+    assert len(game.heat) == 12 and all(len(w) == 7 for w in game.heat)
+    cell = game.heat[-1][1]
+    assert cell is not None and (cell.day, cell.n) == (day(1), 1) and game.heat[-1][3] is None
 
 
 def test_applications_page_has_no_game_block_and_funnel_on_top(monkeypatch, tmp_path):
