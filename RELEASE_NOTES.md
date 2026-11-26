@@ -4,6 +4,20 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-26
 
+### Settings: a checked settings.toml model, modules read it when called (#37)
+
+- jobhunter/settings.py: a Pydantic model of the whole settings.toml (extra="forbid", strict=True) with the defaults that were spread across the code. A typo in a key or a string instead of a number used to give a silent default; now it is an error with the key path: "freehire.max_reqests: unknown key (a typo?)"
+- python -m jobhunter.settings --check [path]: all errors of the file at once, exit code 1
+- The file is read once, on the first settings.get(); settings.use() puts settings in place without a file. Extra keys are allowed only in [[freehire.queries]]: these are API parameters, freehire checks them itself
+- geo.S and the module constants computed from it on import (geo, bigtech, mail, cvgen, cv_match, gamification, applications_report, telegram, verify) are replaced with settings.get().<field> inside functions, so settings.use() changes all modules at once. geo.rules() builds the country patterns and company sets once per settings object; sites.sources() / bigtech.sources() read the Workday list when called
+- [home] is still read when config is imported: the home country is part of many compiled patterns
+- manual_jobs / career_pages entries are model objects (attributes, not dict.get)
+- pydantic is an explicit dependency in requirements.txt (it used to come only through fastapi)
+- Tests: test_settings.py; the use_settings fixture in conftest (section edits without patching constants, restored after the test)
+- Docs: configuration.md (the model, --check, how modules read settings), architecture.md, testing.md
+
+<sub>4ab2f0d</sub>
+
 ### CI: codecov-action v5 -> v7, off the deprecated Node 20 (#36)
 
 codecov-action v5 runs actions/github-script v7.0.1 inside, which targets Node 20; GitHub warns and forces it onto Node 24. v6 moved to github-script v8 (Node 24), v7 only changed the signing key. The inputs we use (token, files, fail_ci_if_error) are unchanged.
