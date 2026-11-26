@@ -1,6 +1,6 @@
 """Vacancy selection: keywords, location, primary language."""
 
-from . import config as c, geo, language, verify
+from . import config as c, geo, language, settings, verify
 from .stack import language_mismatch_text
 
 
@@ -58,7 +58,7 @@ def no_support(text):
 
 
 def keyword_match(job):
-    relaxed = geo.company_key(job.company) in geo.PRIORITY_COMPANIES
+    relaxed = geo.company_key(job.company) in geo.rules().priority_companies
     return role_ok(job.title, job.description, relaxed)
 
 
@@ -110,8 +110,8 @@ def apply(job):
             return _reject(job, "location by the source label: not remote and not the home country", job.location[:80])
         # tied to a country: possibly relocation / remote in the target country
         is_remote = bool(job.remote or c.REMOTE_RX.search(f"{job.location} {job.title}"))
-        in_target = geo.RELOCATION_ENABLED and geo.classify(job, is_remote)
-        if not in_target and (verdict is None or not geo.COUNTRY_BOUND_REMOTE):
+        in_target = settings.get().relocation_enabled and geo.classify(job, is_remote)
+        if not in_target and (verdict is None or not settings.get().country_bound_remote):
             return _reject(job, "location by the source label: not remote and not the home country", job.location[:80])
     job.location_check = verdict == "check"
     full_text = job.source not in c.PREVIEW_ONLY_SOURCES

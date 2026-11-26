@@ -251,13 +251,14 @@ def test_remoterocketship_next_data():
 
 # --- manual_jobs: JSON-LD, Next.js data, <title> ---------------------------------------------
 
-def test_manual_jobs_three_ways_to_read_page(monkeypatch, caplog):
-    from jobhunter import geo
+def test_manual_jobs_three_ways_to_read_page(monkeypatch, caplog, use_settings):
+    from jobhunter.settings import ManualJob, ManualJobs
 
-    urls = ["https://jobs.acme.com/1", "https://www.globex.com/careers/position/2",
-            {"url": "https://withthrive.com/3", "company": "Thrive", "location": "Remote"},
+    urls: list[str | ManualJob] = [
+            "https://jobs.acme.com/1", "https://www.globex.com/careers/position/2",
+            ManualJob(url="https://withthrive.com/3", company="Thrive", location="Remote"),
             "https://gone.example.com/4"]
-    monkeypatch.setitem(geo.S, "manual_jobs", {"urls": urls})
+    use_settings(manual_jobs=ManualJobs(urls=urls))
     next_data = {"props": {"pageProps": {"position": {
         "text": "Backend Engineer", "description": "<p>Go</p>",
         "locations": [{"name": "Lisbon", "type": "office"}, {"name": "Remote - Europe", "type": "remote"}]}}}}

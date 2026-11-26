@@ -4,7 +4,7 @@ import json
 import pytest
 from conftest import RouteHttp
 
-from jobhunter import freehire, geo
+from jobhunter import freehire
 from jobhunter.http import FetchError
 
 SEARCH = freehire.BASE_URL + "/agent/jobs/search"
@@ -101,8 +101,8 @@ def test_collect_pages_dedupes_and_saves(files):
     assert len(saved) == 131
 
 
-def test_collect_skips_relocation_queries_when_disabled(monkeypatch):
-    monkeypatch.setattr(geo, "RELOCATION_ENABLED", False)
+def test_collect_skips_relocation_queries_when_disabled(use_settings):
+    use_settings(relocation_enabled=False)
     http = RouteHttp(lambda m, u, p: body([raw("a")], total=1))
     jobs = freehire.Freehire(http, {"queries": [
         {"name": "reloc", "requires_relocation": True, "relocation": "true"},

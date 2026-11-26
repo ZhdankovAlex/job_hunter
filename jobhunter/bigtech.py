@@ -11,17 +11,14 @@ import logging
 import re
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from . import config as c, filters, geo
+from . import config as c, filters, settings
 from .http import FetchError, HttpClient, HttpPostClient
 from .models import Job, html_to_text, parse_date
 
 log = logging.getLogger(__name__)
 
-SETTINGS = geo.S.get("bigtech", {})
-QUERIES = SETTINGS.get("queries", ["python", "backend"])
-PAGES = int(SETTINGS.get("pages", 3))
-DETAILS_PER_COMPANY = int(SETTINGS.get("details_per_company", 60))
 
 
 def _priority(location: str, posted) -> tuple:
@@ -38,10 +35,10 @@ def _priority(location: str, posted) -> tuple:
 
 
 def _pick(cards: dict) -> list:
-    """Cards worth opening: a fitting title, at most DETAILS_PER_COMPANY."""
+    """Cards worth opening: a fitting title, at most [bigtech] details_per_company."""
     good = [card for card in cards.values() if filters.title_candidate(card["title"])]
     good.sort(key=lambda card: _priority(card["location"], card["posted"]))
-    return good[:DETAILS_PER_COMPANY]
+    return good[:settings.get().bigtech.details_per_company]
 
 
 # --- Microsoft: apply.careers.microsoft.com (Eightfold, /api/pcsx is allowed in robots.txt) ---
@@ -51,9 +48,10 @@ _MS = "https://apply.careers.microsoft.com"
 
 def microsoft(http: HttpClient) -> Iterator[Job]:
     cards: dict = {}
-    searches = [(q, "") for q in QUERIES] + ([("", c.HOME_COUNTRY)] if c.HOME_COUNTRY else [])
+    cfg = settings.get().bigtech
+    searches = [(q, "") for q in cfg.queries] + ([("", c.HOME_COUNTRY)] if c.HOME_COUNTRY else [])
     for query, location in searches:
-        for page in range(PAGES):
+        for page in range(cfg.pages):
             r = http.get(f"{_MS}/api/pcsx/search", params={
                 "domain": "microsoft.com", "query": query, "location": location,
                 "start": page * 10, "num": 10, "sort_by": "relevance",
@@ -107,8 +105,9 @@ def workday(company: str, host: str, tenant: str, site: str):
 
     def fetch(http: HttpPostClient) -> Iterator[Job]:
         cards: dict = {}
-        for query in QUERIES:
-            for page in range(PAGES):
+        cfg = settings.get().bigtech
+        for query in cfg.queries:
+            for page in range(cfg.pages):
                 r = http.post(f"{api}/jobs", json={
                     "appliedFacets": {}, "limit": 20, "offset": page * 20, "searchText": query,
                 })
@@ -151,8 +150,9 @@ _ORACLE_SITE = "CX_45001"
 
 def oracle(http: HttpClient) -> Iterator[Job]:
     cards: dict = {}
-    for query in QUERIES:
-        for page in range(PAGES):
+    cfg = settings.get().bigtech
+    for query in cfg.queries:
+        for page in range(cfg.pages):
             r = http.get(f"{_ORACLE}/recruitingCEJobRequisitions", params={
                 "onlyData": "true", "expand": "requisitionList.secondaryLocations",
                 "finder": f'findReqs;siteNumber={_ORACLE_SITE},keyword="{query}",limit=25,'
@@ -196,8 +196,9 @@ def oracle(http: HttpClient) -> Iterator[Job]:
 
 def amazon(http: HttpClient) -> Iterator[Job]:
     seen = set()
-    for query in QUERIES:
-        for page in range(PAGES):
+    cfg = settings.get().bigtech
+    for query in cfg.queries:
+        for page in range(cfg.pages):
             r = http.get("https://www.amazon.jobs/en/search.json", params={
                 "base_query": query, "result_limit": 100, "offset": page * 100, "sort": "recent",
             })
@@ -225,8 +226,9 @@ def amazon(http: HttpClient) -> Iterator[Job]:
                 break
 
 
-SOURCES = {"microsoft": microsoft, "oracle": oracle, "amazon": amazon}
-for _company, _host, _tenant, _site in (
-    tuple(x) for x in SETTINGS.get("workday", [])
-):
-    SOURCES[f"workday:{_company}"] = workday(_company, _host, _tenant, _site)
+def sources() -> dict[str, Any]:
+    """Sources: Microsoft, Oracle, Amazon and the Workday sites from [bigtech] workday in settings.toml."""
+    found: dict[str, Any] = {"microsoft": microsoft, "oracle": oracle, "amazon": amazon}
+    for company, host, tenant, site in settings.get().bigtech.workday:
+        found[f"workday:{company}"] = workday(company, host, tenant, site)
+    return found

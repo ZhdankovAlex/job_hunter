@@ -2,7 +2,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 
-from . import config, cv_match, geo, outreach, tiers
+from . import config, cv_match, geo, outreach, settings, tiers
 from .keys import company_key
 
 # company priority from companies.txt (0–3) — stars before the name
@@ -17,7 +17,7 @@ SOURCE_LINKS = (
 
 def _was_rejected(job):
     """Whether to move the vacancy to the "Rejected before" section (settings.toml: hide_previous_rejections)."""
-    if not geo.S.get("hide_previous_rejections", False):
+    if not settings.get().hide_previous_rejections:
         return False
     return any(w in f"{job.applied_status} {' '.join(job.history_marks)}".lower() for w in ("reject", "declin", "отказ"))
 
@@ -124,7 +124,7 @@ def _table(jobs, overflow, max_rows=None):
 def _relocation_section(reloc, overflow):
     """🌍: subsections by country, confirmed relocation first within each."""
     lines = [f"## 🌍 Relocation and remote by country — {len(reloc)}", ""]
-    for country in [*geo.COUNTRIES, geo.OTHER]:
+    for country in [*settings.get().relocation_countries, geo.OTHER]:
         group = [j for j in reloc if j.reloc_country == country]
         if not group:
             continue
@@ -297,8 +297,8 @@ def _ranked(jobs, tg_jobs):
 
 def _top_section(jobs, tg_jobs):
     """🎯 Top-N by relevance to the CV (profile.toml), at most top_per_company per company."""
-    limit = int(geo.S.get("top_limit", 100))
-    per_company_limit = int(geo.S.get("top_per_company", 3))
+    limit = settings.get().top_limit
+    per_company_limit = settings.get().top_per_company
     picked = []
     per_company: Counter[str] = Counter()
     for row in _ranked(jobs, tg_jobs):

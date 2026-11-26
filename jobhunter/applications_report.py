@@ -5,7 +5,7 @@ import re
 from datetime import UTC, date, datetime
 from urllib.parse import quote
 
-from . import geo, mail
+from . import mail, settings
 from .html_report import _CSS, _JS, THEME_JS, _e, _table
 
 # Final statuses and row colours
@@ -18,7 +18,12 @@ STATUS = {  # status -> (label, row CSS class)
     REJECTED: ("🔴 Rejected", "c-red"),
 }
 # No answer for longer than this means a rejection: two weeks of silence after an application or a stage is no longer waiting
-TIMEOUT_DAYS = int(geo.S.get("mail", {}).get("timeout_days", 14))
+
+
+def timeout_days() -> int:
+    """No answer for longer than this — a rejection ([mail] timeout_days): two weeks of silence is no longer waiting."""
+    return settings.get().mail.timeout_days
+
 
 # statuses from applications_manual.toml (a company can have several rows: "Applied, Rejected"); Russian words are for older files
 _SHEET_STAGE_RX = re.compile(r"interview|offer|stage|собес|интервью|тестов|оффер|этап", re.I)
@@ -138,9 +143,9 @@ def effective_status(app, in_applied: str, now: datetime) -> tuple[str, str]:
     """Final company status -> (status, explanation).
 
     🟢 in stages: a stage invitation by mail, or an interview / take-home task in applications_manual.toml;
-    🟡 waiting for an answer: there was an application, no answer yet, but no more than TIMEOUT_DAYS have passed;
+    🟡 waiting for an answer: there was an application, no answer yet, but no more than timeout_days() have passed;
     🟠 declined by you: the last event in applications_manual.toml is declined;
-    🔴 rejected: a rejection letter, "Rejected" in applications_manual.toml, or silence longer than TIMEOUT_DAYS.
+    🔴 rejected: a rejection letter, "Rejected" in applications_manual.toml, or silence longer than timeout_days().
     A rejection as the very last event outweighs a stage from the file. A new application by mail after a rejection letter is a new attempt: it waits for an answer again.
     """
     sheet = [s.strip() for s in in_applied.split(",") if s.strip()] if in_applied else []
@@ -169,7 +174,7 @@ def effective_status(app, in_applied: str, now: datetime) -> tuple[str, str]:
         return REJECTED, "marked in applications_manual.toml"
     if base == mail.REJECTED:
         return REJECTED, "rejection in the correspondence"
-    if silent > TIMEOUT_DAYS:
+    if silent > timeout_days():
         after = "a stage" if base == mail.INTERVIEW else "the application"
         return REJECTED, f"no answer for {silent} days after {after}"
     if base == mail.INTERVIEW:
@@ -249,7 +254,7 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
         stages.append(stage)
         label, css = STATUS[status]
         counts[status] = counts.get(status, 0) + 1
-        # days of silence matter only for live processes: waiting (after TIMEOUT_DAYS — a rejection) and stages (follow up)
+        # days of silence matter only for live processes: waiting (after timeout_days() — a rejection) and stages (follow up)
         silent = max(0, (now - app.last.when).days) if status in (ACTIVE, WAITING) else None
         def kind_name(e):  # "stage", but a meeting cancellation letter is "cancelled"
             return "cancelled" if e.kind == mail.INTERVIEW and _CANCELLED_RX.search(e.subject) else KIND_NAMES[e.kind]
@@ -278,9 +283,9 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
     legend = (
         '<div class="sub legend">'
         '<span class="c-green">green — stages, offer</span>'
-        f'<span class="c-yellow">yellow — waiting for an answer, up to {TIMEOUT_DAYS} days</span>'
+        f'<span class="c-yellow">yellow — waiting for an answer, up to {timeout_days()} days</span>'
         '<span class="c-orange">orange — declined by you</span>'
-        f'<span class="c-red">red — rejected: a letter, a mark or {TIMEOUT_DAYS}+ days of silence</span>'
+        f'<span class="c-red">red — rejected: a letter, a mark or {timeout_days()}+ days of silence</span>'
         "</div>"
     )
     parts = [

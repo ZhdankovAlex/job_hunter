@@ -38,6 +38,7 @@ from jobhunter import (
     market_check,
     progress,
     relevance,
+    settings,
     vacancy_lookup,
 )
 from jobhunter.http import PrivateAddress, check_public_url
@@ -227,7 +228,6 @@ def sources_payload() -> dict[str, Any]:
     except (OSError, ValueError):
         sources = {}
     built = datetime.fromtimestamp(SOURCES_FILE.stat().st_mtime) if SOURCES_FILE.exists() else None
-    from jobhunter import geo
     gaps = coverage.gaps(sources)
     why = {g["name"]: g for g in gaps["rows"]}  # why a source gave no vacancies to the report
     rows = [{"name": k, **v, **{f: why.get(k, {}).get(f, "") for f in ("reason", "detail", "checked")}}
@@ -243,8 +243,8 @@ def sources_payload() -> dict[str, Any]:
     return {
         "built": built.strftime("%d.%m %H:%M") if built else "",
         "rows": rows, "kinds": kinds,
-        "telegram": list(config.TELEGRAM_CHANNELS) if config.TELEGRAM_ENABLED else [],
-        "freehire": freehire_queries(geo.S.get("freehire", {})),
+        "telegram": list(settings.get().telegram.channels) if settings.get().telegram.enabled else [],
+        "freehire": freehire_queries(settings.get().freehire.model_dump()),
         "gaps": gaps,
     }
 
@@ -338,7 +338,7 @@ def market_report(day: str = "") -> dict[str, Any]:
     """market_check.analyze + conclusions; recomputed (~10 s) only if the day's vacancies or the CV changed."""
     files = sorted(config.JOBS_ARCHIVE_DIR.glob("*.json"))
     path = next((f for f in files if f.stem == day), files[-1] if files else None)
-    cv_files = [config.CV_BASE_FILE, *(Path(p) for p in market_check.geo.S.get("cv", {}).get("files", []))]
+    cv_files = [config.CV_BASE_FILE, *(Path(p) for p in settings.get().cv.files)]
     key = [path and path.name, path and path.stat().st_mtime, *(cache.mtime(f) for f in cv_files)]
 
     def compute() -> dict[str, Any]:

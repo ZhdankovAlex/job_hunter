@@ -22,8 +22,8 @@ def tg(title, **kw):
 
 
 @pytest.fixture
-def data(monkeypatch):
-    monkeypatch.setitem(geo.S, "hide_previous_rejections", True)
+def data(monkeypatch, use_settings):
+    use_settings(hide_previous_rejections=True)
     monkeypatch.setattr(config, "PRIORITY_MAX_ROWS", 1)  # the second priority vacancy goes to the overflow list
     jobs = [
         job("Senior Python Developer"),

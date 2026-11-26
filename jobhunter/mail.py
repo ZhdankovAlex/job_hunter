@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from email.utils import parseaddr
 
-from . import config, geo, progress
+from . import config, progress, settings
 from .fsutil import atomic_write_text
 from .keys import company_key
 from .models import html_to_text
@@ -25,8 +25,6 @@ log = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 API = "https://gmail.googleapis.com/gmail/v1/users/me"
-SETTINGS = geo.S.get("mail", {})
-QUERY = SETTINGS.get("query", "newer_than:365d -in:sent -in:chats -in:spam -in:trash")
 BODY_CHARS = 4000  # how much letter text to keep and parse
 
 # --- Whose letters are these ----------------------------------------------------------------
@@ -75,7 +73,12 @@ _GENERIC_SENDER_RX = re.compile(
     re.I,
 )
 # your name in a signature / sender (settings.toml [mail].own_names) — not a company name
-_OWN_NAMES = {n.strip().lower() for n in geo.S.get("mail", {}).get("own_names", []) if n.strip()}
+
+
+def _own_names() -> set[str]:
+    """[mail] own_names: the owner's own names, never taken for a company."""
+    return {n.strip().lower() for n in settings.get().mail.own_names if n.strip()}
+
 # company in the subject: "Thank you for applying to Acme", "Your application was sent to Globex",
 # "Interview with Initech", and the same on Russian job sites ("Отклик на вакансию … в компанию «Ромашка»")
 _SUBJECT_COMPANY_RXS = [
@@ -268,11 +271,12 @@ def company_of(sender: str, subject: str, body: str) -> str:
     job site letter text, corporate domain. LinkedIn and calendars write on behalf of a person —
     their sender name is not used.
     """
-    aliases = {company_key(k): v for k, v in SETTINGS.get("company_aliases", {}).items()}
+    cfg = settings.get().mail
+    aliases = {company_key(k): v for k, v in cfg.company_aliases.items()}
     # manual binding: name or address -> company — for letters with no company anywhere. Looked up in the sender
     # and in the text: HiBob writes from "No-reply (via Bob)", and the recruiter name is only in the signature
     head = body[:3000].lower()
-    for part, company in SETTINGS.get("sender_company", {}).items():
+    for part, company in cfg.sender_company.items():
         if part.lower() in sender.lower() or part.lower() in head:
             return company
     display, address = parseaddr(sender)
@@ -301,7 +305,7 @@ def company_of(sender: str, subject: str, body: str) -> str:
         if name.isupper() and len(name) > 4:  # «JOB OFFER AT ACME CORP»
             name = name.title()
         if (name and len(name) <= 40 and not _GENERIC_SENDER_RX.match(name) and not _ROLE_NAME_RX.search(name)
-                and name.lower() not in _OWN_NAMES):
+                and name.lower() not in _own_names()):
             return aliases.get(company_key(name), name)
     return ""
 
@@ -448,7 +452,7 @@ def fetch_messages() -> tuple[list[dict], str]:
         cache = json.loads(config.MAIL_CACHE_FILE.read_text(encoding="utf-8"))
     gmail = Gmail(credentials())
     address = gmail.address()
-    ids = gmail.message_ids(QUERY)
+    ids = gmail.message_ids(settings.get().mail.query)
     new = [i for i in ids if i not in cache]
     log.info("mail %s: letters for the query %d, new %d (≈%d s at 1 request/s)", address, len(ids), len(new), len(new))
     progress.set_total(len(new))
@@ -512,7 +516,7 @@ def summarize(messages: list[dict]) -> tuple[list[Application], list[dict]]:
     """-> (companies with events, letters without a company that look like an application/stage/rejection)."""
     apps: dict[str, Application] = {}
     unknown = []
-    ignore_senders = [s.lower() for s in SETTINGS.get("ignore_senders", [])]
+    ignore_senders = [s.lower() for s in settings.get().mail.ignore_senders]
     for msg in messages:
         sender, subject, body = msg["from"], msg["subject"], msg["body"]
         if any(s in sender.lower() for s in ignore_senders) or _IGNORE_SUBJECT_RX.search(subject):
@@ -548,8 +552,9 @@ def _add_event(apps: dict, company: str, event: Event) -> None:
 
 # time zone of events without a zone in applications_manual.toml: by default this computer's (it differs in summer
 # and winter); settings.toml [mail].utc_offset_hours sets it explicitly (for example, in Docker with TZ=UTC)
-_OFFSET = geo.S.get("mail", {}).get("utc_offset_hours")
-_LOCAL_TZ = timezone(timedelta(hours=float(_OFFSET))) if _OFFSET is not None else None
+def _local_tz() -> timezone | None:
+    offset = settings.get().mail.utc_offset_hours
+    return timezone(timedelta(hours=offset)) if offset is not None else None
 
 
 def manual_events() -> list[tuple[str, Event]]:
@@ -567,7 +572,7 @@ def manual_events() -> list[tuple[str, Event]]:
                 when = datetime(when.year, when.month, when.day, 12)
             if when.tzinfo is None:  # time as in the chat — in this computer's time zone (or from the settings)
                 try:
-                    when = when.replace(tzinfo=_LOCAL_TZ) if _LOCAL_TZ else when.astimezone()
+                    when = when.replace(tzinfo=local_tz) if (local_tz := _local_tz()) else when.astimezone()
                 # a typo date (0001-01-01) used to break the page: Windows has no time zone data before 1970
                 # (OSError), Linux shifts 1 January of year 1 into year 0 (ValueError)
                 except (OSError, OverflowError, ValueError):

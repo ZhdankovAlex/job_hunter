@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterable
 from datetime import date
 from email.utils import parsedate_to_datetime
 
-from . import config, geo
+from . import config, settings
 from .companies import slug_candidates
 from .fsutil import atomic_write_text
 from .http import FetchError, HttpClient
@@ -357,9 +357,9 @@ class AtsClient:
     def jobs_for(self, company, rediscover=False, quiet=False):
         with self.lock:
             entry = None if rediscover else self.mapping.get(company.name)
-        override = geo.S.get("ats_overrides", {}).get(company.name, {})
-        if override.get("greenhouse_board_token"):  # set by hand in settings.toml
-            entry = {"platform": "greenhouse", "slug": override["greenhouse_board_token"].strip()}
+        token = settings.get().ats_overrides.get(company.name, settings.AtsOverride()).greenhouse_board_token
+        if token:  # set by hand in settings.toml
+            entry = {"platform": "greenhouse", "slug": token.strip()}
         today = date.today()
         if entry and entry.get("platform") == "custom":
             return []  # the company has its own site — jobhunter/sites.py reads it

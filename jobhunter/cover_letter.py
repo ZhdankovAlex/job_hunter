@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-from . import cv_match, cvgen, geo
+from . import cv_match, cvgen, settings
 
 STYLES = ("short", "full")
 
@@ -52,7 +52,7 @@ def build(company: str, title: str, text: str, style: str = "short") -> dict:
     cover = {**DEFAULT_COVER, **base.get("cover", {})}
     vac = cvgen.Vacancy(title, text, base)
     holder = type("Job", (), {"title": title, "company": company, "mismatch_lang": ""})()
-    cv_match.CvProfile(geo.S.get("cv", {})).analyze(holder, text)
+    cv_match.CvProfile(settings.get().cv.model_dump()).analyze(holder, text)
     fmt = {"company": company, "title": title}
 
     achievements = cvgen._pick([a for a in base["summary"]["achievements"] if cvgen._for_variant(a, None)],

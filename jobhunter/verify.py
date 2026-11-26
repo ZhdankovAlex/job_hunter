@@ -13,14 +13,13 @@ from __future__ import annotations
 
 import re
 
-from . import config as c, geo
+from . import config as c, geo, settings
 from .stack import language_mismatch_text
 
 MIN_TEXT_CHARS = 400  # shorter — we assume there is no vacancy text
 ONSITE_REASON = f"on-site outside {c.HOME_COUNTRY}" if c.HOME_COUNTRY else "on-site"
 # remote from Russia only ("на территории РФ") — like "US only" for Russian-language sources:
 # settings.toml [filters].hide_russia_only = true hides such vacancies
-HIDE_RUSSIA_ONLY = bool(geo.S.get("filters", {}).get("hide_russia_only", False))
 
 _SENTENCE_RX = re.compile(r"[^\n.!?;•]+")
 _SKILLS_LINE_RX = re.compile(r"\nSkills: .*$", re.S)
@@ -232,7 +231,7 @@ def check(job, text: str, full_text: bool) -> None:
         job.reject_quote = quote(source, *span) if span else ""
 
     # --- remote from Russia only (settings.toml [filters].hide_russia_only)
-    m = _RU_ONLY_RX.search(body) if HIDE_RUSSIA_ONLY else None
+    m = _RU_ONLY_RX.search(body) if settings.get().filters.hide_russia_only else None
     if m and not ABROAD_OK_RX.search(body):
         return reject("remote from Russia only", m.span())
 
@@ -245,12 +244,12 @@ def check(job, text: str, full_text: bool) -> None:
     # a vacancy with relocation to the target country: an office there is expected, not a reason to reject
     relocation = getattr(job, "reloc_type", "") in (geo.RELOCATION, geo.UNCONFIRMED)
     span = None if relocation else _onsite(body, home_label=(kind == "home"))
-    if span and geo.RELOCATION_ENABLED:
+    if span and settings.get().relocation_enabled:
         # "Cyprus — Onsite, employment contract with relocation support": an office in another country + a move
         # paid by the employer — a vacancy for 🌍, not a reject (even if the source labelled it remote).
         # The country is taken from the title first ("… - Relocation to Cyprus"), then from the text.
         reloc_quote = geo.relocation_quote(body)
-        if reloc_quote and not any(rx.search(f"{location} {title}") for rx in geo.EXCLUDE_RX):
+        if reloc_quote and not any(rx.search(f"{location} {title}") for rx in geo.rules().exclude_rx):
             job.reloc_type, job.reloc_quote = geo.RELOCATION, reloc_quote
             job.reloc_country = geo.detect_country(title) or geo.detect_country(body[:3000]) or geo.OTHER
             relocation, span = True, None

@@ -57,7 +57,7 @@ def test_declined_by_me(at, now):
 
 
 def test_silence_turns_into_rejection(at, now):
-    make = app((-(ar.TIMEOUT_DAYS + 1), APPLIED, "Applied"))
+    make = app((-(ar.timeout_days() + 1), APPLIED, "Applied"))
     assert status(make, at, now) == ar.REJECTED
 
 

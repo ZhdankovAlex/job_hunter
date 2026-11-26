@@ -1,7 +1,6 @@
 """All settings in one place: paths, filters, keywords."""
 import os
 import re
-import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -37,14 +36,16 @@ MANUAL_APPLICATIONS_FILE = ROOT / "applications_manual.toml"
 # CV base for the generator (phone, email — personal): no own file — cv/base.example.toml
 CV_BASE_FILE = Path(os.environ.get("JOBHUNTER_CV_BASE") or local_or_example(ROOT / "cv" / "base.toml"))
 
-_SETTINGS = tomllib.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
 
 # --- Home country: settings.toml [home] -------------------------------------
 # Vacancies there (office, hybrid, remote) are shown on a par with worldwide remote. Empty — remote only.
-_HOME = _SETTINGS.get("home", {})
-HOME_COUNTRY = str(_HOME.get("country", "")).strip()
-HOME_ISO = str(_HOME.get("iso", "")).strip().upper()  # ISO country code for Himalayas / freehire queries
-_HOME_NAMES = [n for n in [HOME_COUNTRY, *_HOME.get("places", [])] if str(n).strip()]
+# The only section read when config is imported: the home country is part of many patterns compiled below.
+from . import settings as _settings
+
+_HOME = _settings.get().home
+HOME_COUNTRY = _HOME.country.strip()
+HOME_ISO = _HOME.iso.strip().upper()  # ISO country code for Himalayas / freehire queries
+_HOME_NAMES = [n for n in [HOME_COUNTRY, *_HOME.places] if n.strip()]
 _NEVER = r"(?!x)x"  # a regex that never matches (no home country set)
 
 USER_AGENT = "job-hunter/1.0 (open-source job search script; 1 req/s)"
@@ -53,12 +54,6 @@ MIN_INTERVAL = 1.0  # seconds between requests to one host
 HOST_INTERVALS = {"apply.workable.com": 6.0, "t.me": 2.0}
 
 # Public Telegram channels (web preview t.me/s/...): settings.toml [telegram], off by default
-_TELEGRAM = _SETTINGS.get("telegram", {})
-TELEGRAM_ENABLED = bool(_TELEGRAM.get("enabled", False))
-TELEGRAM_CHANNELS = list(_TELEGRAM.get("channels", []))
-TELEGRAM_MAX_AGE_DAYS = int(_TELEGRAM.get("max_age_days", 60))
-# Channels of the Russian-speaking market: their salary ranges are a separate group in the salary base (salary.py)
-TELEGRAM_CIS_CHANNELS = set(_TELEGRAM.get("cis_channels", []))
 TELEGRAM_MAX_PAGES = 25  # guard against endless paging
 WORKERS = 8 # threads are limited by the per-host rate, not by each other
 

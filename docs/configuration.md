@@ -72,12 +72,39 @@ weekly_goal = 8               # the weekly application goal on the Progress page
 
 All keys are commented in `settings.example.toml`.
 
+## Checking `settings.toml`
+
+Keys, types and defaults of `settings.toml` are described by the model in `jobhunter/settings.py` (Pydantic,
+`extra="forbid"`, `strict=True`). A typo in a key or a wrong type is an error with the key path, not a silent
+default:
+
+```bash
+.venv\Scripts\python.exe -m jobhunter.settings --check
+```
+
+```text
+Settings error: settings.toml:
+  max_age_days: Input should be a valid integer
+  freehire.max_reqests: unknown key (a typo?)
+```
+
+Without an argument it checks `config.SETTINGS_FILE` (`settings.toml`, or the example if there is none); a path
+can be passed. Exit code: 0 — the file is fine, 1 — errors. Extra keys are allowed only in `[[freehire.queries]]`:
+these are freehire API parameters, the API checks their names itself (`meta.ignored_params` stops the run).
+
+The file is read on the first `settings.get()`, once per process; `settings.use(Settings(...))` puts ready settings
+in place without a file. Modules take `settings.get().<field>` inside functions, so `use()` changes the behaviour
+of all of them at once. `geo.rules()` builds the country patterns and company sets — once per settings object.
+The exception is `[home]`: `config` reads it on import, because the home country is part of many patterns
+compiled there and in `verify` / `telegram`.
+
 ## Code (`jobhunter/`)
 
 | Module | What it does |
 |---|---|
-| `config.py` | Paths, home country, keywords, location and language regexes, Telegram settings |
-| `geo.py` | Reads `settings.toml`, location and relocation rules |
+| `config.py` | Paths, home country, keywords, location and language regexes |
+| `settings.py` | The `settings.toml` model: loading (`get`, `use`), the `--check` check |
+| `geo.py` | Location and relocation rules; `rules()` — patterns and company sets from the settings |
 | `http.py` | HTTP client: 1 request/s per host, robots.txt check |
 | `release_notes.py` | `RELEASE_NOTES.md` from the git history (`python -m jobhunter.release_notes`) |
 | `progress.py` | Run stages, `state/progress.json`, the terminal progress line, pipeline viewer |

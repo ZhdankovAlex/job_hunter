@@ -156,10 +156,10 @@ BUILTIN_COMPANIES: dict[str, list[str]] = {
 
 def _settings_companies() -> dict[str, list[str]]:
     """[industry_companies] from settings.toml: {industry code: [company, …]}, empty by default."""
-    from . import geo
+    from . import settings
 
-    raw = geo.S.get("industry_companies", {})
-    return {ind: [str(n) for n in names] for ind, names in raw.items() if ind in LABELS and isinstance(names, list)}
+    raw = settings.get().industry_companies
+    return {ind: [str(n) for n in names] for ind, names in raw.items() if ind in LABELS}
 
 
 SETTINGS_COMPANIES = _settings_companies()

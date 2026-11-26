@@ -1,8 +1,8 @@
 """Common test setup.
 
-jobhunter modules read settings.toml on import. So that tests give the same result for everyone and in CI,
-the example files from the repo are put in place before any import (no personal settings needed). Settings —
-settings.example.toml with test values (home country, relocation countries), see _test_settings().
+So that tests give the same result for everyone and in CI, the example files from the repo are put in place
+before any import (no personal settings needed). Settings — settings.example.toml with test values (home
+country, relocation countries), see _test_settings(). To change settings in a test — the use_settings fixture.
 """
 import os
 import socket
@@ -44,6 +44,33 @@ def _guarded_connect_ex(self: socket.socket, address: Any) -> int:
 def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(socket.socket, "connect", _guarded_connect)
     monkeypatch.setattr(socket.socket, "connect_ex", _guarded_connect_ex)
+
+
+@pytest.fixture(autouse=True)
+def _restore_settings() -> Any:
+    """settings.use() in a test does not leak into the next ones."""
+    from jobhunter import settings
+
+    saved = settings._current
+    yield
+    settings._current = saved
+
+
+@pytest.fixture
+def use_settings() -> Any:
+    """use_settings(relocation_enabled=False, bigtech={"pages": 2}): the current settings with changes.
+    A dict for a section changes only the keys named in it; modules see the change without a reload."""
+    from jobhunter import settings
+
+    def apply(**changes: Any) -> settings.Settings:
+        s = settings.get()
+        update = {k: getattr(s, k).model_copy(update=v) if isinstance(v, dict) and hasattr(getattr(s, k), "model_copy")
+                  else v for k, v in changes.items()}
+        new = s.model_copy(update=update)
+        settings.use(new)
+        return new
+
+    return apply
 
 
 

@@ -25,6 +25,7 @@ from jobhunter import (
     progress,
     report,
     salary as salary_rules,
+    settings,
     sites,
     telegram,
     tiers,
@@ -217,9 +218,9 @@ def must_report(ats, fetched, matched):
     found = Counter(j.company for j in fetched if j.source in PLATFORMS)
     passed = Counter(j.company for j in matched if j.source in PLATFORMS)
     rows = []
-    for name in geo.S.get("must_report_companies", []):
+    for name in settings.get().must_report_companies:
         entry = ats.mapping.get(name)
-        override = geo.S.get("ats_overrides", {}).get(name, {}).get("greenhouse_board_token")
+        override = settings.get().ats_overrides.get(name, settings.AtsOverride()).greenhouse_board_token
         if name in ats.failures:
             reason = ats.failures[name]
         elif override or (entry and entry.get("platform")):
@@ -432,7 +433,7 @@ def _stage_companies(ctx: RunContext) -> None:
 
 
 def _stage_freehire(ctx: RunContext) -> None:
-    ctx.fh_settings = geo.S.get("freehire", {})
+    ctx.fh_settings = settings.get().freehire.model_dump()
     ctx.fh = freehire.Freehire(ctx.http, ctx.fh_settings)
     if ctx.fh_settings.get("enabled", True) and not ctx.args.no_freehire:
         progress.start("freehire")
@@ -452,17 +453,17 @@ def _career_pages(ctx: RunContext) -> None:
     by_name = {c.name: c for c in ctx.companies}
     # pages from settings.toml [career_pages]: company = link or { url, location, links }. They were picked by hand,
     # so they are read even for outsourcing companies — such vacancies go to the "Staffing/outsourcing" appendix
-    for name, page in geo.S.get("career_pages", {}).items():
+    for name, page in settings.get().career_pages.items():
         if name in by_name:
-            page = page if isinstance(page, dict) else {"url": page}
-            ctx.career_pages.append((by_name[name], page["url"], page.get("location", ""), page.get("links", "")))
+            page = page if isinstance(page, settings.CareerPage) else settings.CareerPage(url=page)
+            ctx.career_pages.append((by_name[name], page.url, page.location, page.links))
 
 
 def _stage_filter(ctx: RunContext) -> None:
     """Filters for every collected vacancy: duplicates, role and rules (filters.apply), freshness."""
     progress.start("filter", total=len(ctx.fetched))
     ctx.seen = load_seen()
-    ctx.max_age_days = int(geo.S.get("max_age_days", 30))
+    ctx.max_age_days = settings.get().max_age_days
     seen_urls: set[str] = set()
     for job in ctx.fetched:
         known = ctx.scores.get(norm_name(job.company))
@@ -483,7 +484,7 @@ def _stage_filter(ctx: RunContext) -> None:
                 progress.tally("rejects", "wrong role")
             continue
         seen_urls.add(key)
-        priority = keys.company_key(job.company) in geo.PRIORITY_COMPANIES
+        priority = keys.company_key(job.company) in geo.rules().priority_companies
         if not priority and not is_fresh(job, ctx.seen, ctx.today, ctx.max_age_days):
             ctx.stale += 1
             job.reject = f"older than {ctx.max_age_days} days"
@@ -516,7 +517,7 @@ def _stage_freehire_texts(ctx: RunContext) -> None:
     ctx.fh_dropped = len(candidates) - ctx.fh_added
     ctx.fh.diagnose_empty()
 
-    blocked_urls = {keys.norm_url(u) for u in geo.S.get("blocked_urls", [])}
+    blocked_urls = {keys.norm_url(u) for u in settings.get().blocked_urls}
     ctx.matched = [j for j in ctx.matched if keys.norm_url(j.url) not in blocked_urls]
 
 
@@ -574,19 +575,20 @@ def _stage_sheets(ctx: RunContext) -> None:
     for job in ctx.fresh:
         job.staffing = ctx.blacklist.reason(job.company, job.title, job.description)
         job.app_status = ctx.app_index.lookup(job.company) if ctx.app_index else ""
-        job.referral = keys.company_key(job.company) in geo.REFERRAL_COMPANIES
+        job.referral = keys.company_key(job.company) in geo.rules().referral_companies
 
 
 def _stage_telegram(ctx: RunContext) -> None:
     """Telegram: collect the channels and run the same text checks."""
-    use_telegram = config.TELEGRAM_ENABLED and config.TELEGRAM_CHANNELS and not ctx.args.no_telegram
+    tg = settings.get().telegram
+    use_telegram = tg.enabled and tg.channels and not ctx.args.no_telegram
     if not use_telegram:
         why = "--no-telegram" if ctx.args.no_telegram else "turned off in settings.toml [telegram]"
         progress.skip("telegram", why)
         progress.skip("telegram_check", why)
         ctx.tg_enriched = enrich_from_ats([], ctx.ats)
         return
-    progress.start("telegram", total=len(config.TELEGRAM_CHANNELS))
+    progress.start("telegram", total=len(tg.channels))
     tg_all, ctx.tg_failed = telegram.collect(ctx.http)
     if tg_all is None:
         ctx.tg_enriched = enrich_from_ats([], ctx.ats)
@@ -625,7 +627,7 @@ def _stage_scoring(ctx: RunContext) -> None:
     tg_jobs = ctx.tg_jobs or []
     progress.count(new=len(ctx.fresh), telegram=len(tg_jobs))
     progress.start("scoring")
-    cv = CvProfile(geo.S.get("cv", {}))
+    cv = CvProfile(settings.get().cv.model_dump())
     for job in ctx.fresh:
         cv.analyze(job, job.description)
     for job in tg_jobs:
@@ -650,7 +652,7 @@ def _stage_salaries(ctx: RunContext) -> None:
     today = ctx.today
     salaries = ctx.salaries = SalaryBase()
     for job in telegram.SALARY_POSTS:
-        region = "cis" if job.channel in config.TELEGRAM_CIS_CHANNELS else "global"
+        region = "cis" if job.channel in settings.get().telegram.cis_channels else "global"
         salaries.add(f"tg:{job.post_url}:{norm_name(job.title)}", job.title, job.salary, region,
                      f"@{job.channel}", (job.posted or today).isoformat()[:10])
     for job in [*ctx.fetched, *ctx.fh_jobs]:
@@ -716,7 +718,7 @@ def _stats(ctx: RunContext) -> dict:
         "applications": ctx.app_index.digest() if ctx.app_index else None,
         "max_age_days": ctx.max_age_days,
         "referral": [(n, bool((mapping.get(n) or {}).get("platform")))
-                     for n in geo.S.get("referral_companies", [])],
+                     for n in settings.get().referral_companies],
         "must_report": must_report(ctx.ats, ctx.fetched, ctx.matched),
     }
 
@@ -726,7 +728,7 @@ def _stage_reports(ctx: RunContext, stats: dict) -> None:
     today, fresh, tg_jobs = ctx.today, ctx.fresh, ctx.tg_jobs
     config.REPORTS_DIR.mkdir(exist_ok=True)
     # CVs for new vacancies with a high Fit — the "📄 CV" link in the HTML report
-    if cvgen.AUTO_MAX > 0:
+    if settings.get().cv.auto_max > 0:
         progress.start("cv")
         cvgen.auto_build(ctx.reported, today)
     else:
