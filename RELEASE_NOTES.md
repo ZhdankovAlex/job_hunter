@@ -4,6 +4,19 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-26
 
+### Reliability and security: local-only web, atomic state writes, safe redirects and links (#35)
+
+- Web server: a foreign Host gets 400 (DNS rebinding), a state-changing request from another site's page (Origin not ours, Sec-Fetch-Site not same-origin/none) gets 403; curl and tests without these headers pass
+- State files and cv/base.toml are written atomically (jobhunter/fsutil.py: temp file + os.replace); a broken seen.json or ats_mapping.json gives a warning instead of failing the run
+- Profile: saves of cv/base.toml run one at a time under cv_base.WRITE_LOCK, parallel edits are not lost
+- Runs: progress.json records pid_started; is_alive checks pid and process start time, so a reused pid is not taken for a run. "Stop" marks the run stopped instead of "interrupted"
+- Http: redirects are followed by hand, each step through robots.txt and its host's rate limit (MAX_REDIRECTS = 5, loops are errors); a bad link is a FetchError, and /api/cv, /api/cover, /api/prep answer 422 instead of 500
+- Vacancy links from the web UI are not read if they point to this computer or the local network (Http(public_only=True), check_public_url on every address and redirect step)
+- Tests: autouse no_network and no_dns fixtures, test_fsutil.py, test_network_imports.py (network only through jobhunter/http.py), redirects, private addresses, web endpoints; regex timing thresholds 1 s -> 5 s
+- Docs: web-ui, architecture, pipeline, sources, configuration, testing
+
+<sub>61abedf</sub>
+
 ### Screenshots: all pages retaken on demo data, Progress and Profile added (#34)
 
 - docs/img: all 12 pages after the design system, the Progress page and the Profile page; demo data only — public vacancies from a short run, made-up applications, the Jane Doe example CV
