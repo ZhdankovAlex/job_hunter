@@ -4,20 +4,22 @@ import logging
 import re
 import threading
 import xml.etree.ElementTree as ET
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from datetime import date
 from email.utils import parsedate_to_datetime
+from pathlib import Path
+from typing import Any
 
 from . import config, settings
 from .companies import slug_candidates
 from .fsutil import atomic_write_text
 from .http import FetchError, HttpClient
-from .models import Job, html_to_text, parse_date
+from .models import Company, Job, html_to_text, parse_date
 
 log = logging.getLogger(__name__)
 
 
-def _greenhouse(data, company):
+def _greenhouse(data: Any, company: str) -> Iterator[Job]:
     for j in data.get("jobs", []):
         yield Job(
             company=company,
@@ -30,7 +32,7 @@ def _greenhouse(data, company):
         )
 
 
-def _lever(data, company):
+def _lever(data: Any, company: str) -> Iterator[Job]:
     for j in data if isinstance(data, list) else []:
         cats = j.get("categories") or {}
         locations = cats.get("allLocations") or [cats.get("location") or ""]
@@ -50,7 +52,7 @@ def _lever(data, company):
         )
 
 
-def _ashby(data, company):
+def _ashby(data: Any, company: str) -> Iterator[Job]:
     for j in data.get("jobs", []):
         if j.get("isListed") is False:
             continue
@@ -70,10 +72,10 @@ def _ashby(data, company):
         )
 
 
-def _workable(data, company):
+def _workable(data: Any, company: str) -> Iterator[Job]:
     # Workable returns a vacancy with several countries as a separate record per country (same url): merge them,
     # otherwise only the first country stays (while the fitting one may be the fifth record) and the vacancy is dropped
-    merged: dict[str, dict] = {}
+    merged: dict[str, dict[str, Any]] = {}
     for j in data.get("jobs", []):
         key = j.get("url") or j.get("shortlink") or j.get("shortcode") or j.get("title", "")
         place = ", ".join(filter(None, [j.get("city"), j.get("state"), j.get("country")]))
@@ -101,10 +103,10 @@ def _workable(data, company):
         )
 
 
-def _teamtailor(xml_text, company):
+def _teamtailor(xml_text: str, company: str) -> Iterator[Job]:
     """Public Teamtailor RSS feed: {slug}.teamtailor.com/jobs.rss"""
     for item in ET.fromstring(xml_text).iter("item"):
-        places = []
+        places: list[str] = []
         for loc in item.findall(".//{*}location"):
             city, country = loc.findtext("{*}city") or "", loc.findtext("{*}country") or ""
             places.append(", ".join(filter(None, [city, country])) or loc.findtext("{*}name") or "")
@@ -128,7 +130,7 @@ def _teamtailor(xml_text, company):
         )
 
 
-def _recruitee(data, company):
+def _recruitee(data: Any, company: str) -> Iterator[Job]:
     """Recruitee: {slug}.recruitee.com/api/offers/ — the full text is in the response."""
     for j in data.get("offers", []):
         place = ", ".join(filter(None, [j.get("city"), j.get("country")])) or j.get("location") or ""
@@ -146,7 +148,7 @@ def _recruitee(data, company):
         )
 
 
-def _bamboohr(data, company, slug=""):
+def _bamboohr(data: Any, company: str, slug: str = "") -> Iterator[Job]:
     """BambooHR: a list without text; the description is requested for fitting titles."""
     for j in data.get("result", []):
         loc = j.get("atsLocation") or j.get("location") or {}
@@ -165,7 +167,7 @@ def _bamboohr(data, company, slug=""):
         )
 
 
-def _breezy(data, company):
+def _breezy(data: Any, company: str) -> Iterator[Job]:
     """Breezy: {slug}.breezy.hr/json — a list without text; the description comes from the vacancy page."""
     for j in data if isinstance(data, list) else []:
         loc = j.get("location") or {}
@@ -185,10 +187,10 @@ def _breezy(data, company):
         )
 
 
-def _rippling(data, company):
+def _rippling(data: Any, company: str) -> Iterator[Job]:
     """Rippling ATS: a list without text, the vacancy repeats for every location (same uuid) — merged.
     Text and work format come from the vacancy card (_fill_details)."""
-    merged: dict[str, dict] = {}
+    merged: dict[str, dict[str, Any]] = {}
     for j in data if isinstance(data, list) else []:
         place = (j.get("workLocation") or {}).get("label") or ""
         m = merged.setdefault(j.get("uuid") or j.get("url") or j.get("name", ""), {"job": j, "places": []})
@@ -207,7 +209,7 @@ def _rippling(data, company):
 
 
 # platform -> (url, params, parser)
-PLATFORMS: dict[str, tuple[str, dict | None, Callable[..., Iterable[Job]]]] = {
+PLATFORMS: dict[str, tuple[str, dict[str, str] | None, Callable[..., Iterable[Job]]]] = {
     "greenhouse": ("https://boards-api.greenhouse.io/v1/boards/{slug}/jobs", {"content": "true"}, _greenhouse),
     "lever": ("https://api.lever.co/v0/postings/{slug}", {"mode": "json"}, _lever),
     "ashby": ("https://api.ashbyhq.com/posting-api/job-board/{slug}", None, _ashby),
@@ -229,11 +231,11 @@ _BOARD_CLOSED_RX = re.compile(r"HTTP (?:401|403|410)\b|(?:bamboohr|teamtailor)/\
 
 
 class AtsClient:
-    def __init__(self, http: HttpClient, mapping_path=config.MAPPING_FILE):
+    def __init__(self, http: HttpClient, mapping_path: Path = config.MAPPING_FILE) -> None:
         self.http = http
         self.path = mapping_path
         self.lock = threading.Lock()
-        self.mapping = {}
+        self.mapping: dict[str, dict[str, Any]] = {}
         self.failures: dict[str, str] = {}  # company -> why there are no vacancies today
         try:
             self.mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
@@ -243,7 +245,7 @@ class AtsClient:
             log.warning("%s is broken — company ATS will be detected again", mapping_path)
         self._loaded = json.loads(json.dumps(self.mapping))  # state at start — for saving by merge
 
-    def save(self):
+    def save(self) -> None:
         """By merge: only entries changed by this process go to the file. Edits made in
         ats_mapping.json while the run was going (by hand or by another script) are not overwritten."""
         with self.lock:
@@ -258,7 +260,7 @@ class AtsClient:
             text = json.dumps(current, ensure_ascii=False, indent=2, sort_keys=True)
         atomic_write_text(self.path, text)
 
-    def _fetch(self, platform, slug, company):
+    def _fetch(self, platform: str, slug: str, company: Company) -> list[Job] | None:
         """-> list of Job, or None if there is no such board (404)."""
         url, params, parser = PLATFORMS[platform]
         if platform == "teamtailor" and "." in slug:  # own domain: careers.example.com
@@ -282,7 +284,7 @@ class AtsClient:
             self._fill_details(platform, slug, jobs)
         return jobs
 
-    def _fill_details(self, platform, slug, jobs):
+    def _fill_details(self, platform: str, slug: str, jobs: list[Job]) -> None:
         """Vacancy text for BambooHR/Breezy/Rippling — only for fitting titles, up to the limit."""
         from . import filters  # filters does not import ats, but the import stays next to its use
 
@@ -314,13 +316,14 @@ class AtsClient:
             except (FetchError, ValueError) as e:
                 log.warning("%s: could not get the vacancy text %s (%s)", job.company, job.url, e)
 
-    def _discover(self, company):
+    def _discover(self, company: Company) -> tuple[str | None, str | None, list[Job], bool]:
         """Tries platform × slug until the first board with vacancies.
 
         An empty board does not count as a find: Workable has such "blanks"
         for almost any name, and they would hide the real board forever.
         """
-        empty_hit, had_errors = None, False
+        empty_hit: str | None = None
+        had_errors = False
         for slug in slug_candidates(company.name):
             for platform in DISCOVERABLE:
                 try:
@@ -335,7 +338,7 @@ class AtsClient:
                     empty_hit = f"{platform}/{slug}"
         return None, empty_hit, [], had_errors
 
-    def _board_gone(self, company, board: str) -> list:
+    def _board_gone(self, company: Company, board: str) -> list[Job]:
         """The board is gone: search once more and write ONE warning (moved / no board),
         so it does not repeat in every run. The next search is in RECHECK_NOT_FOUND_DAYS."""
         self.failures[company.name] = f"board {board} is gone"
@@ -354,7 +357,7 @@ class AtsClient:
                         company.name, board, config.RECHECK_NOT_FOUND_DAYS)
         return jobs or []
 
-    def jobs_for(self, company, rediscover=False, quiet=False):
+    def jobs_for(self, company: Company, rediscover: bool = False, quiet: bool = False) -> list[Job]:
         with self.lock:
             entry = None if rediscover else self.mapping.get(company.name)
         token = settings.get().ats_overrides.get(company.name, settings.AtsOverride()).greenhouse_board_token
@@ -387,7 +390,7 @@ class AtsClient:
         platform, slug, jobs, had_errors = self._discover(company)
         if platform:
             log.info("%s -> %s/%s (%d vacancies)", company.name, platform, slug, len(jobs))
-            new_entry = {"platform": platform, "slug": slug, "found_at": today.isoformat()}
+            new_entry: dict[str, Any] = {"platform": platform, "slug": slug, "found_at": today.isoformat()}
         elif had_errors:
             return []  # network failure — "not found" is not cached, try again tomorrow
         else:

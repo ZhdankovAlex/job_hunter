@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from . import config, cv_match, geo, outreach, settings, tiers
 from .keys import company_key
+from .reasons import BULK, LOCATION_TEXT, Mark
 
 # company priority from companies.txt (0–3) — stars before the name
 FLAGS = {3: "★★★", 2: "★★", 1: "★", 0: ""}
@@ -56,7 +57,7 @@ def _marks(job):
     if cv_match.summary(job):
         marks.append(f"🧩 {cv_match.summary(job)}")
     if job.language_mismatch_warning:
-        marks.append(f"⚠️ Python not primary language ({job.mismatch_lang})")
+        marks.append(Mark.PYTHON_NOT_PRIMARY.detail(job.mismatch_lang))
     if job.location_check and not job.reloc_type:
         marks.append("❓ remote tied to a country — check")
     if job.referral:
@@ -471,7 +472,7 @@ REJECTED_PER_BULK_REASON = 3  # "by the source label" and "older than N days" ar
 def pick_rejected(rejected):
     """Up to REJECTED_LIMIT rejected vacancies: rules by the text first, then bulk reasons."""
     def is_bulk(job):
-        return job.reject.startswith(("location by the source label", "older than"))
+        return getattr(job, "reject_code", "") in BULK
 
     # rejected are already sorted by the raw score; rules by the text are shown first
     bulk_rows = []
@@ -483,7 +484,7 @@ def pick_rejected(rejected):
     # location rejects from the text are the most important rule, they go first
     by_text = sorted(
         (j for j in rejected if not is_bulk(j)),
-        key=lambda j: (not j.reject.startswith(("on-site", "tied to country")), -j.relevance),
+        key=lambda j: (getattr(j, "reject_code", "") not in LOCATION_TEXT, -j.relevance),
     )
     return by_text[: REJECTED_LIMIT - len(bulk_rows)] + bulk_rows
 

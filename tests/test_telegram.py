@@ -150,6 +150,14 @@ def test_fetch_posts_reads_page_and_cutoff():
     assert [(p[0], p[2]) for p in posts] == [(2, "<b>new</b>")]
 
 
+def test_fetch_posts_page_without_dates():
+    # no post date was parsed — the page does not break reading the channel (min() over an empty list)
+    page = ('<div class="tgme_widget_message_wrap"><div data-post="chan/1">'
+            '<div class="tgme_widget_message_text js-message_text" dir="auto">text</div>'
+            '<time datetime="not a date" class="time">12:00</time></div></div><div data-before="1"></div>')
+    assert tg.fetch_posts(FakeHttp({"https://t.me/s/chan": page}), "chan", datetime(2026, 11, 1, tzinfo=UTC)) == []
+
+
 @pytest.mark.parametrize("location,label", [
     ("Remote, Poland", "✅"), ("Warsaw, office", "✅ Poland"), ("remote", "❓ remote, region not stated"),
 ])

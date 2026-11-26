@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from . import config, settings
 from .keys import company_key
+from .models import Job
 
 # Settings are not read on import: rules() builds the patterns and sets from them on the first call
 # and rebuilds them when settings.use() puts other settings in place.
@@ -114,7 +115,7 @@ _SALARY_RX = re.compile(
 )
 
 
-def detect_country(location, description=""):
+def detect_country(location: str, description: str = "") -> str:
     """Target country by the vacancy location (city or country), or ''."""
     for country, rx in rules().country_rx.items():
         if not rx.search(location):
@@ -128,7 +129,7 @@ def detect_country(location, description=""):
     return ""
 
 
-def relocation_quote(text, country="", max_words=12):
+def relocation_quote(text: str, country: str = "", max_words: int = 12) -> str:
     """A quote (≤12 words around the phrase) offering relocation TO this country, or ''."""
     for m in _RELOCATION_RX.finditer(text):
         if _NEGATION_RX.search(text[max(0, m.start() - 45): m.start()]):
@@ -148,7 +149,7 @@ def relocation_quote(text, country="", max_words=12):
     return ""
 
 
-def role_fits(job):
+def role_fits(job: Job) -> bool:
     """The 🌍 section — only engineering Python roles."""
     if config.RELOC_EXCLUDE_TITLE_RX.search(job.title):
         return False
@@ -158,7 +159,7 @@ def role_fits(job):
     return bool(config.KEYWORD_RX.search(text))
 
 
-def classify(job, is_remote):
+def classify(job: Job, is_remote: bool) -> bool:
     """Fills job.reloc_* for a vacancy tied to a country. True — the vacancy is taken."""
     if not role_fits(job):
         return False

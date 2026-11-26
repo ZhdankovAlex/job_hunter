@@ -38,6 +38,7 @@ from jobhunter.cv_match import CvProfile
 from jobhunter.fsutil import atomic_write_text
 from jobhunter.http import Http, cancel as http_cancel
 from jobhunter.models import norm_name
+from jobhunter.reasons import GROUPS, Reject
 from jobhunter.relevance import Profile
 from jobhunter.salary import SalaryBase
 from jobhunter.staffing import Blacklist
@@ -140,21 +141,13 @@ def collect(args, companies, http, ats, career_pages=()):
     return jobs
 
 
-_REASON_GROUPS = [  # reject reason -> short group for the chart on the pipeline page
-    (("location", "on-site", "tied to country", "Russia only"), "location"),
-    (("language", "JVM"), "other language"),
-    (("full-time", "AI trainer"), "not full-time"),
-    (("experience from",), "experience"),
-    (("older than",), "old"),
-]
-
-
-def _reason_group(reason: str) -> str:
-    """"primary language — Go" -> "other language"; an unknown reason is kept as is, up to the colon."""
-    for needles, group in _REASON_GROUPS:
-        if any(n in reason for n in needles):
-            return group
-    return reason.split(":")[0][:40]
+def _reason_group(job) -> str:
+    """Group of the reject reason for the chart on the pipeline page — by the code (reasons.GROUPS);
+    without a code — "wrong role" (the title did not pass) or the text up to the colon."""
+    code = getattr(job, "reject_code", "")
+    if code in GROUPS:
+        return GROUPS[Reject(code)]
+    return (job.reject or "wrong role").split(":")[0][:40]
 
 
 def save_freehire_queries(fh, settings: dict, jobs: list) -> None:
@@ -478,7 +471,7 @@ def _stage_filter(ctx: RunContext) -> None:
             if job.reject:  # the role fits, but another rule fired — show it in "Rejected"
                 seen_urls.add(key)
                 ctx.rejected.append(job)
-                progress.tally("rejects", _reason_group(job.reject))
+                progress.tally("rejects", _reason_group(job))
                 progress.event("reject", f"{job.company} — {job.title}: {job.reject}")
             else:
                 progress.tally("rejects", "wrong role")
@@ -487,7 +480,7 @@ def _stage_filter(ctx: RunContext) -> None:
         priority = keys.company_key(job.company) in geo.rules().priority_companies
         if not priority and not is_fresh(job, ctx.seen, ctx.today, ctx.max_age_days):
             ctx.stale += 1
-            job.reject = f"older than {ctx.max_age_days} days"
+            job.reject, job.reject_code = f"older than {ctx.max_age_days} days", Reject.TOO_OLD
             ctx.rejected.append(job)
             progress.tally("rejects", "old")
             continue
@@ -513,7 +506,7 @@ def _stage_freehire_texts(ctx: RunContext) -> None:
             progress.event("found", f"{job.company} — {job.title} (freehire)")
         else:
             ctx.rejected.append(job)
-            progress.tally("rejects", _reason_group(job.reject or "wrong role"))
+            progress.tally("rejects", _reason_group(job))
     ctx.fh_dropped = len(candidates) - ctx.fh_added
     ctx.fh.diagnose_empty()
 
@@ -546,7 +539,7 @@ def _freehire_candidates(ctx: RunContext) -> list:
             candidates.append(job)
         elif job.reject:
             ctx.rejected.append(job)
-            progress.tally("rejects", _reason_group(job.reject))
+            progress.tally("rejects", _reason_group(job))
     return candidates
 
 
@@ -608,7 +601,7 @@ def _stage_telegram(ctx: RunContext) -> None:
             verify.check(job, job.text, job.full_text)
         if job.reject:
             ctx.rejected.append(job)
-            progress.tally("rejects", _reason_group(job.reject))
+            progress.tally("rejects", _reason_group(job))
             progress.event("reject", f"@{job.channel}: {job.company} — {job.title}: {job.reject}")
             continue
         progress.tally("rejects", "passed")
