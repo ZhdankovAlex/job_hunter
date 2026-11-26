@@ -4,6 +4,16 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-26
 
+### Cleanup: dead code removed, docs checked against the code (#46)
+
+- config.py: constants nobody reads: TITLE_ROLE_RX (the role filter lives in filters.role_ok on ROLE_*_RX), CONTRACT_TITLE_RX, TOP_LIMIT, TOP_SENIORITY_EXCLUDE_RX, TOP_PER_COMPANY, TOP_TITLE_RX, TOP_LOCATION_RX (leftovers of the old report "top")
+- tiers.AGE_NAMES: freshness group labels shown nowhere
+- gamification: Ledger.actions, streaks, icebreakers were wrappers called only by tests; the page counts through _streak_walk and _first_reply_after_ping, and the tests now check those directly
+- cover_letter.save: unused url argument dropped
+- Docs: configuration.md lists stack.py and progress_charts.py; filters.md points to filters.role_ok instead of the removed TITLE_ROLE_RX
+
+<sub>3f2d203</sub>
+
 ### Docs: Pages, skipping and stopping a run, Grade, experience and relocation offices (#45)
 
 - web-ui.md: the page table gets a "Pages" heading; "Skip a stage or stop a run" and "How a run starts" become sections of their own, with what was missing: skipped mail is not an error (the sync time is not updated), Stop asks for confirmation and works for terminal / scheduler runs, an interrupted run, the collapsible panel and the run pill. The outdated "The interface is in Russian" is gone
