@@ -24,3 +24,9 @@ def test_company_is_employer_not_career_site(url, org, company):
     """A career site returns hiringOrganization "Career Hub" — that is the platform; the employer comes from the domain."""
     found = vacancy_lookup.fetch(url, FakeHttp({url: page(org)}))
     assert found["company"] == company
+
+
+def test_bad_url_is_vacancy_not_found():
+    """A bad link — VacancyNotFound (Http raises FetchError), not a requests exception: the endpoint doesn't 500."""
+    with pytest.raises(vacancy_lookup.VacancyNotFound, match="invalid link"):
+        vacancy_lookup.fetch("foo")

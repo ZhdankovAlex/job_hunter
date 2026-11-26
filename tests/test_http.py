@@ -56,3 +56,11 @@ def test_success_resets_and_other_hosts_unaffected(client):
     state["fail"] = True
     with pytest.raises(http_mod.FetchError, match=r"timed out|ConnectTimeout|x"):
         h.get("https://api.lever.co/v0/postings/c")  # the first failure in a row again — not turned off yet
+
+
+def test_network_is_blocked_in_tests():
+    """The no_network autouse fixture (conftest): a real outbound connect fails at once, no silent network."""
+    import socket
+
+    with pytest.raises(RuntimeError, match="FakeHttp"):
+        socket.create_connection(("192.0.2.1", 80), timeout=1)

@@ -214,7 +214,7 @@ applications and contacts, and there is no login, so the server is never exposed
 
 **A run is a separate process.** The server starts `applications.py` and `main.py` one after another as separate
 processes. Two runs never go at once. The UI sees a run even if it was started from a terminal: it checks
-`progress.json` and whether the process writing it is alive.
+`progress.json` and whether the process writing it is alive (pid and process start time).
 
 **Progress in real time.** The page receives `progress.json` updates as they happen (SSE,
 `GET /api/progress/stream`). The stages, the event feed and the time-left estimate (from past run durations in
@@ -242,7 +242,8 @@ More: [web-ui.md](web-ui.md#how-pages-are-built) · [pipeline.md](pipeline.md#ho
 ## How we treat other people's sites
 
 These rules cannot be turned off by a setting: all requests to sites go through one module, `http`, and there is
-no other way.
+no other way. The test `tests/test_network_imports.py` checks it: only `jobhunter/http.py` imports
+`requests` (or `urllib3`, `httpx`, `urllib.request`...). Gmail is read through google-auth: a mail API, not a site.
 
 - **robots.txt** is read before the first request to a site. It is parsed by our own code, because Python's
   standard module does not understand `*` and `$`. Disallowed pages are not requested. If robots.txt cannot be
@@ -250,6 +251,14 @@ no other way.
 - **At most one request per second per site** (or less often, if `Crawl-delay` asks). On 429 or 5xx the request
   is repeated after a pause. A host that times out or drops the connection on `Http.UNREACHABLE_AFTER` (2)
   requests in a row is skipped until the end of the run.
+- **Redirects follow the same rules.** `requests` does not follow them itself (`allow_redirects=False`): `Http`
+  takes `Location` (relative ones too), checks robots.txt for the new address and waits for its host's pause.
+  More than `Http.MAX_REDIRECTS` (5) steps or a loop — `FetchError`. A bad link (no `http(s)://` or no host) is a
+  `FetchError` too, before any request.
+- **Links from the web UI — public addresses only.** A vacancy by link is read with `Http(public_only=True)`:
+  every address, redirect steps included, passes `check_public_url` — if any address of the host is loopback,
+  link-local, LAN or `0.0.0.0`, it is a `PrivateAddress`. The plain `Http` of vacancy sources does not touch DNS:
+  their addresses come from code and settings.
 - **Bot protection is not bypassed.** Sites that load vacancies with scripts or close them in robots.txt are not
   connected.
 - **Nothing is sent.** No applications, no messages. LinkedIn is not read.

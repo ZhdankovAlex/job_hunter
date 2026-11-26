@@ -13,19 +13,38 @@ is no cv/base.toml yet, the first edit creates it from base.example.toml (same a
 """
 from __future__ import annotations
 
+import functools
+import threading
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, ParamSpec, TypeVar
 
 import tomlkit
 from tomlkit.items import AoT, Comment, Table, Whitespace
 
 from . import config, cvgen
+from .fsutil import atomic_write_bytes
 
 ACHIEVEMENT_KEYS = ("text", "pin", "summary_for", "requires", "topics")
 BULLET_KEYS = ("text", "pin", "generic", "requires", "topics")
 JOB_KEYS = ("title", "company", "dates", "bullets_max", "intro", "tech", "tech_always", "bullets")
 SUMMARY_KEYS = ("intro", "closing", "max_achievements", "achievements")
+
+# Edits from the web: FastAPI runs sync PUT handlers in a thread pool, and each one reads, edits and writes the
+# file. Without a lock two tabs read the same old file, and the second write wipes out the first.
+WRITE_LOCK = threading.RLock()
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def locked(fn: Callable[_P, _R]) -> Callable[_P, _R]:
+    """Read-edit-write of the base under WRITE_LOCK — edits to different sections don't lose each other."""
+    @functools.wraps(fn)
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        with WRITE_LOCK:
+            return fn(*args, **kwargs)
+    return wrapper
 
 
 def path() -> Path:
@@ -225,7 +244,7 @@ def write_text(src: Path, text: str, newline: str) -> Path:
     except UnicodeEncodeError as e:
         raise ValueError("the text has broken characters (lone UTF-16 surrogates)") from e
     dst = src.with_name("base.toml") if src.name == "base.example.toml" else src
-    dst.write_bytes(data)
+    atomic_write_bytes(dst, data)
     if dst != src:
         cvgen.BASE_FILE = config.CV_BASE_FILE = dst
     return dst
@@ -240,6 +259,7 @@ def _dump(doc: Any) -> str:
     return text
 
 
+@locked
 def save_summary(intro: str, closing: str, max_achievements: int, achievements: list[dict]) -> dict[str, Any]:
     """Writes [summary] and [[summary.achievements]]; returns what is read back.
 
@@ -265,6 +285,7 @@ def save_summary(intro: str, closing: str, max_achievements: int, achievements: 
     return read_summary()
 
 
+@locked
 def save_experience(jobs: list[dict]) -> dict[str, Any]:
     """Writes [[experience]] with bullets; returns what is read back.
 
@@ -320,6 +341,7 @@ def _set_keys(doc: Any, name: str, values: dict[str, str | None]) -> None:
     _give(table, trailer)
 
 
+@locked
 def save_other(education: dict[str, str], languages: str, publications: str) -> dict[str, Any]:
     """Writes education, languages and publications; an empty thesis removes the thesis_ai key.
 

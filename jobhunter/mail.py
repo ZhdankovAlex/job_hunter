@@ -17,6 +17,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from email.utils import parseaddr
 
 from . import config, geo, progress
+from .fsutil import atomic_write_text
 from .keys import company_key
 from .models import html_to_text
 
@@ -331,7 +332,7 @@ def save_sync(error: str = "") -> None:
         state["ok_at"] = datetime.now(UTC).isoformat()
     state["error"] = error
     config.MAIL_SYNC_FILE.parent.mkdir(exist_ok=True)
-    config.MAIL_SYNC_FILE.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    atomic_write_text(config.MAIL_SYNC_FILE, json.dumps(state, ensure_ascii=False))
 
 
 def stale_warning() -> str:
@@ -376,7 +377,7 @@ def credentials():
         # without a timeout a run from the Task Scheduler would wait for the sign-in forever and never reach the vacancy search
         creds = flow.run_local_server(port=0, open_browser=True, timeout_seconds=LOGIN_TIMEOUT_SECONDS)
     config.GMAIL_TOKEN_FILE.parent.mkdir(exist_ok=True)
-    config.GMAIL_TOKEN_FILE.write_text(creds.to_json(), encoding="utf-8")
+    atomic_write_text(config.GMAIL_TOKEN_FILE, creds.to_json())
     return creds
 
 
@@ -461,9 +462,9 @@ def fetch_messages() -> tuple[list[dict], str]:
             log.warning("letter %s: %s", msg_id, e)
         if n % 100 == 0:
             log.info("mail: read %d of %d", n, len(new))
-            config.MAIL_CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+            atomic_write_text(config.MAIL_CACHE_FILE, json.dumps(cache, ensure_ascii=False))
     config.MAIL_CACHE_FILE.parent.mkdir(exist_ok=True)
-    config.MAIL_CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    atomic_write_text(config.MAIL_CACHE_FILE, json.dumps(cache, ensure_ascii=False))
     return [cache[i] for i in ids if i in cache], address
 
 

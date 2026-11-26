@@ -114,6 +114,7 @@ class Runner:
                     os.killpg(pid, signal.SIGTERM)  # start_new_session: group = pid
                 except OSError:
                     os.kill(pid, signal.SIGTERM)
+            progress.mark_stopped(pid)  # a killed process won't write its status — otherwise "interrupted"
             return pid
 
 

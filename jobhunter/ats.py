@@ -10,6 +10,7 @@ from email.utils import parsedate_to_datetime
 
 from . import config, geo
 from .companies import slug_candidates
+from .fsutil import atomic_write_text
 from .http import FetchError, HttpClient
 from .models import Job, html_to_text, parse_date
 
@@ -234,21 +235,28 @@ class AtsClient:
         self.lock = threading.Lock()
         self.mapping = {}
         self.failures: dict[str, str] = {}  # company -> why there are no vacancies today
-        if mapping_path.exists():
+        try:
             self.mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            pass
+        except ValueError:
+            log.warning("%s is broken — company ATS will be detected again", mapping_path)
         self._loaded = json.loads(json.dumps(self.mapping))  # state at start — for saving by merge
 
     def save(self):
         """By merge: only entries changed by this process go to the file. Edits made in
         ats_mapping.json while the run was going (by hand or by another script) are not overwritten."""
         with self.lock:
-            current = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
+            try:
+                current = json.loads(self.path.read_text(encoding="utf-8"))
+            except (FileNotFoundError, ValueError):
+                current = {}  # a broken file gets overwritten with a whole one
             for name, entry in self.mapping.items():
                 if self._loaded.get(name) != entry:
                     current[name] = entry
             self._loaded = json.loads(json.dumps(self.mapping))
             text = json.dumps(current, ensure_ascii=False, indent=2, sort_keys=True)
-        self.path.write_text(text, encoding="utf-8")
+        atomic_write_text(self.path, text)
 
     def _fetch(self, platform, slug, company):
         """-> list of Job, or None if there is no such board (404)."""

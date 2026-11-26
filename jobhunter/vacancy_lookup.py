@@ -77,7 +77,7 @@ def fetch(url: str, http: HttpClient | None = None) -> dict:
     Raises:
         VacancyNotFound: the page is unavailable, closed by robots.txt or has too little text.
     """
-    http = http or Http()
+    http = http or Http(public_only=True)  # a link from the web UI: not this computer, not the LAN
     try:
         r = http.get(url, timeout=25, headers={"Accept": "text/html"})
     except FetchError as e:

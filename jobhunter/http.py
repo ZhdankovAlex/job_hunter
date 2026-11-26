@@ -1,11 +1,13 @@
 """HTTP client: at most 1 request per second per host + robots.txt check."""
 import contextlib
+import ipaddress
 import logging
 import re
+import socket
 import threading
 import time
 from typing import Any, Protocol, runtime_checkable
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import requests
 
@@ -29,6 +31,44 @@ class FetchError(Exception):
 
 class RobotsDisallowed(FetchError):
     pass
+
+
+class PrivateAddress(FetchError):
+    """The link points to this computer or the local network — such links from the web UI are not read."""
+
+
+def _resolve(host: str) -> list[str]:
+    """All addresses of the host (getaddrinfo); no DNS answer — empty. Replaced in tests (conftest: no_dns)."""
+    try:
+        return [str(info[4][0]) for info in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)]
+    except (OSError, UnicodeError):
+        return []
+
+
+def _is_local(addr: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(addr.split("%", 1)[0])  # fe80::1%eth0 — without the zone
+    except ValueError:
+        return False
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return ip.is_loopback or ip.is_link_local or ip.is_private or ip.is_unspecified
+
+
+def check_public_url(url: str) -> None:
+    """A link sent from the web UI does not point to loopback, link-local, LAN or 0.0.0.0.
+
+    Every address of the host is checked: requests may connect to any of them. A host that does not resolve
+    is let through — the request fails by itself. Vacancy sources don't need this: their addresses come from
+    code and settings, not from a form.
+
+    Raises:
+        PrivateAddress: at least one address of the host is local.
+    """
+    host = urlsplit(url).hostname or ""
+    bad = [a for a in _resolve(host) if _is_local(a)]
+    if bad:
+        raise PrivateAddress(f"{url}: address {bad[0]} is this computer or the local network, such links are not read")
 
 
 class _Robots:
@@ -122,13 +162,20 @@ class HttpPostClient(HttpClient, Protocol):
              headers: Headers | None = None) -> Response: ...
 
 
+_REDIRECT_CODES = {301, 302, 303, 307, 308}
+
+
 class Http:
     # this many requests in a row ended with a timeout / network error — the host is down; a dead
     # host with 3 retries x 40 s per company can stretch a run to hours, so stop calling it
     UNREACHABLE_AFTER = 2
+    # redirects in a row per request (as in browsers and RFC 9309 for robots.txt — 5); more — FetchError
+    MAX_REDIRECTS = 5
 
-    def __init__(self, min_interval: float = config.MIN_INTERVAL) -> None:
+    def __init__(self, min_interval: float = config.MIN_INTERVAL, public_only: bool = False) -> None:
+        """public_only — for links from the web UI: every address, redirect steps included, passes check_public_url."""
         self.min_interval = min_interval
+        self.public_only = public_only
         self._local = threading.local()
         self._guard = threading.Lock()
         self._host_locks: dict[str, threading.Lock] = {}
@@ -214,7 +261,46 @@ class Http:
 
     def _request(self, method: str, url: str, params: Params | None = None, json: Any = None,
                  timeout: float = 40, headers: Headers | None = None) -> requests.Response:
-        url = requests.Request(method, url, params=params).prepare().url or url
+        """A request that follows redirects by hand: every step goes through robots.txt and its host's rate limit.
+
+        requests itself does not follow redirects (allow_redirects=False): otherwise a redirect target on
+        another host would skip both robots.txt and the pause.
+        """
+        url = self._prepare_url(method, url, params)
+        visited = {url}
+        for _ in range(self.MAX_REDIRECTS):
+            r = self._send(method, url, json, timeout, headers)
+            location = r.headers.get("Location") if r.status_code in _REDIRECT_CODES else None
+            if not location:
+                return r
+            if r.status_code == 303 or (r.status_code in (301, 302) and method == "POST"):
+                method, json = "GET", None  # like browsers and requests: after 303 (and 301/302 on POST) — GET, no body
+            url = self._prepare_url(method, urljoin(url, location))
+            if url in visited:
+                raise FetchError(f"{url}: redirect loop")
+            visited.add(url)
+        r = self._send(method, url, json, timeout, headers)
+        if r.status_code in _REDIRECT_CODES and r.headers.get("Location"):
+            raise FetchError(f"{url}: more than {self.MAX_REDIRECTS} redirects")
+        return r
+
+    @staticmethod
+    def _prepare_url(method: str, url: str, params: Params | None = None) -> str:
+        """URL with params; a bad link ("foo", ftp://, no host) — FetchError, not a requests exception."""
+        try:
+            prepared = requests.Request(method, url, params=params).prepare().url or url
+        except (requests.RequestException, ValueError) as e:
+            raise FetchError(f"{url!r}: invalid link ({e})") from e
+        parts = urlsplit(prepared)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            raise FetchError(f"{url!r}: invalid link — needs http:// or https:// with a site address")
+        return prepared
+
+    def _send(self, method: str, url: str, json: Any, timeout: float,
+              headers: Headers | None) -> requests.Response:
+        """One step: robots.txt, disabled hosts, rate limit and retries on 429 / 5xx / network errors."""
+        if self.public_only:
+            check_public_url(url)  # before robots.txt: otherwise robots.txt would be fetched from a local address
         self._check_robots(url)
         host = urlsplit(url).netloc
         if self._rate_limited.get(host, 0) >= 3:
@@ -229,7 +315,8 @@ class Http:
                 raise Cancelled(url)
             self._throttle(host)
             try:
-                r = self._session().request(method, url, json=json, timeout=timeout, headers=headers)
+                r = self._session().request(method, url, json=json, timeout=timeout, headers=headers,
+                                             allow_redirects=False)
             except requests.RequestException as e:
                 last, network_error = str(e), True
                 if self._unreachable.get(host, 0):

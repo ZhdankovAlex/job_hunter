@@ -179,3 +179,13 @@ def test_scheduler_busy_start_retries(runner: Runner, monkeypatch: pytest.Monkey
     with pytest.raises(StopLoop):
         daily_scheduler(runner, "07:30", state)
     assert json.loads(state.read_text(encoding="utf-8")) == {}
+
+
+def test_stop_marks_progress_stopped(runner: Runner, monkeypatch: pytest.MonkeyPatch) -> None:
+    """After "Stop" progress.json says stopped, not running with a dead pid ("interrupted" on the page)."""
+    monkeypatch.setattr(runner_mod.sys, "platform", "win32")
+    monkeypatch.setattr(subprocess, "run", lambda args, **kw: None)
+    progress.PROGRESS_FILE.write_text(json.dumps({"status": "running", "pid": 4242, "stages": []}), encoding="utf-8")
+    runner.process = FakeProcess(["python", "main.py"], env={})  # type: ignore[assignment]
+    runner.stop()
+    assert progress.read()["status"] == progress.STOPPED

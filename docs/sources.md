@@ -4,7 +4,8 @@
 
 ## Rules for every source
 
-- Before the first request to a host its `robots.txt` is read; disallowed URLs are not requested.
+- Before the first request to a host its `robots.txt` is read; disallowed URLs are not requested. A redirect to
+  another address goes through the same check and the new host's pause (see [architecture.md](architecture.md)).
 - At most 1 request per second per host (`jobhunter/http.py`); slower where a site needs it
   (Workable — 1 per 6 s, Telegram — 1 per 2 s).
 - LinkedIn is not used.
