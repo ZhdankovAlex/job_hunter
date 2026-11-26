@@ -24,12 +24,23 @@ form.addEventListener('submit', async e => {
     if (!r.ok) throw new Error(d.detail || 'failed');
     show(d);
     status.textContent = '';
+    await refreshList();
   } catch (err) {
     status.textContent = '⚠️ ' + err.message;
   } finally {
     button.disabled = false;
   }
 });
+
+// "Built CVs" — the section from a fresh /cv, so a new CV shows up without a reload
+// (the same template: rows, the counter and the empty state are not duplicated in JS)
+async function refreshList() {
+  try {
+    const html = await (await fetch('/cv')).text();
+    const fresh = new DOMParser().parseFromString(html, 'text/html').getElementById('cv-built');
+    if (fresh) document.getElementById('cv-built').replaceWith(fresh);
+  } catch { /* the list updates the next time the page is opened */ }
+}
 
 function show(d) {
   document.getElementById('cv-result').hidden = false;

@@ -66,6 +66,15 @@ def test_empty_state_without_data(client, path):
     assert '<div class="empty">' in http.get(path).text
 
 
+def test_cv_list_refreshes_after_build(client):
+    """After a build "Built CVs" updates without a reload: cv.js takes the #cv-built section from a fresh /cv
+    (also when the list was empty — then the table replaces the empty state)."""
+    http, _, _ = client
+    assert 'id="cv-built"' in http.get("/cv").text
+    js = http.get("/static/cv.js").text
+    assert "getElementById('cv-built')" in js and "await refreshList()" in js
+
+
 def test_foreign_host_rejected(client):
     """DNS rebinding: evil.test resolves to 127.0.0.1 and the browser sends Host: evil.test — rejected."""
     c, _, _ = client
