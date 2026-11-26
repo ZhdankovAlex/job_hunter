@@ -4,6 +4,13 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-26
 
+### CI: codecov-action v5 -> v7, off the deprecated Node 20 (#36)
+
+codecov-action v5 runs actions/github-script v7.0.1 inside, which targets Node 20; GitHub warns and forces it onto Node 24. v6 moved to github-script v8 (Node 24), v7 only changed the signing key. The inputs we use (token, files, fail_ci_if_error) are unchanged.
+
+
+<sub>e65841f</sub>
+
 ### Reliability and security: local-only web, atomic state writes, safe redirects and links (#35)
 
 - Web server: a foreign Host gets 400 (DNS rebinding), a state-changing request from another site's page (Origin not ours, Sec-Fetch-Site not same-origin/none) gets 403; curl and tests without these headers pass
