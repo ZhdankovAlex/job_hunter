@@ -11,6 +11,7 @@ import logging
 import re
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from typing import Any
 
 from . import config as c, filters
 from .http import FetchError, HttpClient
@@ -222,17 +223,17 @@ SOURCES = {"aiven": aiven, "bolt": bolt, "fin.dev": findev, "gurtam": gurtam, "p
 
 def enabled_sources() -> list[str]:
     """Sources from SOURCES minus those turned off in settings.toml [sources].disabled."""
-    from . import geo
+    from . import settings
 
-    disabled = {n.lower() for n in geo.S.get("sources", {}).get("disabled", [])}
-    return [name for name in SOURCES if name.lower() not in disabled]
+    disabled = {n.lower() for n in settings.get().sources.disabled}
+    return [name for name in sources() if name.lower() not in disabled]
 
 
 def fetch(name: str, http: HttpClient) -> list[Job]:
     """Collects what it can; on an error returns what it already has and writes to errors.log."""
     jobs: list[Job] = []
     try:
-        for job in SOURCES[name](http):
+        for job in sources()[name](http):
             jobs.append(job)
     except FetchError as e:
         log.warning("site %s: %s", name, e)
@@ -249,9 +250,9 @@ _NEXT_F_RX = re.compile(r'self\.__next_f\.push\(\[1,"(.*?)"\]\)</script>', re.S)
 
 def _boards() -> dict:
     """The [boards] section of settings.toml."""
-    from . import geo  # imported here: geo reads settings.toml on import
+    from . import settings
 
-    return geo.S.get("boards", {})
+    return settings.get().boards.model_dump()
 
 
 def _next_payload(page: str) -> str:
@@ -611,10 +612,10 @@ def manual_jobs(http: HttpClient) -> Iterator[Job]:
     """
     from urllib.parse import urlsplit
 
-    from . import geo
+    from . import settings
 
-    for entry in geo.S.get("manual_jobs", {}).get("urls", []):
-        url, forced = (entry, "") if isinstance(entry, str) else (entry.get("url", ""), entry.get("company", ""))
+    for entry in settings.get().manual_jobs.urls:
+        url, forced = (entry, "") if isinstance(entry, str) else (entry.url, entry.company)
         try:
             page = _get(http, url)
         except FetchError as e:
@@ -659,7 +660,7 @@ def manual_jobs(http: HttpClient) -> Iterator[Job]:
                     title = head.strip()
                 text = _page_text(page)
         # location from the entry — when the page has none (otherwise the filter drops the job as not remote)
-        location = location or ("" if isinstance(entry, str) else entry.get("location", ""))
+        location = location or ("" if isinstance(entry, str) else entry.location)
         remote = remote or (bool(re.search(r"remote", location, re.I)) or None)
         yield Job(company=forced or company, title=title, location=location, url=url, description=text[:20000],
                   remote=remote, source="manual")
@@ -932,6 +933,9 @@ def career_page(http: HttpClient, company, url: str, location: str = "", links: 
 
 
 # --- Big companies (jobhunter/bigtech.py): Microsoft, Workday sites, Oracle, Amazon ----
-from .bigtech import SOURCES as BIGTECH_SOURCES
+from . import bigtech
 
-SOURCES.update(BIGTECH_SOURCES)
+
+def sources() -> dict[str, Any]:
+    """All sites: SOURCES and the big companies (their Workday list comes from settings.toml, read on the call)."""
+    return {**SOURCES, **bigtech.sources()}

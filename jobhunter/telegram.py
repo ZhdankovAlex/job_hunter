@@ -6,16 +6,14 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from . import config as c, filters, geo, language, progress
+from . import config as c, filters, geo, language, progress, settings
 from .http import FetchError, HttpClient
 from .keys import company_key
 from .models import parse_date
-from .verify import ABROAD_OK_RX, HIDE_RUSSIA_ONLY, ru_only
+from .verify import ABROAD_OK_RX, ru_only
 
 log = logging.getLogger(__name__)
 
-# aggregator sites that post links lead to: whether such a link is alive is checked separately
-AGGREGATOR_HOSTS = tuple(c._TELEGRAM.get("aggregator_hosts", []))
 B_OPEN, B_CLOSE = "\x01", "\x02"  # <b> borders in the post text
 
 _MESSAGE_SPLIT = '<div class="tgme_widget_message_wrap'
@@ -609,7 +607,7 @@ def classify(job):
         return False
     if not filters.full_time(job.title, "", job.text) or filters.residency_blocked(job.text, job.location):
         return False
-    if HIDE_RUSSIA_ONLY and ru_only(f"{job.location}\n{job.text}"):
+    if settings.get().filters.hide_russia_only and ru_only(f"{job.location}\n{job.text}"):
         return False  # remote from Russia only
     if not c.PYTHON_RX.search(job.title):
         other = next((name for name, rx in c.TITLE_LANGS.items() if rx.search(job.title)), "")
@@ -617,18 +615,18 @@ def classify(job):
             job.marks.append(f"⚠️ Python not primary language ({other})")
     lang_marks, job.lang_required = language.analyze(job.title, job.text)
     job.marks += lang_marks
-    if company_key(job.company) in geo.REFERRAL_COMPANIES:
+    if company_key(job.company) in geo.rules().referral_companies:
         job.marks.append("🤝 referral possible")
     loc = job.location
     home = bool(c.HOME_RX.search(loc))
     remote = bool(c.REMOTE_RX.search(loc))
     if not remote and not home:
         # an office in another country fits only if the employer pays for the move
-        if geo.RELOCATION_ENABLED and (geo.relocation_quote(job.text) or "relocation support" in loc):
+        if settings.get().relocation_enabled and (geo.relocation_quote(job.text) or "relocation support" in loc):
             job.label = "🌍 office in another country, the employer helps with relocation"
             job.reloc_type = geo.RELOCATION  # verify.check does not treat the office as a reason to reject
             return True
-        if geo.RELOCATION_ENABLED and re.search(r"hybrid|гибрид", loc, re.I):
+        if settings.get().relocation_enabled and re.search(r"hybrid|гибрид", loc, re.I):
             job.label = "❓ hybrid in another country — relocation needed"
             return True
         return False  # onsite / hybrid in another country without help with the move
@@ -638,7 +636,7 @@ def classify(job):
         else:
             job.label = f"✅ remote + {c.HOME_COUNTRY} or worldwide/EU" if c.HOME_COUNTRY else "✅ remote worldwide/EU"
     elif c.LOCATION_NOISE_RX.sub("", c.REMOTE_RX.sub("", re.sub(r"#\w+|удал[её]нн?[а-яё]*", "", loc, flags=re.I))):
-        if not geo.COUNTRY_BOUND_REMOTE:
+        if not settings.get().country_bound_remote:
             return False
         job.label = "❓ remote, tied to another country"
     else:
@@ -659,10 +657,10 @@ def _check_aggregator_link(http: HttpClient, job):
 
 def collect(http: HttpClient):
     """-> (vacancies, list of channels that could not be read)."""
-    cutoff = datetime.now(UTC) - timedelta(days=c.TELEGRAM_MAX_AGE_DAYS)
+    cutoff = datetime.now(UTC) - timedelta(days=settings.get().telegram.max_age_days)
     jobs: dict = {}
     failed = []
-    for channel in c.TELEGRAM_CHANNELS:
+    for channel in settings.get().telegram.channels:
         if progress.skip_requested():  # the "Skip" button: the channels already read go on
             break
         progress.item_started(f"@{channel}")
@@ -701,11 +699,13 @@ def collect(http: HttpClient):
                 if key not in jobs or job.posted > jobs[key].posted:
                     jobs[key] = job
         log.info("telegram @%s: posts in %d days — %d, matching vacancies — %d",
-                 channel, c.TELEGRAM_MAX_AGE_DAYS, len(posts), found)
+                 channel, settings.get().telegram.max_age_days, len(posts), found)
         progress.event("source", f"@{channel}: posts {len(posts)}, matching vacancies {found}")
         progress.item_finished(f"@{channel}")
     result = list(jobs.values())
     for job in result:
-        if AGGREGATOR_HOSTS and any(host in job.url for host in AGGREGATOR_HOSTS):
+        # aggregator sites that post links lead to: whether such a link is alive is checked separately
+        hosts = settings.get().telegram.aggregator_hosts
+        if hosts and any(host in job.url for host in hosts):
             _check_aggregator_link(http, job)
     return result, failed

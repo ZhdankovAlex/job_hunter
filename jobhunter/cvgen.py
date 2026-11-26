@@ -15,14 +15,17 @@ import tomllib
 from pathlib import Path
 from typing import Literal, overload
 
-from . import config, cv_match, geo
+from . import config, cv_match, settings
 from .config import ROOT
 
 BASE_FILE = config.CV_BASE_FILE
 OUT_DIR = ROOT / "cv_out"
-# Chrome for PDF: JOBHUNTER_CHROME (container: /usr/bin/chromium) > settings.toml [cv].chrome > the Windows path
-CHROME = os.environ.get("JOBHUNTER_CHROME") or geo.S.get("cv", {}).get(
-    "chrome", r"C:\Program Files\Google\Chrome\Application\chrome.exe")
+
+
+def chrome() -> str:
+    """Chrome for PDF: JOBHUNTER_CHROME (container: /usr/bin/chromium) > settings.toml [cv].chrome > the Windows path."""
+    return os.environ.get("JOBHUNTER_CHROME") or settings.get().cv.chrome
+
 
 # Vacancy topics -> signs in the text; base bullets have their topics set by hand (topics)
 TOPICS = {
@@ -417,7 +420,12 @@ def _projects(base: dict, vac: Vacancy, limits: Limits, picks: list | None) -> l
 
 # --- Markdown -> HTML: classic (like the desktop CV) and harvard ------------------------------
 
-STYLE = geo.S.get("cv", {}).get("style", "classic")
+
+
+def default_style() -> str:
+    """The default look: [cv] style from settings.toml (classic / harvard)."""
+    return settings.get().cv.style
+
 
 # Arial, dark blue headings, a line under the header, italic dates under the job title
 CLASSIC_CSS = """
@@ -480,7 +488,7 @@ def _inline(text: str) -> str:
     return text.replace("AES-256", "AES&#8209;256")
 
 
-def markdown_to_html(md: str, style: str = STYLE, compact: bool = False) -> str:
+def markdown_to_html(md: str, style: str | None = None, compact: bool = False) -> str:
     """Own small parser: only what build_markdown writes (and edits in the same style).
 
     style: "classic" — the look of base CVs (Arial, blue headings), "harvard" — a serif font.
@@ -563,16 +571,16 @@ def markdown_to_html(md: str, style: str = STYLE, compact: bool = False) -> str:
 
 # Overloads: with pdf=True (the default) the PDF always exists, so the caller needs no None check
 @overload
-def render(md_path: Path, pdf: Literal[True] = ..., style: str = ..., compact: bool | None = ...) -> tuple[Path, Path]:
+def render(md_path: Path, pdf: Literal[True] = ..., style: str | None = ..., compact: bool | None = ...) -> tuple[Path, Path]:
     ...
 
 
 @overload
-def render(md_path: Path, pdf: bool, style: str = ..., compact: bool | None = ...) -> tuple[Path, Path | None]:
+def render(md_path: Path, pdf: bool, style: str | None = ..., compact: bool | None = ...) -> tuple[Path, Path | None]:
     ...
 
 
-def render(md_path: Path, pdf: bool = True, style: str = STYLE, compact: bool | None = None) -> tuple[Path, Path | None]:
+def render(md_path: Path, pdf: bool = True, style: str | None = None, compact: bool | None = None) -> tuple[Path, Path | None]:
     """md -> html next to it; pdf — through headless Chrome (the way CVs were built before).
 
     compact — the dense layout of the one-page variant; None — by the file name (…_1p.md).
@@ -590,13 +598,13 @@ def render(md_path: Path, pdf: bool = True, style: str = STYLE, compact: bool | 
     tmp_path.unlink(missing_ok=True)
     subprocess.run(
         # in a container Chrome runs as root — it does not start without --no-sandbox
-        [CHROME, "--headless", "--disable-gpu", "--no-pdf-header-footer",
+        [chrome(), "--headless", "--disable-gpu", "--no-pdf-header-footer",
          *(["--no-sandbox"] if sys.platform != "win32" else []),
          f"--print-to-pdf={tmp_path}", html_path.resolve().as_uri()],
         check=True, capture_output=True, timeout=120,
     )
     if not tmp_path.exists():
-        raise RuntimeError(f"Chrome did not create the PDF ({CHROME})")
+        raise RuntimeError(f"Chrome did not create the PDF ({chrome()})")
     try:
         os.replace(tmp_path, pdf_path)
     except PermissionError as e:
@@ -619,7 +627,7 @@ ONE_PAGE_ATTEMPTS = 8  # how many times to shrink the one-page variant
 
 
 def build_cv(company: str, title: str, text: str, url: str = "", one_page: bool = False,
-             out_dir: Path | None = None, style: str = STYLE) -> dict:
+             out_dir: Path | None = None, style: str | None = None) -> dict:
     """A whole CV for a vacancy: Fit, Markdown, PDF; one_page — shrink until it fits on one page.
 
     Args:
@@ -633,7 +641,7 @@ def build_cv(company: str, title: str, text: str, url: str = "", one_page: bool 
     from datetime import date
 
     holder = type("Job", (), {"title": title, "company": company, "mismatch_lang": ""})()
-    cv_match.CvProfile(geo.S.get("cv", {})).analyze(holder, text)
+    cv_match.CvProfile(settings.get().cv.model_dump()).analyze(holder, text)
     base = load_base()
     out_dir = out_dir or OUT_DIR / date.today().isoformat()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -658,15 +666,12 @@ def build_cv(company: str, title: str, text: str, url: str = "", one_page: bool 
     }
 
 
-AUTO = geo.S.get("cv", {})
-AUTO_FIT_MIN = int(AUTO.get("auto_fit_min", 80))
-AUTO_MAX = int(AUTO.get("auto_max", 40))
 
 
 def auto_build(jobs: list, day) -> int:
-    """A CV for every new vacancy with Fit ≥ AUTO_FIT_MIN (Backend and ML / AI categories).
+    """A CV for every new vacancy with Fit ≥ [cv] auto_fit_min (Backend and ML / AI categories).
 
-    Puts .md and .pdf into cv_out/auto/<date>/, the path goes to job.cv_file. At most AUTO_MAX per run
+    Puts .md and .pdf into cv_out/auto/<date>/, the path goes to job.cv_file. At most [cv] auto_max per run
     (the best-fitting first). -> how many were built.
     """
     import logging
@@ -674,7 +679,8 @@ def auto_build(jobs: list, day) -> int:
     from . import progress, tiers
 
     log = logging.getLogger(__name__)
-    picked = [j for j in jobs if j.is_new_today and getattr(j, "cv_fit", -1) >= AUTO_FIT_MIN
+    cfg = settings.get().cv
+    picked = [j for j in jobs if j.is_new_today and getattr(j, "cv_fit", -1) >= cfg.auto_fit_min
               and j.tier in (tiers.BACKEND, tiers.ML) and not getattr(j, "staffing", "")
               and not getattr(j, "lang_required", False)]
     picked.sort(key=lambda j: (-j.cv_fit, -j.relevance))
@@ -684,8 +690,8 @@ def auto_build(jobs: list, day) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     base = load_base()
     built = 0
-    progress.set_total(len(picked[:AUTO_MAX]))
-    for j in picked[:AUTO_MAX]:
+    progress.set_total(len(picked[:cfg.auto_max]))
+    for j in picked[:cfg.auto_max]:
         if progress.skip_requested():
             break
         progress.step(f"{j.company} — {j.title}")
@@ -700,7 +706,7 @@ def auto_build(jobs: list, day) -> int:
             continue
         j.cv_file = pdf_path.relative_to(ROOT).as_posix()
         built += 1
-    log.info("CVs for vacancies: built %d (Fit ≥ %d%%, new, Backend / ML) -> %s", built, AUTO_FIT_MIN, out_dir)
+    log.info("CVs for vacancies: built %d (Fit ≥ %d%%, new, Backend / ML) -> %s", built, cfg.auto_fit_min, out_dir)
     return built
 
 

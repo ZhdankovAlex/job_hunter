@@ -15,11 +15,11 @@ NOTE_LIMIT = 300
 
 def _outreach_settings() -> tuple[str, str]:
     """(who you are, where you are) for drafts: settings.toml [outreach], by default from [home]."""
-    from . import config, geo  # geo reads settings.toml on import
+    from . import config, settings
 
-    cfg = geo.S.get("outreach", {})
-    pitch = cfg.get("pitch") or "Backend Engineer with Python and PostgreSQL experience"
-    based = cfg.get("based_in") or (f"Based in {config.HOME_COUNTRY}." if config.HOME_COUNTRY else "")
+    cfg = settings.get().outreach
+    pitch = cfg.pitch or "Backend Engineer with Python and PostgreSQL experience"
+    based = cfg.based_in or (f"Based in {config.HOME_COUNTRY}." if config.HOME_COUNTRY else "")
     return pitch, based
 
 # skills already named in the first sentence of the message

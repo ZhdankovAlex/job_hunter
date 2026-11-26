@@ -84,8 +84,8 @@ def test_priority_home_then_remote_then_europe_then_fresh(home):
                      ("Austin, US", new), ("Austin, US", old), ("Austin, US", None)]
 
 
-def test_pick_filters_titles_and_limits(home, monkeypatch):
-    monkeypatch.setattr(bigtech, "DETAILS_PER_COMPANY", 2)
+def test_pick_filters_titles_and_limits(home, use_settings):
+    use_settings(bigtech={"details_per_company": 2})
     cards = {i: {"title": t, "location": loc, "posted": None} for i, (t, loc) in enumerate([
         ("Senior Python Engineer", "Austin, US"), ("Account Executive", "Lisbon, Portugal"),
         ("Backend Engineer", "Lisbon, Portugal"), ("Software Engineer, Backend", "Remote")])}
@@ -104,9 +104,8 @@ def test_workday_posted_unknown():
 
 
 @pytest.fixture
-def one_query(monkeypatch):
-    monkeypatch.setattr(bigtech, "QUERIES", ["python"])
-    monkeypatch.setattr(bigtech, "PAGES", 2)
+def one_query(use_settings):
+    use_settings(bigtech={"queries": ["python"], "pages": 2})
 
 
 # --- bigtech: sources --------------------------------------------------------------------------
@@ -196,4 +195,4 @@ def test_amazon_dedupes_and_parses_date(one_query):
 
 
 def test_workday_companies_from_settings_become_sources():
-    assert "workday:NVIDIA" in bigtech.SOURCES
+    assert "workday:NVIDIA" in bigtech.sources()

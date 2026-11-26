@@ -49,7 +49,7 @@ def main() -> None:
     p.add_argument("--no-pdf", action="store_true", help="only .md and .html (except when building for a vacancy)")
     p.add_argument("--one-page", action="store_true", help="the one-page variant")
     p.add_argument("--base", choices=cvgen.GENERIC_VARIANTS, help="a base CV without a vacancy: backend or ai")
-    p.add_argument("--style", choices=("classic", "harvard"), default=cvgen.STYLE,
+    p.add_argument("--style", choices=("classic", "harvard"), default=None,
                    help="look: classic (like the base CVs) or harvard")
     args = p.parse_args()
 

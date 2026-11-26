@@ -14,7 +14,7 @@ import tomllib
 from collections import Counter
 from pathlib import Path
 
-from . import config, cv_match, geo
+from . import config, cv_match, settings
 
 # which vacancies count as "your market": the role by its title
 RELEVANT_TITLE_RX = re.compile(r"back[\s-]?end|python|software engineer|software developer|platform engineer|"
@@ -49,12 +49,12 @@ TOP_KEYWORDS = 30
 
 def _cv_texts() -> tuple[str, str, list[Path]]:
     """(PDF CV text, cv/base.toml base text, paths to the PDFs) — the same that cv_match reads."""
-    settings = geo.S.get("cv", {})
-    profile = cv_match.CvProfile(settings)
+    cv = settings.get().cv
+    profile = cv_match.CvProfile(cv.model_dump())
     pdf_text = "\n".join(t for _, t in profile.cvs)
     base_file = config.CV_BASE_FILE
     base_text = base_file.read_text(encoding="utf-8") if base_file.exists() else ""
-    return pdf_text, base_text, [Path(p) for p in settings.get("files") or []]
+    return pdf_text, base_text, [Path(p) for p in cv.files]
 
 
 def _bullets(base_text: str) -> list[str]:
@@ -123,7 +123,7 @@ def analyze(day: str = "") -> dict:
     jobs = json.loads(path.read_text(encoding="utf-8"))
     relevant = [j for j in jobs if RELEVANT_TITLE_RX.search(j["title"]) and j.get("text")]
     pdf_text, base_text, pdfs = _cv_texts()
-    profile = cv_match.CvProfile(geo.S.get("cv", {}))
+    profile = cv_match.CvProfile(settings.get().cv.model_dump())
 
     core: Counter[str] = Counter()
     fits = []
@@ -144,7 +144,7 @@ def analyze(day: str = "") -> dict:
 
     n = len(relevant) or 1
     keywords = [{"name": name, "count": c, "share": round(100 * c / n), "in_cv": where(name),
-                 "partial": cv_match.PARTIAL.get(name, "")}  # AWS: S3 only — present, but with a caveat
+                 "partial": settings.get().cv.partial.get(name, "")}  # AWS: S3 only — present, but with a caveat
                 for name, c in core.most_common(TOP_KEYWORDS)]
     titles: Counter[str] = Counter()
     levels: Counter[str] = Counter()

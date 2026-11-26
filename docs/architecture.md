@@ -74,7 +74,7 @@ More: [pipeline.md](pipeline.md) · [configuration.md](configuration.md) · [doc
 | `jobhunter/` | The main code, one module per task (see below) |
 | `web/` | Web UI: a FastAPI server (`app.py` — pages and API, `models.py` — Pydantic models, `runner.py` — starting runs, `cache.py` — page cache), templates, CSS and JS |
 | `cv/base.toml` | **All facts about you**: CVs, cover letters and interview prep are built from it |
-| `settings.toml`, `profile.toml` | Run settings and skills with weights; edits from the UI go to `profile_overrides.json` |
+| `settings.toml`, `profile.toml` | Run settings (`settings.toml` is checked by the `jobhunter/settings.py` model on the first `settings.get()`) and skills with weights; edits from the UI go to `profile_overrides.json` |
 | `ats_mapping.json`, `companies.txt` | The company list and where their vacancies are — data, not code |
 | `state/`, `reports/`, `cv_out/` | State between runs, reports, built CVs and letters (not in git) |
 | `tests/` | Tests without network and personal files (see [testing.md](testing.md)) |

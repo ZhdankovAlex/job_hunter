@@ -181,13 +181,12 @@ def _tg_job(channel, post_id, when, raw):
                      contact="", post_url=f"https://t.me/{channel}/{post_id}")]
 
 
-def test_collect(monkeypatch, tmp_path, caplog):
+def test_collect(monkeypatch, tmp_path, caplog, use_settings):
     """A failing channel, forwarded posts, a broken post, duplicates across channels and the aggregator link check."""
-    from jobhunter import config, progress
+    from jobhunter import progress
 
     monkeypatch.setattr(progress, "PROGRESS_FILE", tmp_path / "progress.json")
-    monkeypatch.setattr(config, "TELEGRAM_CHANNELS", ["down", "one", "two"])
-    monkeypatch.setattr(tg, "AGGREGATOR_HOSTS", ("agg.example",))
+    use_settings(telegram={"channels": ["down", "one", "two"], "aggregator_hosts": ["agg.example"]})
     older, newer = datetime(2026, 11, 1, tzinfo=UTC), datetime(2026, 11, 5, tzinfo=UTC)
     posts = {
         "one": [(1, older, "Python Dev|Acme", False), (2, newer, "Forward|Other", True), (3, newer, "boom", False)],
@@ -218,8 +217,8 @@ def test_collect(monkeypatch, tmp_path, caplog):
     ("Senior Python Developer", "Berlin, hybrid", "Python, FastAPI. Full-time.", "❓ hybrid in another country"),
     ("Senior Python Developer", "Remote, Germany", "Python, FastAPI. Full-time.", "❓ remote, tied to another country"),
 ], ids=["relocation", "hybrid", "remote-other-country"])
-def test_classify_outside_home(title, location, text, label, monkeypatch):
-    monkeypatch.setattr(tg.geo, "COUNTRY_BOUND_REMOTE", True)
+def test_classify_outside_home(title, location, text, label, use_settings):
+    use_settings(country_bound_remote=True)
     job = tg.TgJob(channel="c", posted=WHEN, title=title, company="Acme", location=location,
                    salary="", url="", contact="", post_url="", text=text)
     assert tg.classify(job)
@@ -233,11 +232,11 @@ def test_classify_marks_other_primary_language():
     assert any("Python not primary language" in m for m in job.marks)
 
 
-def test_classify_skips_part_time_and_country_bound_off(monkeypatch):
+def test_classify_skips_part_time_and_country_bound_off(monkeypatch, use_settings):
     def job(location, text, title="Python Developer"):
         return tg.TgJob(channel="c", posted=WHEN, title=title, company="Acme", location=location,
                         salary="", url="", contact="", post_url="", text=text)
 
     assert not tg.classify(job("Remote", "Python, Django.", "Python Developer (part-time)"))
-    monkeypatch.setattr(tg.geo, "COUNTRY_BOUND_REMOTE", False)
+    use_settings(country_bound_remote=False)
     assert not tg.classify(job("Remote, Germany", "Python, Django. Full-time."))

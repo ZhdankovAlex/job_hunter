@@ -73,14 +73,14 @@ def test_teamtailor_python_job_passes_filters():
     assert filters.apply(job), job.reject
 
 
-def test_manual_jobs_company_override(monkeypatch):
+def test_manual_jobs_company_override(use_settings):
     """[manual_jobs]: a job on an agency site gets an explicit company — the application status is matched by it."""
-    from jobhunter import geo
+    from jobhunter.settings import ManualJob, ManualJobs
 
     plain = "https://acme.example/careers/python"
     agency = "https://agency.example/job/lead-engineer/"
-    monkeypatch.setitem(geo.S, "manual_jobs", {"urls": [
-        plain, {"url": agency, "company": "Agency Client", "location": "Remote"}]})
+    use_settings(manual_jobs=ManualJobs(urls=[
+        plain, ManualJob(url=agency, company="Agency Client", location="Remote")]))
     page = "<html><head><title>Lead Engineer - Agency</title></head><body>Python, remote</body></html>"
     jobs = list(sites.manual_jobs(FakeHttp({plain: page, agency: page})))
     assert [(j.company, j.url) for j in jobs] == [("Acme", plain), ("Agency Client", agency)]

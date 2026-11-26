@@ -1,13 +1,12 @@
 """Relocation and remote tied to a country (countries and companies are in settings.toml)."""
 import re
-import tomllib
+from dataclasses import dataclass
 
-from . import config
+from . import config, settings
 from .keys import company_key
 
-S = tomllib.loads(config.SETTINGS_FILE.read_text(encoding="utf-8"))
-COUNTRIES = list(S.get("relocation_countries", []))
-ANY_COUNTRY = bool(S.get("any_country", False))
+# Settings are not read on import: rules() builds the patterns and sets from them on the first call
+# and rebuilds them when settings.use() puts other settings in place.
 OTHER = "Other"
 
 # Kinds in display order within a country: confirmed relocation first
@@ -19,27 +18,56 @@ RESIDENTS_ONLY = "❌ residents only"
 TYPE_ORDER = [RELOCATION, UNCONFIRMED, REMOTE_OK, REMOTE_UNCLEAR, RESIDENTS_ONLY]
 
 
-def _names_rx(names):
+def _names_rx(names: list[str]) -> re.Pattern[str]:
     names = sorted(names, key=len, reverse=True)
     return re.compile(r"(?<!\w)(?:" + "|".join(re.escape(n) for n in names) + r")(?!\w)", re.I)
 
 
-_PLACES = S.get("places", {})
-COUNTRY_RX = {c: _names_rx([c, *_PLACES.get(c, [])]) for c in COUNTRIES}
-EXCLUDE_RX = [_names_rx([c, *_PLACES.get(c, [])]) for c in S.get("exclude_countries", [])]
-RELOCATION_COMPANIES = {
-    company_key(n) for names in S.get("relocation_companies", {}).values() for n in names
-}
-RELOCATION_ENABLED = bool(S.get("relocation_enabled", True))
-COUNTRY_BOUND_REMOTE = bool(S.get("country_bound_remote", True))
-PRIORITY_COMPANIES = {company_key(n) for n in S.get("priority_companies", [])}
 # Big companies (bigtech.py) rarely mention relocation in the vacancy text, although they usually offer it:
 # their vacancies in these countries go to 🌍 as "relocation (unconfirmed)".
 BIGTECH_SOURCES = {"microsoft", "workday", "oracle", "amazon"}
-BIGTECH_HUBS_RX = _names_rx(S.get("bigtech", {}).get("relocation_hubs", []) or ["-"])
-# companies on regular ATS boards that get the same rule (big trading firms and the like)
-BIGTECH_COMPANIES = {company_key(n) for n in S.get("bigtech", {}).get("companies", [])}
-REFERRAL_COMPANIES = {company_key(n) for n in S.get("referral_companies", [])}
+
+
+@dataclass(frozen=True)
+class Rules:
+    """What geo builds from the settings: country patterns and sets of company keys."""
+
+    country_rx: dict[str, re.Pattern[str]]
+    exclude_rx: list[re.Pattern[str]]
+    relocation_companies: set[str]
+    priority_companies: set[str]
+    bigtech_hubs_rx: re.Pattern[str]
+    # companies on regular ATS boards that get the bigtech rule (big trading firms and the like)
+    bigtech_companies: set[str]
+    referral_companies: set[str]
+
+
+def _build(s: settings.Settings) -> Rules:
+    def rx(c: str) -> re.Pattern[str]:
+        return _names_rx([c, *s.places.get(c, [])])
+
+    return Rules(
+        country_rx={c: rx(c) for c in s.relocation_countries},
+        exclude_rx=[rx(c) for c in s.exclude_countries],
+        relocation_companies={company_key(n) for names in s.relocation_companies.values() for n in names},
+        priority_companies={company_key(n) for n in s.priority_companies},
+        bigtech_hubs_rx=_names_rx(s.bigtech.relocation_hubs or ["-"]),
+        bigtech_companies={company_key(n) for n in s.bigtech.companies},
+        referral_companies={company_key(n) for n in s.referral_companies},
+    )
+
+
+_rules: tuple[settings.Settings, Rules] | None = None
+
+
+def rules() -> Rules:
+    """Rules for the current settings.get(): built once per settings object."""
+    global _rules
+    s = settings.get()
+    if _rules is None or _rules[0] is not s:
+        _rules = (s, _build(s))
+    return _rules[1]
+
 
 # "Georgia" is a country, not a US state
 _GEORGIA_CITY_RX = re.compile(r"tbilisi|batumi|kutaisi", re.I)
@@ -88,7 +116,7 @@ _SALARY_RX = re.compile(
 
 def detect_country(location, description=""):
     """Target country by the vacancy location (city or country), or ''."""
-    for country, rx in COUNTRY_RX.items():
+    for country, rx in rules().country_rx.items():
         if not rx.search(location):
             continue
         if country == "Georgia" and not _GEORGIA_CITY_RX.search(location):
@@ -109,7 +137,8 @@ def relocation_quote(text, country="", max_words=12):
             continue
         # "relocation support to Tokyo" — relocation to another place
         target = _RELOCATION_TARGET_RX.match(text[m.end(): m.end() + 40].lstrip())
-        if target and country in COUNTRY_RX and not COUNTRY_RX[country].search(target.group(1)):
+        country_rx = rules().country_rx
+        if target and country in country_rx and not country_rx[country].search(target.group(1)):
             continue
         before = text[: m.start()].split()[-(max_words // 3):]
         phrase = m.group().split()
@@ -135,10 +164,11 @@ def classify(job, is_remote):
         return False
     country = detect_country(job.location, job.description)
     quote = relocation_quote(job.description, country)
-    bigtech = getattr(job, "source", "") in BIGTECH_SOURCES or company_key(job.company) in BIGTECH_COMPANIES
-    bigtech_hub = bigtech and bool(BIGTECH_HUBS_RX.search(job.location))
+    r = rules()
+    bigtech = getattr(job, "source", "") in BIGTECH_SOURCES or company_key(job.company) in r.bigtech_companies
+    bigtech_hub = bigtech and bool(r.bigtech_hubs_rx.search(job.location))
     if not country:
-        if not ANY_COUNTRY or any(rx.search(job.location) for rx in EXCLUDE_RX):
+        if not settings.get().any_country or any(rx.search(job.location) for rx in r.exclude_rx):
             return False
         if quote:
             job.reloc_country, job.reloc_type, job.reloc_quote = OTHER, RELOCATION, quote
@@ -157,7 +187,7 @@ def classify(job, is_remote):
             kind = RESIDENTS_ONLY
         else:
             kind = REMOTE_UNCLEAR
-    elif company_key(job.company) in RELOCATION_COMPANIES or bigtech_hub:
+    elif company_key(job.company) in r.relocation_companies or bigtech_hub:
         kind = UNCONFIRMED
     else:
         return False

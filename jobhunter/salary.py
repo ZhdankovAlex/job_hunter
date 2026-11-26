@@ -60,16 +60,16 @@ _SENIORITY = (
 
 def rates() -> dict[str, float]:
     """Rates to EUR: from settings.toml ([salary.rates_to_eur]) on top of the defaults."""
-    from . import geo
+    from . import settings
 
-    return {**DEFAULT_RATES, **(geo.S.get("salary", {}).get("rates_to_eur") or {})}
+    return {**DEFAULT_RATES, **settings.get().salary.rates_to_eur}
 
 
 def min_monthly() -> int:
     """Money threshold, EUR/month ([salary] min_monthly_eur in settings.toml; 0 — off)."""
-    from . import geo
+    from . import settings
 
-    return int(geo.S.get("salary", {}).get("min_monthly_eur") or 0)
+    return int(settings.get().salary.min_monthly_eur)
 
 
 def below_min(job) -> bool:

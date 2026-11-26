@@ -17,7 +17,7 @@ import logging
 import time
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from . import config as c, filters, geo, language, progress
+from . import config as c, filters, geo, language, progress, settings
 from .http import FetchError, HttpClient
 from .models import Job, html_to_text, parse_date
 
@@ -135,20 +135,20 @@ def prepare(job: Job) -> bool:
     verdict = "ok" if force_ok else filters.location_verdict(job)
     job.reloc_country = job.reloc_type = job.reloc_quote = ""
     if verdict != "ok":
-        in_target = geo.RELOCATION_ENABLED and not filters.no_support(job.description) and geo.classify(job, bool(job.remote))
+        in_target = settings.get().relocation_enabled and not filters.no_support(job.description) and geo.classify(job, bool(job.remote))
         supported = enrichment.get("relocation") == "supported" or enrichment.get("visa_sponsorship") is True
-        if geo.RELOCATION_ENABLED and supported and geo.role_fits(job):
+        if settings.get().relocation_enabled and supported and geo.role_fits(job):
             country = (
                 job.reloc_country
                 or geo.detect_country(job.location, job.description)
                 or next((COUNTRY_BY_CODE[x] for x in extra["countries"] if x in COUNTRY_BY_CODE
-                         and COUNTRY_BY_CODE[x] in geo.COUNTRIES), "")
+                         and COUNTRY_BY_CODE[x] in settings.get().relocation_countries), "")
             )
             if country:
                 job.reloc_country, job.reloc_type = country, geo.RELOCATION
                 job.reloc_quote = job.reloc_quote or "freehire: relocation / visa supported"
                 in_target = True
-        if not in_target and (verdict is None or not geo.COUNTRY_BOUND_REMOTE):
+        if not in_target and (verdict is None or not settings.get().country_bound_remote):
             return filters._reject(job, "location by the source label: not remote and not the home country", job.location[:80])
     job.location_check = verdict == "check"
     verify.check(job, job.description, bool(extra.get("full_description")))
@@ -215,7 +215,7 @@ class Freehire:
         try:
             for query in self.settings.get("queries", []):
                 name = query["name"]
-                if query.get("requires_relocation") and not geo.RELOCATION_ENABLED:
+                if query.get("requires_relocation") and not settings.get().relocation_enabled:
                     continue
                 if progress.skip_requested():  # the "Skip" button in the web UI
                     break

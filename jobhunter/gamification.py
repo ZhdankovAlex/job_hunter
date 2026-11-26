@@ -16,12 +16,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
-from . import applications_report as ar, config, geo, mail
+from . import applications_report as ar, config, mail, settings
 from .cvgen import slug
 from .html_report import _CSS, THEME_JS, WEB_URL, _e
 from .keys import company_key
 
-WEEKLY_GOAL = int(geo.S.get("gamification", {}).get("weekly_goal", 8))
 CV_DIR = config.ROOT / "cv_out"  # tailored CVs: cv_out/<date>/<Company>_<Role>.md
 JOBS_DIR = config.JOBS_ARCHIVE_DIR  # vacancies of every report: state/jobs/<date>.json
 HEAT_WEEKS = 8
@@ -713,9 +712,12 @@ class Game:
     quote: str | None
 
 
-def build(today: date, staged: list[tuple[mail.Application, str]], goal: int = WEEKLY_GOAL,
+def build(today: date, staged: list[tuple[mail.Application, str]], goal: int | None = None,
           cv_dir: Path | None = None, jobs_dir: Path | None = None) -> Game:
-    """staged — companies and the furthest stage with each (as in the funnel of the Applications page)."""
+    """staged — companies and the furthest stage with each (as in the funnel of the Applications page).
+    goal — the weekly goal; None — [gamification] weekly_goal from settings.toml."""
+    if goal is None:
+        goal = settings.get().gamification.weekly_goal
     apps = [a for a, _ in staged]
     led = ledger(apps)
     days = led.action_days()

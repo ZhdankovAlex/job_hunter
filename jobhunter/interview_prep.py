@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 
-from . import config, cv_match, cvgen, geo
+from . import config, cv_match, cvgen, settings
 
 _FROM_HOME = f" from {config.HOME_COUNTRY}" if config.HOME_COUNTRY else ""
 
@@ -69,7 +69,7 @@ def build(company: str, title: str, text: str, location: str = "") -> dict:
     base = cvgen.load_base()
     vac = cvgen.Vacancy(title, text, base)
     holder = type("Job", (), {"title": title, "company": company, "mismatch_lang": ""})()
-    cv_match.CvProfile(geo.S.get("cv", {})).analyze(holder, text)
+    cv_match.CvProfile(settings.get().cv.model_dump()).analyze(holder, text)
 
     bullets = [(job, b) for job in base["experience"] for b in job["bullets"] if not b.get("generic")]
     ranked = sorted(bullets, key=lambda jb: -vac.score(jb[1]["text"], jb[1].get("topics", [])))

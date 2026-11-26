@@ -14,7 +14,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from . import config
+from . import config, settings
 
 log = logging.getLogger(__name__)
 
@@ -106,17 +106,6 @@ _AI_TITLE_RX = re.compile(r"\bai\b|\bml\b|\bllms?\b|machine learning|genai|agent
 _AI_TEXT_RX = re.compile(r"\bllms?\b|\brag\b|retrieval[\s-]augmented|embeddings?|vector (?:search|database|store)|"
                          r"langchain|llamaindex|prompt engineering|ai agents?", _I)
 # About the candidate — settings.toml [cv]: years of experience (0 — do not compare), English level, master's / PhD
-def _cv_setting(key, default):
-    from . import geo  # geo reads settings.toml on import
-
-    return geo.S.get("cv", {}).get(key, default)
-
-
-CV_YEARS = int(_cv_setting("years_experience", 0))
-CV_ENGLISH = str(_cv_setting("english_level", "")).upper()
-CV_HAS_DEGREE = bool(_cv_setting("has_masters_or_phd", False))
-# skills you have only in part (settings.toml [cv.partial]: AWS = "S3 only") — not a gap, but a caveat
-PARTIAL = dict(_cv_setting("partial", {}))
 # Fit %: the share of covered key skills weighs 85%, nice-to-have — 15%; mismatches and partial
 # matches lower the result
 FIT_CORE_WEIGHT = 0.85
@@ -319,19 +308,21 @@ class CvProfile:
                 missing.append(term)
         mismatch = []
         years = verify._years(text)
-        if CV_YEARS and years and years[0] > CV_YEARS:
-            mismatch.append(f"{years[0]}+ years of experience (CV: {CV_YEARS})")
-        if not CV_HAS_DEGREE and _DEGREE_RX.search(text):
+        cv = settings.get().cv
+        cv_years, cv_english = cv.years_experience, cv.english_level.upper()
+        if cv_years and years and years[0] > cv_years:
+            mismatch.append(f"{years[0]}+ years of experience (CV: {cv_years})")
+        if not cv.has_masters_or_phd and _DEGREE_RX.search(text):
             mismatch.append("master's / PhD required")
         if getattr(job, "mismatch_lang", ""):
             mismatch.append(f"primary language — {job.mismatch_lang}")
         job.cv_have = sorted(have)
         job.cv_missing = missing[:6]
         job.cv_mismatch = mismatch
-        job.cv_partial = [f"{n}: {PARTIAL[n]}" for n in sorted(have) if n in PARTIAL]
+        job.cv_partial = [f"{n}: {cv.partial[n]}" for n in sorted(have) if n in cv.partial]
         # English below C1 in the CV is not a penalty, but a caveat
-        if CV_ENGLISH and CV_ENGLISH < "C1" and _ENGLISH_HIGH_RX.search(text):
-            job.cv_partial.append(f"English C1+ requested (CV: {CV_ENGLISH})")
+        if cv_english and cv_english < "C1" and _ENGLISH_HIGH_RX.search(text):
+            job.cv_partial.append(f"English C1+ requested (CV: {cv_english})")
         job.cv_full = bool(have) and not missing and not mismatch
         job.cv_core_have, job.cv_core_missing = sorted(core_have), sorted(core_missing)
         job.cv_nice_have, job.cv_nice_missing = sorted(nice_have), sorted(nice_missing)

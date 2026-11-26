@@ -218,7 +218,7 @@ def test_waiting_long_only_waiting_and_silent_over_week():
     staged_ = Application("Stage", [ev(day(0), APPLIED), ev(day(1), INTERVIEW, "Screen call")])
     rejected = Application("No", [ev(day(0), APPLIED), ev(day(1), REJECTED)])
     assert g.waiting_long([old, fresh, pinged, staged_, rejected], day(10)) == ["Old"]
-    assert g.waiting_long([old], day(20)) == []  # longer than TIMEOUT_DAYS — already counts as a rejection
+    assert g.waiting_long([old], day(20)) == []  # longer than timeout_days() — already counts as a rejection
 
 
 def test_fit_leads_skip_applied_and_weak(tmp_path):
