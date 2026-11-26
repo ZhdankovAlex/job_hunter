@@ -4,6 +4,17 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-26
 
+### CI: exact dependency versions from pip-compile, Windows in the matrix, pip-audit (#39)
+
+- requirements-lock.txt is pip-compile output from requirements-lock.in (-r requirements-dev.txt); CI installs it instead of the lower bounds, so a build a month later is the same. Dependabot rebuilds such files as a whole, resolving dependencies, instead of bumping one line at a time; pip-tools is in requirements-dev.txt
+- CI runs on ubuntu and windows: the tool is mostly run on Windows, but only Linux was checked. The coverage summary and the Codecov upload run once, on ubuntu, and only if the tests ran
+- A separate audit job: pip-audit over requirements-lock.txt
+- ruff in pre-commit is v0.17.6, as in the lock (was v0.17.4 with ruff>=0.17.6 in requirements-dev)
+- tests/test_ci_config.py: the lock is pip-compile output, every dependency is pinned within its bounds, ruff in pre-commit matches the lock, CI installs the lock and has Windows and pip-audit
+- Docs: testing.md (CI, how to rebuild the lock, the new test), configuration.md (requirements-lock.*)
+
+<sub>e5da649</sub>
+
 ### Reject reasons and marks as StrEnum codes; selection, score, Telegram and ATS in strict mypy (#38)
 
 - jobhunter/reasons.py: Reject (11 reject codes) with GROUPS, BULK and LOCATION_TEXT; Mark for the marks the score depends on, with a detail in brackets (Mark.PYTHON_NOT_PRIMARY.detail("Go")). The pipeline chart group, the order in "Rejected" and part of the score used to match substrings of the reason text, so rewording a reason silently changed them; now they go by job.reject_code (the shown text is unchanged)
