@@ -4,6 +4,14 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-26
 
+### Report: no crash on a vacancy without a link in the Staffing and Local-language appendices (#42)
+
+- The run crashed while building the report with AttributeError: 'Job' object has no attribute 'post_url'. These appendices mix site vacancies and Telegram posts; the link was taken as `j.url or j.post_url`, and only Telegram posts have post_url
+- The link now falls back with getattr(j, "post_url", ""), as elsewhere in report.py
+- Test: tests/test_cvgen_report.py — vacancies without a url in both appendices
+
+<sub>c09204f</sub>
+
 ### CV page: "Built CVs" updates right after a build (#41)
 
 - A new CV showed up in the list only after a page reload. Now cv.js takes the #cv-built section from a fresh /cv after a build and swaps it in: the same template, so the rows, the counter and the empty state are not duplicated in JS
