@@ -20,6 +20,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from . import config as c, filters, geo, language, progress, settings
 from .http import FetchError, HttpClient
 from .models import Job, html_to_text, parse_date
+from .reasons import Reject
 
 log = logging.getLogger(__name__)
 
@@ -118,9 +119,9 @@ def prefilter(job: Job, max_experience_years: int = 7) -> bool:
         return False  # wrong role — not shown in "Rejected"
     experience = enrichment.get("experience_years_min") or 0
     if experience > max_experience_years:
-        return filters._reject(job, f"experience from {experience} years (freehire field)")
+        return filters._reject(job, Reject.EXPERIENCE, f"experience from {experience} years (freehire field)")
     if not filters.full_time(job.title, job.employment, job.description):
-        return filters._reject(job, "not full-time: part-time / freelance / hourly or piecework pay")
+        return filters._reject(job, Reject.NOT_FULL_TIME, "not full-time: part-time / freelance / hourly or piecework pay")
     return True
 
 
@@ -149,7 +150,7 @@ def prepare(job: Job) -> bool:
                 job.reloc_quote = job.reloc_quote or "freehire: relocation / visa supported"
                 in_target = True
         if not in_target and (verdict is None or not settings.get().country_bound_remote):
-            return filters._reject(job, "location by the source label: not remote and not the home country", job.location[:80])
+            return filters._reject(job, Reject.SOURCE_LOCATION, "location by the source label: not remote and not the home country", job.location[:80])
     job.location_check = verdict == "check"
     verify.check(job, job.description, bool(extra.get("full_description")))
     if job.reject:

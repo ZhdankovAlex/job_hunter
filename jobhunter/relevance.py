@@ -5,9 +5,15 @@ import logging
 import re
 import tomllib
 from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from . import config, geo
-from .language import RUSSIAN_MARK
+from .reasons import Mark, has_mark, mark_detail
+
+if TYPE_CHECKING:
+    from .models import Checked, Job
+    from .telegram import TgJob
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +44,7 @@ class Skill:
 
     name: str
     weight: int
-    rx: re.Pattern
+    rx: re.Pattern[str]
 
 
 # Skill edits from the web UI (the "Skills" page) — on top of profile.toml, so its comments stay untouched:
@@ -46,7 +52,7 @@ class Skill:
 OVERRIDES_FILE = config.ROOT / "profile_overrides.json"
 
 
-def read_overrides() -> dict:
+def read_overrides() -> dict[str, Any]:
     import json
     try:
         data = json.loads(OVERRIDES_FILE.read_text(encoding="utf-8"))
@@ -55,13 +61,13 @@ def read_overrides() -> dict:
     return {"skills": data.get("skills", {}), "added": data.get("added", [])}
 
 
-def write_overrides(data: dict) -> None:
+def write_overrides(data: dict[str, Any]) -> None:
     import json
     # encode before opening the file: on UnicodeEncodeError write_text would leave it empty and lose the edits
     OVERRIDES_FILE.write_bytes(json.dumps(data, ensure_ascii=False, indent=1).encode("utf-8"))
 
 
-def skill_table(path=config.PROFILE_FILE) -> list[dict]:
+def skill_table(path: Path = config.PROFILE_FILE) -> list[dict[str, Any]]:
     """All skills with edits applied: name, pattern, base_weight, weight, disabled, added (own, from the UI)."""
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     over = read_overrides()
@@ -80,7 +86,7 @@ def skill_table(path=config.PROFILE_FILE) -> list[dict]:
 class Profile:
     """Skills and score adjustments loaded from profile.toml (+ edits from profile_overrides.json)."""
 
-    def __init__(self, path=config.PROFILE_FILE) -> None:
+    def __init__(self, path: Path = config.PROFILE_FILE) -> None:
         """Reads profile.toml and the edits; invalid patterns are skipped and written to errors.log."""
         data = tomllib.loads(path.read_text(encoding="utf-8"))
         self.weights: dict[str, int] = data.get("scoring", {})
@@ -98,7 +104,7 @@ class Profile:
     def _w(self, key: str) -> int:
         return int(self.weights.get(key, 0))
 
-    def score(self, job, text: str, marks: list[str], location_points: int) -> tuple[int, list[str]]:
+    def score(self, job: Checked, text: str, marks: list[str], location_points: int) -> tuple[int, list[str]]:
         """Relevance score and matched skills (by weight, descending).
 
         job — Job or TgJob; text — where to look for skills; marks — marks already set
@@ -125,13 +131,13 @@ class Profile:
         total += getattr(job, "score", 0) * self._w("company_priority_per_point")
         letters = _LETTER_RX.findall(full)
         in_russian = bool(letters) and len(_CYRILLIC_RX.findall(full)) / len(letters) > 0.3
-        if in_russian or RUSSIAN_MARK in marks or _RU_SPEAKING_RX.search(full):
+        if in_russian or has_mark(marks, Mark.RUSSIAN) or _RU_SPEAKING_RX.search(full):
             total += self._w("russian_language")
         has_python_title = bool(_TITLE_PYTHON_RX.search(title))
-        mismatch = any("Python not primary" in m for m in marks) or getattr(job, "language_mismatch_warning", False)
+        mismatch = has_mark(marks, Mark.PYTHON_NOT_PRIMARY) or getattr(job, "language_mismatch_warning", False)
         go = (
             getattr(job, "mismatch_lang", "") == "Go"
-            or any("language (Go)" in m for m in marks)
+            or mark_detail(marks, Mark.PYTHON_NOT_PRIMARY) == "Go"
             or (not has_python_title and bool(config.GO_REQUIRED_RX.search(text)))
         )
         if go:
@@ -142,9 +148,9 @@ class Profile:
             total += self._w("jvm_spring")
         if config.YEARS_8_PLUS_RX.search(full):
             total += self._w("years_8_plus")
-        if any("local language is a plus" in m for m in marks):
+        if has_mark(marks, Mark.LOCAL_NICE):
             total += self._w("local_language_nice")
-        if any("not in English" in m for m in marks) and not in_russian:
+        if has_mark(marks, Mark.NOT_ENGLISH) and not in_russian:
             total += self._w("not_english")
 
         for penalty in getattr(job, "penalties", []):
@@ -169,7 +175,7 @@ class Profile:
         matched.sort(key=lambda s: -s.weight)
         return total, [s.name for s in matched]
 
-    def base_score(self, job, text: str) -> tuple[int, list[str]]:
+    def base_score(self, job: Checked, text: str) -> tuple[int, list[str]]:
         """Score only by skills and role title — without penalties and location adjustments."""
         full = f"{job.title}\n{text}"
         matched = sorted((s for s in self.skills if s.rx.search(full)), key=lambda s: -s.weight)
@@ -182,7 +188,7 @@ class Profile:
                 total += self._w(key)
         return total, [s.name for s in matched]
 
-    def location_points(self, job) -> int:
+    def location_points(self, job: Job) -> int:
         """Location adjustment for a vacancy from an ATS/aggregator."""
         if job.reloc_type == geo.RELOCATION:
             return self._w("location_relocation")
@@ -194,6 +200,6 @@ class Profile:
             return 0  # ❓ location not confirmed by the text
         return self._w("location_other_country") if job.location_check else self._w("location_remote_ok")
 
-    def tg_location_points(self, job) -> int:
+    def tg_location_points(self, job: TgJob) -> int:
         """Location adjustment for a vacancy from Telegram (by its label)."""
         return self._w("location_remote_ok") if job.label.startswith("✅") and not job.manual_check else 0

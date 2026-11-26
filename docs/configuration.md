@@ -115,6 +115,7 @@ compiled there and in `verify` / `telegram`.
 | `freehire.py` | freehire.me |
 | `telegram.py` | Telegram channels via the web preview, a parser per channel format |
 | `filters.py`, `verify.py`, `language.py` | Selection: role, location, primary language, full-text checks |
+| `reasons.py` | Codes of reject reasons (`Reject`) and marks (`Mark`): the group on the pipeline chart, the order in "Rejected" and the score go by the code, the shown text can be edited |
 | `staffing.py` | Staffing / outsourcing blacklist |
 | `keys.py` | Normalised keys: vacancy URL, IDs in a URL, company name, ATS board from a link |
 | `applied.py` | Vacancies and companies you already applied to (`applications_manual.toml`) |

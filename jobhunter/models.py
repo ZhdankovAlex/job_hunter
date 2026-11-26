@@ -2,7 +2,7 @@ import html
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Protocol
 
 
 @dataclass
@@ -49,7 +49,8 @@ class Job:
     is_new_today: bool = False
     flags: list[str] = field(default_factory=list)
     # check by the full text (verify.py)
-    reject: str = ""  # why the vacancy is hidden
+    reject: str = ""  # why the vacancy is hidden (text for display)
+    reject_code: str = ""  # its code — reasons.Reject; decisions are made by it
     reject_quote: str = ""  # quote from the text the rule fired on
     manual_check: str = ""  # status ❓: why a manual check is needed
     penalties: list[str] = field(default_factory=list)  # level / experience_7 / role / language
@@ -74,6 +75,25 @@ class Job:
     industries: list[str] = field(default_factory=list)  # industries of the company from the vacancy text (industry.py)
     sources: list[str] = field(default_factory=list)  # all sources where the vacancy was seen
     extra: dict[str, Any] = field(default_factory=dict)  # raw freehire fields (enrichment, collections, …)
+
+
+
+class Checked(Protocol):
+    """A vacancy checked by verify and geo: Job or telegram.TgJob (the fields they read and write)."""
+
+    title: str
+    company: str
+    location: str
+    url: str
+    salary: str
+    reject: str
+    reject_code: str
+    reject_quote: str
+    manual_check: str
+    penalties: list[str]
+    reloc_country: str
+    reloc_type: str
+    reloc_quote: str
 
 
 def norm_name(name: str) -> str:

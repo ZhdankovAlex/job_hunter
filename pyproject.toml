@@ -54,6 +54,13 @@ module = [
     "jobhunter.stack",
     "jobhunter.industry",
     "jobhunter.companies",
+    "jobhunter.filters",
+    "jobhunter.verify",
+    "jobhunter.geo",
+    "jobhunter.reasons",
+    "jobhunter.relevance",
+    "jobhunter.telegram",
+    "jobhunter.ats",
     "web.*",
 ]
 disallow_untyped_defs = true

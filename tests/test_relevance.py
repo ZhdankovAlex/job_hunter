@@ -10,6 +10,7 @@ import pytest
 
 from jobhunter import geo, relevance
 from jobhunter.language import RUSSIAN_MARK
+from jobhunter.reasons import Mark
 
 PROFILE = """
 [scoring]
@@ -106,8 +107,8 @@ def test_russian_language_by_share_or_mark(profile):
 def test_go_beats_language_mismatch(profile):
     """Go has its own penalty, and then the general "Python not primary" is not added on top."""
     assert score(profile, text="Strong experience with Golang")[0] == -10000
-    assert score(profile, marks=["⚠️ Python not primary"])[0] == -20000
-    assert score(profile, text="Strong experience with Golang", marks=["⚠️ Python not primary"])[0] == -10000
+    assert score(profile, marks=[Mark.PYTHON_NOT_PRIMARY.detail("Java")])[0] == -20000
+    assert score(profile, text="Strong experience with Golang", marks=[Mark.PYTHON_NOT_PRIMARY.detail("Java")])[0] == -10000
 
 
 def test_go_in_text_ignored_for_python_title(profile):
@@ -121,9 +122,9 @@ def test_jvm_and_years_penalties(profile):
 
 
 def test_language_marks(profile):
-    assert score(profile, marks=["🗣️ local language is a plus"])[0] == -23
-    assert score(profile, marks=["🌐 not in English"])[0] == -27
-    assert score(profile, text="Мы ищем разработчика", marks=["🌐 not in English"])[0] == 3000  # Russian is fine
+    assert score(profile, marks=[Mark.LOCAL_NICE])[0] == -23
+    assert score(profile, marks=[Mark.NOT_ENGLISH.detail("de")])[0] == -27
+    assert score(profile, text="Мы ищем разработчика", marks=[Mark.NOT_ENGLISH.detail("de")])[0] == 3000  # Russian is fine
 
 
 def test_cv_missing_is_capped(profile):

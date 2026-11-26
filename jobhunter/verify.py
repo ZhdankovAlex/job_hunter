@@ -14,6 +14,8 @@ from __future__ import annotations
 import re
 
 from . import config as c, geo, settings
+from .models import Checked
+from .reasons import Reject
 from .stack import language_mismatch_text
 
 MIN_TEXT_CHARS = 400  # shorter — we assume there is no vacancy text
@@ -208,13 +210,13 @@ _RU_ONLY_RX = re.compile(
 ABROAD_OK_RX = re.compile(r"за пределами (?:РФ|России)|из любой (?:точки|страны)|не обязательно в (?:РФ|России)", re.I)
 
 
-def ru_only(text):
+def ru_only(text: str) -> bool:
     """Work is possible only from Russia (and it does not say work from abroad is fine)."""
     return bool(_RU_ONLY_RX.search(text)) and not ABROAD_OK_RX.search(text)
 
 
 
-def check(job, text: str, full_text: bool) -> None:
+def check(job: Checked, text: str, full_text: bool) -> None:
     """Sets job.reject / job.manual_check / job.penalties from the vacancy text.
 
     job — Job or TgJob; text — the description; full_text — the description was received in full
@@ -226,19 +228,19 @@ def check(job, text: str, full_text: bool) -> None:
     kind = label_kind(location, title)
     job.penalties, job.manual_check = [], ""
 
-    def reject(reason: str, span: tuple[int, int] | None = None, source: str = body) -> None:
-        job.reject = reason
+    def reject(code: Reject, reason: str, span: tuple[int, int] | None = None, source: str = body) -> None:
+        job.reject, job.reject_code = reason, code
         job.reject_quote = quote(source, *span) if span else ""
 
     # --- remote from Russia only (settings.toml [filters].hide_russia_only)
     m = _RU_ONLY_RX.search(body) if settings.get().filters.hide_russia_only else None
     if m and not ABROAD_OK_RX.search(body):
-        return reject("remote from Russia only", m.span())
+        return reject(Reject.RUSSIA_ONLY, "remote from Russia only", m.span())
 
     # --- kind of work
     m = _NOT_A_JOB_RX.search(f"{title}\n{body}")
     if m:
-        return reject("AI trainer / piecework data labelling", m.span(), f"{title}\n{body}")
+        return reject(Reject.AI_TRAINER, "AI trainer / piecework data labelling", m.span(), f"{title}\n{body}")
 
     # --- location by the text
     # a vacancy with relocation to the target country: an office there is expected, not a reason to reject
@@ -254,10 +256,10 @@ def check(job, text: str, full_text: bool) -> None:
             job.reloc_country = geo.detect_country(title) or geo.detect_country(body[:3000]) or geo.OTHER
             relocation, span = True, None
     if span:
-        return reject(ONSITE_REASON, span)
+        return reject(Reject.ONSITE, ONSITE_REASON, span)
     span = None if relocation else _residency(body)
     if span and kind != "home":
-        return reject("tied to country: you must live / have the right to work in another country", span)
+        return reject(Reject.COUNTRY_BOUND, "tied to country: you must live / have the right to work in another country", span)
 
     # --- experience
     experience = (getattr(job, "extra", None) or {}).get("enrichment", {}).get("experience_years_min") or 0
@@ -273,13 +275,13 @@ def check(job, text: str, full_text: bool) -> None:
     if lang in HIDE_LANGUAGES:
         rx = c.TITLE_LANGS.get(lang) or c.OTHER_LANGS.get(lang)
         m = rx.search(f"{title}\n{body}") if rx else None
-        return reject(f"primary language — {lang}", m.span() if m else None, f"{title}\n{body}")
+        return reject(Reject.MAIN_LANGUAGE, f"primary language — {lang}", m.span() if m else None, f"{title}\n{body}")
     m = c.JVM_SPRING_RX.search(body)
     if m:
-        return reject("JVM / Spring in the requirements", m.span())
+        return reject(Reject.JVM, "JVM / Spring in the requirements", m.span())
     span = _required_language(title, body)
     if span:
-        return reject("required language is not Python", span)
+        return reject(Reject.REQUIRED_NOT_PYTHON, "required language is not Python", span)
     if lang:
         job.penalties.append("language")
 

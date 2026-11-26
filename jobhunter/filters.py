@@ -1,10 +1,12 @@
 """Vacancy selection: keywords, location, primary language."""
 
 from . import config as c, geo, language, settings, verify
+from .models import Job
+from .reasons import Reject
 from .stack import language_mismatch_text
 
 
-def role_ok(title, text, relaxed=False):
+def role_ok(title: str, text: str, relaxed: bool = False) -> bool:
     """One role filter for all sections (ATS, aggregators, Telegram).
 
     relaxed — for priority companies: any engineering role with python in the text fits.
@@ -23,7 +25,7 @@ def role_ok(title, text, relaxed=False):
     return False
 
 
-def title_candidate(title):
+def title_candidate(title: str) -> bool:
     """A rough check by the title alone — is it worth opening the vacancy page."""
     if c.ROLE_EXCLUDE_RX.search(title) or c.TITLE_EXCLUDE_RX.search(title):
         return False
@@ -35,14 +37,14 @@ def title_candidate(title):
     )
 
 
-def full_time(title, employment, text):
+def full_time(title: str, employment: str, text: str) -> bool:
     """Full-time employee or contract; part-time, freelance, hourly pay and internships are not."""
     if c.NOT_FULL_TIME_RX.search(f"{title} {employment}") or c.NOT_A_JOB_TITLE_RX.search(title):
         return False
     return not (c.HOURLY_PAY_RX.search(text) or c.NOT_A_JOB_TEXT_RX.search(text))
 
 
-def residency_blocked(text, location):
+def residency_blocked(text: str, location: str) -> bool:
     """"must reside in …" / "not providing relocation", unless the home country or EU is next to it."""
     if c.RESIDENCY_OK_RX.search(location):
         return False
@@ -52,17 +54,17 @@ def residency_blocked(text, location):
     return False
 
 
-def no_support(text):
+def no_support(text: str) -> bool:
     """The text says outright that there is no relocation or visa support."""
     return bool(c.NO_SUPPORT_RX.search(text))
 
 
-def keyword_match(job):
+def keyword_match(job: Job) -> bool:
     relaxed = geo.company_key(job.company) in geo.rules().priority_companies
     return role_ok(job.title, job.description, relaxed)
 
 
-def location_verdict(job):
+def location_verdict(job: Job) -> str | None:
     """'ok' | 'check' (remote, but tied to a country/city) | None (does not fit)."""
     loc = job.location or ""
     text = f"{loc} {job.title}"
@@ -82,18 +84,18 @@ def location_verdict(job):
     return "check"
 
 
-def language_mismatch(job):
+def language_mismatch(job: Job) -> str:
     """The name of a language that looks primary instead of Python, or ''."""
     return language_mismatch_text(job.title, job.description)
 
 
-def _reject(job, reason, quote=""):
+def _reject(job: Job, code: Reject, reason: str, quote: str = "") -> bool:
     """Stores the reject reason (for the "Rejected by filters" section) and returns False."""
-    job.reject, job.reject_quote = reason, quote
+    job.reject, job.reject_code, job.reject_quote = reason, code, quote
     return False
 
 
-def apply(job):
+def apply(job: Job) -> bool:
     """True if the vacancy passes; also sets the marks.
 
     If the vacancy fits by role but is dropped by another rule, the reason stays in job.reject.
@@ -103,16 +105,16 @@ def apply(job):
     if not full_time(job.title, job.employment, job.description):
         m = (c.NOT_FULL_TIME_RX.search(f"{job.title} {job.employment}") or c.HOURLY_PAY_RX.search(job.description)
              or c.NOT_A_JOB_TEXT_RX.search(job.description) or c.NOT_A_JOB_TITLE_RX.search(job.title))
-        return _reject(job, "not full-time: part-time / freelance / hourly or piecework pay", m.group() if m else "")
+        return _reject(job, Reject.NOT_FULL_TIME, "not full-time: part-time / freelance / hourly or piecework pay", m.group() if m else "")
     verdict = location_verdict(job)
     if verdict != "ok":
         if no_support(job.description):
-            return _reject(job, "location by the source label: not remote and not the home country", job.location[:80])
+            return _reject(job, Reject.SOURCE_LOCATION, "location by the source label: not remote and not the home country", job.location[:80])
         # tied to a country: possibly relocation / remote in the target country
         is_remote = bool(job.remote or c.REMOTE_RX.search(f"{job.location} {job.title}"))
         in_target = settings.get().relocation_enabled and geo.classify(job, is_remote)
         if not in_target and (verdict is None or not settings.get().country_bound_remote):
-            return _reject(job, "location by the source label: not remote and not the home country", job.location[:80])
+            return _reject(job, Reject.SOURCE_LOCATION, "location by the source label: not remote and not the home country", job.location[:80])
     job.location_check = verdict == "check"
     full_text = job.source not in c.PREVIEW_ONLY_SOURCES
     verify.check(job, job.description, full_text)

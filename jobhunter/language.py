@@ -2,9 +2,11 @@
 import re
 from collections import Counter
 
-MUST_MARK = "🚫 local language required (must-have)"
-NICE_MARK = "🗣️ local language is a plus"
-RUSSIAN_MARK = "🇷🇺 Russian — a plus/required"
+from .reasons import Mark
+
+MUST_MARK = Mark.LOCAL_MUST
+NICE_MARK = Mark.LOCAL_NICE
+RUSSIAN_MARK = Mark.RUSSIAN
 
 # Frequent function words — a simple detector of the text language
 _STOPWORD_LINES = {
@@ -64,10 +66,11 @@ def detect_language(text):
 
 def analyze(title, text):
     """-> (marks, whether a local language is required)."""
-    marks, must, nice = [], False, False
+    marks: list[str] = []
+    must = nice = False
     lang = detect_language(text)
     if lang not in ("", "en") or (not lang and _GERMAN_TITLE_RX.search(title)):
-        marks.append(f"🗣️ vacancy not in English ({lang or 'de'})")
+        marks.append(Mark.NOT_ENGLISH.detail(lang or "de"))
     for sentence in _SENTENCE_SPLIT_RX.split(text):
         if not _LANG_RX.search(sentence):
             continue

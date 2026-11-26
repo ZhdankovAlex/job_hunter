@@ -2,6 +2,7 @@
 import html
 import logging
 import re
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -10,6 +11,7 @@ from . import config as c, filters, geo, language, progress, settings
 from .http import FetchError, HttpClient
 from .keys import company_key
 from .models import parse_date
+from .reasons import Mark
 from .verify import ABROAD_OK_RX, ru_only
 
 log = logging.getLogger(__name__)
@@ -52,12 +54,12 @@ _TAG_LABELS = {
 }
 
 
-def _labels(table, *texts):
+def _labels(table: Iterable[tuple[str, re.Pattern[str]]], *texts: str) -> list[str]:
     joined = " ".join(texts)
     return [name for name, rx in table if rx.search(joined)]
 
 
-def _short_place(text, limit=45):
+def _short_place(text: str, limit: int = 45) -> str:
     """Country/city without free text: cut at a bracket/dash, drop long ones."""
     text = re.split(r"[(—–·|]|\s-\s", text)[0].strip(" ,.)")
     if " " not in text and _labels(_FORMAT_LABELS, text):
@@ -65,9 +67,9 @@ def _short_place(text, limit=45):
     return text if len(text) <= limit else ""
 
 
-def _join_location(parts):
-    seen: set = set()
-    out = []
+def _join_location(parts: Iterable[str]) -> str:
+    seen: set[str] = set()
+    out: list[str] = []
     for part in filter(None, parts):
         if part.lower() not in seen and not any(part.lower() in s for s in seen):
             seen.add(part.lower())
@@ -88,7 +90,7 @@ class TgJob:
     post_url: str
     text: str = ""  # where to look for keywords
     label: str = ""
-    marks: list = field(default_factory=list)
+    marks: list[str] = field(default_factory=list)
     # filled in by the same checks as Job (same fields)
     applied_status: str = ""
     staffing: str = ""
@@ -96,35 +98,45 @@ class TgJob:
     is_new_today: bool = False
     relevance: int = 0
     reject: str = ""
+    reject_code: str = ""
     reject_quote: str = ""
     manual_check: str = ""
-    penalties: list = field(default_factory=list)
+    penalties: list[str] = field(default_factory=list)
     full_text: bool = True  # the post has the full vacancy text (not just a title or a summary)
-    cv_have: list = field(default_factory=list)
-    cv_missing: list = field(default_factory=list)
-    cv_mismatch: list = field(default_factory=list)
-    cv_partial: list = field(default_factory=list)
+    cv_have: list[str] = field(default_factory=list)
+    cv_missing: list[str] = field(default_factory=list)
+    cv_mismatch: list[str] = field(default_factory=list)
+    cv_partial: list[str] = field(default_factory=list)
     cv_full: bool = False
     cv_pick: str = ""
     cv_fit: int = -1  # Fit % of the vacancy and the CV (cv_match.fit_percent); -1 — not computed
     grade: str = ""  # junior / middle / senior / lead — from the title or required experience (salary.grade)
     cv_file: str = ""  # PDF CV for the vacancy built automatically (cvgen.auto_build), path from the project root
-    cv_core_have: list = field(default_factory=list)
-    cv_core_missing: list = field(default_factory=list)
-    cv_nice_have: list = field(default_factory=list)
-    cv_nice_missing: list = field(default_factory=list)
+    cv_core_have: list[str] = field(default_factory=list)
+    cv_core_missing: list[str] = field(default_factory=list)
+    cv_nice_have: list[str] = field(default_factory=list)
+    cv_nice_missing: list[str] = field(default_factory=list)
     tier: int = 4
-    industries: list = field(default_factory=list)  # industries of the company (industry.classify)
+    industries: list[str] = field(default_factory=list)  # industries of the company (industry.classify)
     mismatch_lang: str = ""
+    reloc_country: str = ""  # a TgJob does not go to 🌍, but verify may mark relocation in the text
+    reloc_type: str = ""
+    reloc_quote: str = ""
     salary_note: str = ""  # salary range: stated or estimated from the base (salary.py)
     levels_note: str = ""  # median for the vacancy country from levels.fyi (levels.py)
     levels_url: str = ""
-    matched_skills: list = field(default_factory=list)
-    history_marks: list = field(default_factory=list)
+    matched_skills: list[str] = field(default_factory=list)
+    history_marks: list[str] = field(default_factory=list)
     app_status: str = ""
 
 
-def _to_text(raw):
+# a channel post: (number, time, text HTML, forwarded from another channel)
+Post = tuple[int, datetime, str, bool]
+Parser = Callable[[str, int, datetime, str], list[TgJob]]
+_NEVER = datetime.min.replace(tzinfo=UTC)  # a post without a date is older than any
+
+
+def _to_text(raw: str) -> str:
     """Post HTML -> text; <b> is marked with B_OPEN/B_CLOSE, links stand as ⟦url⟧."""
     raw = re.sub(r"</?tg-emoji[^>]*>", "", raw)
     raw = _EMOJI_RX.sub(lambda m: m.group(1), raw)
@@ -136,24 +148,24 @@ def _to_text(raw):
     return html.unescape(raw).replace("\xa0", " ")
 
 
-def _plain(text):
+def _plain(text: str) -> str:
     text = re.sub(r"⟦[^⟧]*⟧", "", text)
     return text.replace(B_OPEN, "").replace(B_CLOSE, "").strip()
 
 
-def _external_links(text):
+def _external_links(text: str) -> list[str]:
     return [u for u in re.findall(r"⟦([^⟧]*)⟧", text) if u.startswith("http") and "//t.me/" not in u]
 
 
-def fetch_posts(http: HttpClient, channel, cutoff):
+def fetch_posts(http: HttpClient, channel: str, cutoff: datetime) -> list[Post]:
     """Channel posts not older than cutoff: [(post_id, datetime, html, forwarded)]."""
-    posts: list[tuple[int, Any, Any, bool]] = []
-    before = None
+    posts: list[Post] = []
+    before: str | None = None
     for _ in range(c.TELEGRAM_MAX_PAGES):
         r = http.get(f"https://t.me/s/{channel}", params={"before": before} if before else None)
         if r.status_code != 200:
             raise FetchError(f"t.me/s/{channel}: HTTP {r.status_code}")
-        page = []
+        page: list[tuple[int, datetime | None, str, bool]] = []
         for chunk in r.text.split(_MESSAGE_SPLIT)[1:]:
             post = re.search(r'data-post="[^"/]+/(\d+)"', chunk)
             when = re.findall(r'<time datetime="([^"]+)" class="time"', chunk)
@@ -167,15 +179,17 @@ def fetch_posts(http: HttpClient, channel, cutoff):
             if not posts:
                 raise FetchError(f"t.me/s/{channel}: no posts found (the channel is closed or the page layout changed)")
             break
-        posts += [p for p in page if p[1] and p[1] >= cutoff]
+        posts += [(i, d, t, f) for i, d, t, f in page if d and d >= cutoff]
+        dates = [p[1] for p in page if p[1]]
         older = re.search(r'data-before="(\d+)"', r.text)
-        if not older or min(p[1] for p in page if p[1]) < cutoff:
+        # a page without dates ends the paging (min() over an empty list used to raise ValueError)
+        if not older or not dates or min(dates) < cutoff:
             break
         before = older.group(1)
     return posts
 
 
-def _vacancy_link(links):
+def _vacancy_link(links: list[str]) -> str:
     """Link to the vacancy itself if it is among the post links; otherwise the first one."""
     for link in links:
         if re.search(r"vacanc|job|career|apply|position|hirify", link, re.I):
@@ -183,7 +197,7 @@ def _vacancy_link(links):
     return links[0] if links else ""
 
 
-def parse_youritjob(channel, post_id, when, raw):
+def parse_youritjob(channel: str, post_id: int, when: datetime, raw: str) -> list[TgJob]:
     """One post = one vacancy; the first bold line is 'Title, Company/format'."""
     text = _to_text(raw)
     head = re.match(rf"\s*{B_OPEN}(.*?){B_CLOSE}", text, re.S)
@@ -242,7 +256,7 @@ def parse_youritjob(channel, post_id, when, raw):
     )]
 
 
-def parse_af_job_board(channel, post_id, when, raw):
+def parse_af_job_board(channel: str, post_id: int, when: datetime, raw: str) -> list[TgJob]:
     """One post = a list of vacancies; blocks end with the line '👉 Apply'."""
     lines = [l.strip() for l in _to_text(raw).split("\n")]
     jobs, block, intro = [], [], None
@@ -250,7 +264,7 @@ def parse_af_job_board(channel, post_id, when, raw):
         block.append(line)
         if "👉" not in line or not _external_links(line):
             continue
-        fields: dict = {}
+        fields: dict[str, str] = {}
         title_idx = None
         for i, l in enumerate(block):
             p = _plain(l)
@@ -294,7 +308,7 @@ def parse_af_job_board(channel, post_id, when, raw):
     return result
 
 
-def _ru_format(line):
+def _ru_format(line: str) -> str:
     """'удалённо (можно за пределами РФ)', 'Москва (офис)' -> short location labels."""
     labels = _labels(_FORMAT_LABELS + _EXTRA_LABELS, line)
     if ABROAD_OK_RX.search(line):
@@ -310,7 +324,7 @@ def _ru_format(line):
     return _join_location([_short_place(place, 30) if place else "", *labels])
 
 
-def parse_habr_digest(channel, post_id, when, raw):
+def parse_habr_digest(channel: str, post_id: int, when: datetime, raw: str) -> list[TgJob]:
     """@habr_career: a list post, one line = '<Title> в <Company> ⟦u.habr.com/…⟧. City. Format.'"""
     text = _to_text(raw)
     tags = " ".join(f"#{t}" for t in _HASHTAG_RX.findall(_plain(text)))
@@ -332,7 +346,7 @@ def parse_habr_digest(channel, post_id, when, raw):
 _ABROAD_REMOTE_RX = re.compile(r"\s*\(?\s*вне\s+(?:РФ|России)(?:\s+и\s+(?:РБ|Беларуси))?\s*\)?", re.I)
 
 
-def parse_zarubezhom(channel, post_id, when, raw):
+def parse_zarubezhom(channel: str, post_id: int, when: datetime, raw: str) -> list[TgJob]:
     """@zarubezhom_jobs: "**<Title> в <Company>**", "📍 place", "💎 requirements", link "Узнать подробнее … тут".
 
     Digests ("Дайджест вакансий…") are skipped: they only link to separate posts.
@@ -358,7 +372,7 @@ def parse_zarubezhom(channel, post_id, when, raw):
     )]
 
 
-def parse_relocatesme(channel, post_id, when, raw):
+def parse_relocatesme(channel: str, post_id: int, when: datetime, raw: str) -> list[TgJob]:
     """@relocatesme: posts of three kinds, ads without these signs are skipped.
 
     "**<Title> в <Company>**", "📍 place" — as in @zarubezhom_jobs;
@@ -392,7 +406,7 @@ def parse_relocatesme(channel, post_id, when, raw):
     )]
 
 
-def parse_jtbl(channel, post_id, when, raw):
+def parse_jtbl(channel: str, post_id: int, when: datetime, raw: str) -> list[TgJob]:
     """@jtbl_vacancy: "**<Title> в <Industry>**", hashtags, "Требования:", "Локация: 📍…", "Контакт для отклика: @…".
 
     Posts do not name the company — the industry from the header is used instead ("Fintech", "Travel Tech").
@@ -416,7 +430,7 @@ def parse_jtbl(channel, post_id, when, raw):
     )]
 
 
-def parse_career_sports(channel, post_id, when, raw):
+def parse_career_sports(channel: str, post_id: int, when: datetime, raw: str) -> list[TgJob]:
     """@career_sports (the Sports.ru channel): '**<Title>** ⟦link⟧', then '📍 format' and '🔵 level'."""
     jobs = parse_youritjob(channel, post_id, when, raw)
     for job in jobs:
@@ -427,7 +441,7 @@ def parse_career_sports(channel, post_id, when, raw):
     return jobs
 
 
-def parse_job_python(channel, post_id, when, raw):
+def parse_job_python(channel: str, post_id: int, when: datetime, raw: str) -> list[TgJob]:
     """@job_python: a hashtag line, then bold 'Company' and 'Title', 'Формат работы: …' (work format)."""
     text = _to_text(raw)
     plain = _plain(text)
@@ -449,7 +463,7 @@ def parse_job_python(channel, post_id, when, raw):
     )]
 
 
-def parse_pythonrabota(channel, post_id, when, raw):
+def parse_pythonrabota(channel: str, post_id: int, when: datetime, raw: str) -> list[TgJob]:
     """@pythonrabota: '**<Title>** | Смотреть вакансию ⟦telegra.ph⟧', then 'Формат:', 'Компания:', 'ЗП:'.
 
     The full text is on telegra.ph — collect() fetches it (fill_telegraph).
@@ -460,7 +474,7 @@ def parse_pythonrabota(channel, post_id, when, raw):
     if not head or not page:
         return []
     plain = _plain(text)
-    fields = {}
+    fields: dict[str, str] = {}
     for line in plain.split("\n"):
         key, sep, value = line.partition(":")
         if sep and len(key) < 15:
@@ -474,14 +488,14 @@ def parse_pythonrabota(channel, post_id, when, raw):
     )]
 
 
-def _telegraph_text(node):
+def _telegraph_text(node: str | dict[str, Any]) -> str:
     if isinstance(node, str):
         return node
     inner = "".join(_telegraph_text(n) for n in node.get("children", []))
     return inner + "\n" if node.get("tag") in {"p", "li", "h3", "h4", "br", "blockquote"} else inner
 
 
-def fill_telegraph(http: HttpClient, job):
+def fill_telegraph(http: HttpClient, job: TgJob) -> None:
     """Full vacancy text from a telegra.ph page (public getPage API); refines the location."""
     path = job.url.split("telegra.ph/", 1)[1].split("?")[0]
     try:
@@ -500,7 +514,7 @@ def fill_telegraph(http: HttpClient, job):
         job.location = _join_location([place[:60], *(x for x in job.location.split(", ") if x not in place)])
 
 
-def parse_offer_inside(channel, post_id, when, raw):
+def parse_offer_inside(channel: str, post_id: int, when: datetime, raw: str) -> list[TgJob]:
     """@JobOfferInside: '<Title> ⟦link to the ATS⟧ в <Company>', then a location line and a summary."""
     text = _to_text(raw)
     plain = _plain(text)
@@ -520,7 +534,7 @@ def parse_offer_inside(channel, post_id, when, raw):
     )]
 
 
-def _field(plain, *names):
+def _field(plain: str, *names: str) -> str:
     """Value of a line "🏢 Компания: …" / "Формат: …": the first of names, without a leading emoji."""
     for line in plain.split("\n"):
         key, sep, value = line.partition(":")
@@ -529,7 +543,7 @@ def _field(plain, *names):
     return ""
 
 
-def parse_hiddengurus(channel, post_id, when, raw):
+def parse_hiddengurus(channel: str, post_id: int, when: datetime, raw: str) -> list[TgJob]:
     """@hiddengurus: "**<Title>**", "🏢 Компания:", "💰 ЗП:", "🌍 Формат:", "📩 Отклик: @…".
 
     Posts without a "Компания:" (company) line (articles about finance etc.) are skipped.
@@ -553,7 +567,7 @@ def parse_hiddengurus(channel, post_id, when, raw):
     )]
 
 
-def parse_opento(channel, post_id, when, raw):
+def parse_opento(channel: str, post_id: int, when: datetime, raw: str) -> list[TgJob]:
     """@opento_dev: "**<Title> / <Company>**", the next line is the location (and salary).
 
     A digest is several such pairs in one post, each with a link to wantapply.com.
@@ -584,7 +598,7 @@ def parse_opento(channel, post_id, when, raw):
 
 
 
-PARSERS = {
+PARSERS: dict[str, Parser] = {
     "youritjob": parse_youritjob, "af_job_board": parse_af_job_board, "JobOfferInside": parse_offer_inside,
     "job_python": parse_job_python, "pythonrabota": parse_pythonrabota, "habr_career": parse_habr_digest,
     "career_sports": parse_career_sports,
@@ -598,10 +612,10 @@ PARSERS = {
 SHORT_POST_CHANNELS = {"af_job_board", "choicy_work", "JobOfferInside", "habr_career"}  # posts lack the full text
 # channels where vacancies are reposts from company channels: forwarded posts are not skipped
 FORWARDS_OK_CHANNELS = {"zarubezhom_jobs"}
-SALARY_POSTS: list = []  # all parsed posts with a stated salary — the base for range estimates
+SALARY_POSTS: list[TgJob] = []  # all parsed posts with a stated salary — the base for range estimates
 
 
-def classify(job):
+def classify(job: TgJob) -> bool:
     """Sets the label; False — the vacancy is not shown."""
     if not filters.role_ok(job.title, job.text) or c.TG_EXCLUDE_RX.search(job.title):
         return False
@@ -612,7 +626,7 @@ def classify(job):
     if not c.PYTHON_RX.search(job.title):
         other = next((name for name, rx in c.TITLE_LANGS.items() if rx.search(job.title)), "")
         if other:
-            job.marks.append(f"⚠️ Python not primary language ({other})")
+            job.marks.append(Mark.PYTHON_NOT_PRIMARY.detail(other))
     lang_marks, job.lang_required = language.analyze(job.title, job.text)
     job.marks += lang_marks
     if company_key(job.company) in geo.rules().referral_companies:
@@ -644,7 +658,7 @@ def classify(job):
     return True
 
 
-def _check_aggregator_link(http: HttpClient, job):
+def _check_aggregator_link(http: HttpClient, job: TgJob) -> None:
     job.marks.append("⚠️ via an aggregator — check that the vacancy is still open")
     try:
         status = http.get(job.url).status_code
@@ -655,11 +669,11 @@ def _check_aggregator_link(http: HttpClient, job):
     job.marks.append("link opens" if status == 200 else f"❌ link does not open (HTTP {status})")
 
 
-def collect(http: HttpClient):
+def collect(http: HttpClient) -> tuple[list[TgJob], list[str]]:
     """-> (vacancies, list of channels that could not be read)."""
     cutoff = datetime.now(UTC) - timedelta(days=settings.get().telegram.max_age_days)
-    jobs: dict = {}
-    failed = []
+    jobs: dict[tuple[str, str], TgJob] = {}
+    failed: list[str] = []
     for channel in settings.get().telegram.channels:
         if progress.skip_requested():  # the "Skip" button: the channels already read go on
             break
@@ -696,7 +710,7 @@ def collect(http: HttpClient):
                 found += 1
                 # the same vacancy in different posts/channels — keep the freshest
                 key = (company_key(job.company), re.sub(r"[^a-zа-яё0-9]", "", job.title.lower()))
-                if key not in jobs or job.posted > jobs[key].posted:
+                if key not in jobs or (job.posted or _NEVER) > (jobs[key].posted or _NEVER):
                     jobs[key] = job
         log.info("telegram @%s: posts in %d days — %d, matching vacancies — %d",
                  channel, settings.get().telegram.max_age_days, len(posts), found)

@@ -39,10 +39,11 @@ after `pytest`, `git status` is clean.
 | `tests/test_sources.py` | Parsing fin.dev (JSON-LD), career pages (the `links` setting, the title from `aria-label`), Teamtailor RSS — on saved pages from `tests/fixtures/`; `[manual_jobs]` entries with `company` / `location`; `Http` and `FakeHttp` fit the `HttpClient` protocol |
 | `tests/test_filters.py` | Selection by role, employment type and the presence of a link |
 | `tests/test_verify.py` | Full-text checks: on-site, country binding, JVM, Russia-only remote, AI trainer; 7+ and 8+ years are a penalty, not hiding; manual check |
+| `tests/test_reasons.py` | Reason codes: every code has a group, every reject in the code passes `Reject.X` (by AST), the group and the order in "Rejected" go by the code, not by the text; marks with a detail (`Mark.detail`) |
 | `tests/test_geo_salary.py` | Relocation and remote within a country (Georgia the country vs the US state, excluded countries, residents only, "remote from anywhere"); salary ranges ("4.5–5.5k EUR", yearly, hourly); grade |
 | `tests/test_ats.py` | Greenhouse, Lever, Ashby, Workable, Recruitee, Breezy, Rippling responses; board discovery, empty board, Lever EU, Teamtailor on its own domain, "board gone / moved", saving `ats_mapping.json` without overwriting other edits; vacancy text from BambooHR / Rippling / Breezy pages (limit, broken JSON-LD) |
 | `tests/test_freehire.py` | API record → vacancy (utm, salary, preview), prefilter (role, experience, `part_time`), relocation from freehire's markup |
-| `tests/test_telegram.py` | Posts of every channel format (markup as on t.me), telegra.ph, reading a channel page, labels and filtering (relocation, hybrid, remote in another country); going through channels: a failing channel, forwarded and broken posts, duplicates, the aggregator link |
+| `tests/test_telegram.py` | Posts of every channel format (markup as on t.me), telegra.ph, reading a channel page (also one with no parsed dates), labels and filtering (relocation, hybrid, remote in another country); going through channels: a failing channel, forwarded and broken posts, duplicates, the aggregator link |
 | `tests/test_cv_profile.py` | Profile, the CV header: contacts is split and joined back in the previous order, an edit does not touch the rest of `cv/base.toml` (byte for byte, CRLF and LF), bad input does not write the file, the first save creates `base.toml` from the example |
 | `tests/test_cv_base.py` | Profile, Summary and experience through tomlkit: a save without changes does not change the file, an edit and a revert return it byte for byte, the comment before the next section does not move under a new or deleted item, extra is kept, an edit shows up in the built CV; education, languages, publications (an empty thesis and empty publications leave no lines); topic hints from the text; two threads saving different sections at once keep both edits |
 | `tests/test_cvgen_report.py` | A CV for a vacancy (headline for the title, one-page version, HTML); the report: sections and staffing in the appendix |
@@ -162,10 +163,12 @@ updated Python dependencies and a monthly one for GitHub Actions; CI checks each
 
 mypy checks `jobhunter`, `web`, `main.py`, `cvgen.py`, `tests/conftest.py` and `.claude/hooks`, including the bodies
 of unannotated functions (`check_untyped_defs`); the settings are in `[tool.mypy]` in `pyproject.toml`. The key
-modules — `jobhunter/http.py`, `models.py`, `stack.py`, `industry.py`, `companies.py` and all of `web/` — run in strict
-mode (`[[tool.mypy.overrides]]`): every function is annotated (`disallow_untyped_defs`, `disallow_incomplete_defs`),
+modules — `jobhunter/http.py`, `models.py`, `stack.py`, `industry.py`, `companies.py`, the selection rules `filters.py`,
+`verify.py`, `geo.py`, `reasons.py`, the score `relevance.py`, Telegram channels `telegram.py`, ATS boards `ats.py`
+and all of `web/` — run in strict mode (`[[tool.mypy.overrides]]`): every function is annotated (`disallow_untyped_defs`, `disallow_incomplete_defs`),
 `dict` / `list` carry element types (`disallow_any_generics`), and no `Any` is returned from a function with a concrete
-return type (`warn_return_any`). In `web/app.py`, endpoints without a response model of their own set
+return type (`warn_return_any`). A vacancy checked by `verify.check` and scored by `relevance.Profile` is described
+by the `models.Checked` protocol: both `Job` and `telegram.TgJob` match it. In `web/app.py`, endpoints without a response model of their own set
 `response_model=None`: otherwise FastAPI would make the return annotation the response model and start validating
 the response. CI runs on Linux, so
 platform-dependent code (`subprocess.CREATE_NEW_PROCESS_GROUP` exists only on Windows) is checked locally with:
