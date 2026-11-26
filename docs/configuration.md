@@ -17,6 +17,7 @@
 | File | What is inside |
 |---|---|
 | `CLAUDE.md`, `.claude/` | Claude Code setup: rules, skills (`/new-source`, `/prep-commit`) and hooks (`.claude/settings.json`, `.claude/hooks/`) — see [claude-code.md](claude-code.md) |
+| `requirements-lock.in`, `requirements-lock.txt` | Exact versions of all dependencies — CI installs them; `pip-compile` builds the `.txt` from the `.in` |
 | `.github/workflows/` | CI (`ci.yml`) and rebuilding `RELEASE_NOTES.md` after a push to main (`release-notes.yml`) |
 | `RELEASE_NOTES.md` | What changed and when — built automatically, not edited by hand |
 | `settings.toml` | Almost everything: home country, locations and relocation, freehire queries, sources, Telegram, `[manual_jobs]`, mail company aliases, career pages, thresholds |
