@@ -120,6 +120,17 @@ def test_report_sections():
     assert "Backend Engineer" in md
 
 
+def test_appendix_job_without_url():
+    """The outsourcing and local-language appendices mix Job and TgJob. A Job has no post_url, so a site
+    vacancy without a url crashed the whole report with AttributeError on `j.url or j.post_url`."""
+    jobs = [job("Senior Python Developer"), job("Python Engineer", "Globex", staffing="blacklist"),
+            job("Backend Engineer", "Beta", lang_required=True)]
+    for j in jobs[1:]:
+        j.url = ""
+    md = report.render(date(2026, 11, 12), jobs, dict(STATS))
+    assert "Globex" in md and "Beta" in md
+
+
 def test_html_report_renders():
     page = html_report.render(date(2026, 11, 12), [job("Senior Python Developer")], dict(STATS))
     assert "<html" in page.lower() and "Senior Python Developer" in page
