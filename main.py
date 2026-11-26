@@ -34,6 +34,7 @@ from jobhunter.applications_report import StatusIndex
 from jobhunter.ats import PLATFORMS, AtsClient
 from jobhunter.companies import load_companies
 from jobhunter.cv_match import CvProfile
+from jobhunter.fsutil import atomic_write_text
 from jobhunter.http import Http, cancel as http_cancel
 from jobhunter.models import norm_name
 from jobhunter.relevance import Profile
@@ -134,7 +135,7 @@ def collect(args, companies, http, ats, career_pages=()):
             ats.save()
             for name, entry in results.items():
                 entry.update((ats.mapping.get(name) or {}) if entry["kind"] == "ats" else {})
-            SOURCES_FILE.write_text(json.dumps(results, ensure_ascii=False, indent=1), encoding="utf-8")
+            atomic_write_text(SOURCES_FILE, json.dumps(results, ensure_ascii=False, indent=1))
     return jobs
 
 
@@ -168,14 +169,20 @@ def save_freehire_queries(fh, settings: dict, jobs: list) -> None:
         "total": fh.totals.get(q["name"]), "fetched": got.get(q["name"], 0),
         "skipped": q["name"] not in fh.query_params,  # for example, relocation is turned off
     } for q in settings.get("queries", [])]
-    FREEHIRE_FILE.write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
+    atomic_write_text(FREEHIRE_FILE, json.dumps(rows, ensure_ascii=False, indent=1))
 
 
 def load_seen() -> dict[str, str]:
     """Vacancy key -> date (ISO) when the script first saw it."""
-    if config.SEEN_FILE.exists():
+    try:
         return json.loads(config.SEEN_FILE.read_text(encoding="utf-8"))
-    return {}
+    except FileNotFoundError:
+        return {}
+    except ValueError:
+        # a broken file (a write cut off before atomic writes, a hand edit) must not fail the run:
+        # every vacancy just becomes new
+        log.warning("%s is broken — starting over", config.SEEN_FILE)
+        return {}
 
 
 def is_fresh(job, seen: dict[str, str], today: date, max_age_days: int) -> bool:
@@ -196,7 +203,7 @@ def mark_first_seen(jobs, tg_jobs, today, seen):
     for job, key in keyed:
         job.is_new_today = seen.setdefault(key, today.isoformat()) == today.isoformat()
     config.SEEN_FILE.parent.mkdir(exist_ok=True)
-    config.SEEN_FILE.write_text(json.dumps(seen, indent=0, sort_keys=True), encoding="utf-8")
+    atomic_write_text(config.SEEN_FILE, json.dumps(seen, indent=0, sort_keys=True))
 
 
 def _section_rank(job):
@@ -740,9 +747,9 @@ def _stage_reports(ctx: RunContext, stats: dict) -> None:
          "industries": j.industries, "remote": getattr(j, "remote", None), "salary": getattr(j, "salary", "")}
         for j in ctx.reported
     ], ensure_ascii=False)
-    (config.ROOT / "state" / "jobs_latest.json").write_text(jobs_json, encoding="utf-8")
+    atomic_write_text(config.ROOT / "state" / "jobs_latest.json", jobs_json)
     config.JOBS_ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
-    (config.JOBS_ARCHIVE_DIR / f"{today.isoformat()}.json").write_text(jobs_json, encoding="utf-8")
+    atomic_write_text(config.JOBS_ARCHIVE_DIR / f"{today.isoformat()}.json", jobs_json)
     progress.count(rejected=len(ctx.rejected), new_today=sum(j.is_new_today for j in ctx.reported))
     log.info("Done: %d new of %d matching -> %s and %s", len(fresh), len(ctx.matched), out, html_out)
 

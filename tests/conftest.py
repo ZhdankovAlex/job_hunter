@@ -5,6 +5,7 @@ the example files from the repo are put in place before any import (no personal 
 settings.example.toml with test values (home country, relocation countries), see _test_settings().
 """
 import os
+import socket
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -17,6 +18,32 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+_LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+_real_connect = socket.socket.connect
+_real_connect_ex = socket.socket.connect_ex
+
+
+def _guarded_connect(self: socket.socket, address: Any) -> None:
+    """Network in tests goes only through FakeHttp. Loopback is allowed: on Windows asyncio builds
+    a socketpair by connecting to 127.0.0.1, without it no event loop starts."""
+    host = address[0] if isinstance(address, tuple) else None
+    if host is not None and host not in _LOOPBACK:
+        raise RuntimeError(f"test went to the network: {address!r} — use FakeHttp")
+    _real_connect(self, address)
+
+
+def _guarded_connect_ex(self: socket.socket, address: Any) -> int:
+    host = address[0] if isinstance(address, tuple) else None
+    if host is not None and host not in _LOOPBACK:
+        raise RuntimeError(f"test went to the network: {address!r} — use FakeHttp")
+    return _real_connect_ex(self, address)
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(socket.socket, "connect", _guarded_connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", _guarded_connect_ex)
 
 
 
@@ -126,3 +153,26 @@ def now():
 def at(now):
     """at(-3) — three days before the test's "now"."""
     return lambda days, hours=0: now + timedelta(days=days, hours=hours)
+
+
+def fake_resolve(host: str) -> list[str]:
+    """DNS in tests: an IP literal is itself, localhost — 127.0.0.1, *.lan — a LAN address, the rest — public."""
+    import ipaddress
+
+    try:
+        return [str(ipaddress.ip_address(host.strip("[]")))]
+    except ValueError:
+        pass
+    if host == "localhost":
+        return ["127.0.0.1", "::1"]
+    if host.endswith(".lan"):
+        return ["192.168.1.20"]
+    return ["93.184.215.14"]
+
+
+@pytest.fixture(autouse=True)
+def no_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The "address is not in the local network" check (http.check_public_url) resolves the host — no DNS in tests."""
+    from jobhunter import http
+
+    monkeypatch.setattr(http, "_resolve", fake_resolve)

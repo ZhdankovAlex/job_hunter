@@ -64,3 +64,60 @@ def test_empty_state_without_data(client, path):
     """No data — the ui.empty state with a hint on what to do, not a bare line."""
     http, _, _ = client
     assert '<div class="empty">' in http.get(path).text
+
+
+def test_foreign_host_rejected(client):
+    """DNS rebinding: evil.test resolves to 127.0.0.1 and the browser sends Host: evil.test — rejected."""
+    c, _, _ = client
+    assert c.get("/progress", headers={"host": "evil.test"}).status_code == 400
+    assert c.get("/progress", headers={"host": "127.0.0.1:8765"}).status_code == 200
+
+
+def test_cross_site_post_rejected(client):
+    c, _, _ = client
+    r = c.post("/api/runs/current/stop", headers={"origin": "https://evil.test"})
+    assert r.status_code == 403
+    r = c.post("/api/runs/current/stop", headers={"sec-fetch-site": "cross-site"})
+    assert r.status_code == 403
+
+
+def test_same_origin_post_passes(client):
+    """Own Origin reaches the handler: no run going — 409."""
+    c, _, _ = client
+    headers = {"host": "127.0.0.1:8765", "origin": "http://127.0.0.1:8765", "sec-fetch-site": "same-origin"}
+    assert c.post("/api/runs/current/stop", headers=headers).status_code == 409
+
+
+@pytest.mark.parametrize("url", ["foo", "ftp://example.com/job", "https://", "http://[bad"])
+def test_bad_vacancy_url_is_422_not_500(client, url):
+    """A link without http(s) never reaches Http: 422 with a clear message (was a 500 from requests.MissingSchema)."""
+    c, _, _ = client
+    for path in ("/api/cv", "/api/prep", "/api/cover"):
+        r = c.post(path, json={"url": url})
+        assert r.status_code == 422, (path, r.text)
+        assert "http://" in r.json()["detail"]
+    page = c.get("/prep", params={"url": url})
+    assert page.status_code == 200 and "http://" in page.text
+
+
+@pytest.mark.parametrize("url", ["http://127.0.0.1:8765/api/runs", "http://169.254.169.254/latest/meta-data",
+                                 "http://192.168.1.1/", "http://router.lan/", "http://[::1]/", "http://0.0.0.0/"])
+def test_vacancy_url_in_local_network_is_422(client, monkeypatch, url):
+    """A link to this computer or the LAN is not read — 422 before any request (DNS is faked in conftest)."""
+    c, web, _ = client
+    fetched = []
+    monkeypatch.setattr(web.vacancy_lookup, "fetch", lambda u, http=None: fetched.append(u))
+    for path in ("/api/cv", "/api/prep", "/api/cover"):
+        r = c.post(path, json={"url": url})
+        assert r.status_code == 422, (path, r.text)
+        assert "local network" in r.json()["detail"]
+    page = c.get("/prep", params={"url": url})
+    assert page.status_code == 200 and "local network" in page.text
+    assert fetched == []
+
+
+def test_vacancy_lookup_fetch_is_public_only(monkeypatch):
+    from jobhunter import vacancy_lookup
+
+    with pytest.raises(vacancy_lookup.VacancyNotFound, match="local network"):
+        vacancy_lookup.fetch("http://10.0.0.1/job")

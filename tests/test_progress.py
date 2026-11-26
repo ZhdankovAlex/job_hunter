@@ -249,3 +249,35 @@ def test_rotate_errors_log(tmp_path, monkeypatch):
     monkeypatch.delenv(progress.CONTINUE_RUN_ENV)
     progress.rotate_errors_log()
     assert not log.exists() and prev.read_text(encoding="utf-8") == "previous run"
+
+
+def test_snapshot_records_process_start_time(state):
+    """Process start time next to pid: later it tells our run apart from another process with the same pid."""
+    snap = progress.Pipeline("main", STAGES).snapshot()
+    started = progress._process_started(os.getpid())
+    assert started is not None
+    assert snap["pid_started"] == started
+
+
+def test_alive_rejects_reused_pid(state):
+    """The pid is alive but the process started at another time — someone else's process, no run going."""
+    snap = progress.Pipeline("main", STAGES).snapshot()
+    assert progress.is_alive(snap) is True
+    assert progress.is_alive({**snap, "pid_started": snap["pid_started"] - 3600}) is False
+    legacy = {k: v for k, v in snap.items() if k != "pid_started"}  # progress.json from older versions
+    assert progress.is_alive(legacy) is True
+
+
+def test_mark_stopped(state):
+    """"Stop run": status stopped, the running stage too; another pid leaves the file alone."""
+    p = progress.Pipeline("main", STAGES)
+    progress.start("fetch")
+    pid = p.snapshot()["pid"]
+    progress.mark_stopped(pid + 1)
+    assert progress.read()["status"] == progress.RUNNING
+    progress.mark_stopped(pid)
+    data = progress.read()
+    assert data["status"] == progress.STOPPED
+    assert progress.is_alive(data) is False
+    assert all(s["status"] != progress.RUNNING for s in data["stages"])
+    assert "stopped" in progress.render(data)

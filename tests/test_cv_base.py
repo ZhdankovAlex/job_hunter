@@ -173,3 +173,42 @@ def test_other_sections_keep_rest_of_file(base):
 
     cv_base.save_other(other["education"], other["languages"], other["publications"])
     assert cv_base.read_other() == other
+
+
+def test_parallel_saves_of_different_sections_keep_both(base, monkeypatch):
+    """Two tabs save different sections at once (FastAPI runs PUT in a thread pool): both edits end up in the file.
+    A delay before writing: without the lock both would read the old file and the second write would wipe the first."""
+    import threading
+    import time
+
+    from jobhunter import cv_profile
+
+    real_write = cv_base.write_text
+
+    def slow_write(*args, **kwargs):
+        time.sleep(0.3)
+        return real_write(*args, **kwargs)
+
+    monkeypatch.setattr(cv_base, "write_text", slow_write)
+    summary, profile = cv_base.read_summary(), cv_profile.read()
+    errors: list[BaseException] = []
+
+    def run(fn):
+        try:
+            fn()
+        except BaseException as e:  # otherwise an error in the thread is lost
+            errors.append(e)
+
+    threads = [
+        threading.Thread(target=run, args=(lambda: cv_base.save_summary(
+            "New intro", summary["closing"], summary["max_achievements"], summary["achievements"]),)),
+        threading.Thread(target=run, args=(lambda: cv_profile.save(
+            "New Name", profile["email"], profile["phone"], profile["location"], profile["links"]),)),
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert not errors
+    assert cv_base.read_summary()["intro"] == "New intro"
+    assert cv_profile.read()["name"] == "New Name"

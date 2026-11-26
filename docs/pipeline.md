@@ -89,7 +89,10 @@ When run by a scheduler or with output redirected to a file, the line is not dra
 Redrawn every second while the run is going; `--once` prints one snapshot. Icons: `✔` done, `▶` running,
 `·` ahead, `–` skipped (for example `--no-telegram`), `✖` failed. Below are the run counters (collected,
 passed filters, new, rejected) and the last 5 warnings. A run whose process ended without finishing
-(window closed, process killed) is shown as "interrupted".
+(window closed, process killed) is shown as "interrupted"; one stopped by the button in the web UI — as
+"stopped" (`status: "stopped"`). A run counts as alive only if the process with `pid` is alive and started at
+the time recorded in `pid_started` (within `PID_START_TOLERANCE`, 2 s): after a run ends the OS hands its pid
+to other processes.
 
 ## Run speed
 
@@ -164,7 +167,7 @@ after a run they open instantly ([web-ui.md](web-ui.md#how-pages-are-built)).
 
 ```json
 {
- "script": "main", "pid": 1234, "status": "running",
+ "script": "main", "pid": 1234, "pid_started": 1762340473.2, "status": "running",
  "started": "2026-11-05T12:01:13", "updated": "2026-11-05T12:01:17", "elapsed": 4,
  "stage": "sources", "eta_stage": 344, "last_item": "GitLab",
  "active": [{"item": "PostHog", "seconds": 4}],

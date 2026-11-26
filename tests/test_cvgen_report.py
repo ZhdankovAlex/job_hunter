@@ -69,7 +69,7 @@ def test_topic_regexes_linear_on_long_text(text):
     import time
     start = time.perf_counter()
     cvgen.Vacancy("x", text)
-    assert time.perf_counter() - start < 1
+    assert time.perf_counter() - start < 5  # the quadratic version took 9–18 s; headroom for --cov
 
 
 @pytest.mark.parametrize("text", [

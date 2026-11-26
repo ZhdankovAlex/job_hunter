@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from jobhunter import config
+from jobhunter.fsutil import atomic_write_text
 
 WEB_CACHE_FILE = config.ROOT / "state" / "web_cache.json"
 _cache_lock = threading.Lock()
@@ -41,7 +42,7 @@ def put(name: str, key: list[Any], value: Any) -> None:
     with _cache_lock:
         _memory_cache[name] = {"key": key, "value": value}
         WEB_CACHE_FILE.parent.mkdir(exist_ok=True)
-        WEB_CACHE_FILE.write_text(json.dumps(_memory_cache, ensure_ascii=False, default=str), encoding="utf-8")
+        atomic_write_text(WEB_CACHE_FILE, json.dumps(_memory_cache, ensure_ascii=False, default=str))
 
 
 def mtime(path: Path) -> float:

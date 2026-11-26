@@ -58,6 +58,10 @@ def no_writes_outside(tmp_path, monkeypatch):
     monkeypatch.setattr(pathlib.Path, "write_text", write_text)
     monkeypatch.setattr(pathlib.Path, "open", path_open)
     monkeypatch.setattr(builtins, "open", open_)
+    # atomic writes go through mkstemp + os.replace, bypassing open — guard them too
+    from jobhunter import fsutil
+    real_atomic = fsutil.atomic_write_bytes
+    monkeypatch.setattr(fsutil, "atomic_write_bytes", lambda path, data: (guard(path), real_atomic(path, data))[1])
 
 
 @pytest.fixture

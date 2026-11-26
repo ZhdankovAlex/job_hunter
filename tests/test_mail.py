@@ -57,7 +57,7 @@ def test_classify_long_letter_is_fast():
     body = ("word " * 40_000) + "Unfortunately, we will not be moving forward."
     start = time.perf_counter()
     assert mail.classify("Update", body) == mail.REJECTED
-    assert time.perf_counter() - start < 1
+    assert time.perf_counter() - start < 5  # the quadratic version took 13 s; headroom for --cov
 
 
 def test_company_from_manual_sender_mapping(monkeypatch):

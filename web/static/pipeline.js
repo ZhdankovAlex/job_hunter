@@ -7,7 +7,7 @@ const COUNTER_NAMES = {
   rejected: 'rejected with a reason', new_today: 'new today', companies: 'companies in applications',
   unknown_letters: 'letters without a company',
 };
-const STATUS_TEXT = { running: 'running', done: 'done', failed: 'failed', interrupted: 'interrupted' };
+const STATUS_TEXT = { running: 'running', done: 'done', failed: 'failed', interrupted: 'interrupted', stopped: 'stopped' };
 let feedKind = 'all';
 document.querySelectorAll('.feed-filter button').forEach(b => { b.dataset.label = b.textContent; });
 let last = null;
@@ -36,7 +36,7 @@ function render(d) {
   $('script').textContent = `${d.script}.py · ${STATUS_TEXT[d.status] || d.status}`;
   const stage = d.stages.find(s => s.key === d.stage);
   $('headline').textContent = running && stage ? stage.title
-    : d.status === 'done' ? 'Run finished' : d.status === 'failed' ? 'Run failed' : 'Run interrupted';
+    : d.status === 'done' ? 'Run finished' : d.status === 'failed' ? 'Run failed' : d.status === 'stopped' ? 'Run stopped' : 'Run interrupted';
   const queue = d.queue && d.queue.length > 1 ? ` · next: ${d.queue.slice(1).join(', ')}` : '';
   $('subline').textContent = `started ${d.started.slice(11, 16)} · elapsed ${dur(d.elapsed)}${queue}`;
 

@@ -26,9 +26,11 @@ import time
 import traceback
 from collections.abc import Collection
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from . import config
+from .fsutil import atomic_write_text
 
 PROGRESS_FILE = config.ROOT / "state" / "progress.json"
 WRITE_EVERY = 0.5  # seconds between file writes and redraws of the line
@@ -61,6 +63,8 @@ CONTROL_EVERY = 1.0  # seconds between reads of CONTROL_FILE
 BAR_WIDTH = 24
 
 PENDING, RUNNING, DONE, FAILED, SKIPPED = "pending", "running", "done", "failed", "skipped"
+STOPPED = "stopped"  # run status after "Stop run" in the web UI (stages never have it)
+PID_START_TOLERANCE = 2.0  # seconds: process start time from the OS and from progress.json match within this
 _ICONS = {PENDING: "·", RUNNING: "▶", DONE: "✔", FAILED: "✖", SKIPPED: "–"}
 
 _current: Pipeline | None = None
@@ -275,7 +279,7 @@ class Pipeline:
                 eta = int(spent / stage["done"] * (stage["total"] - stage["done"]))
             now = time.time()
             return {
-                "script": self.script, "pid": os.getpid(), "status": self.status,
+                "script": self.script, "pid": os.getpid(), "pid_started": _own_started(), "status": self.status,
                 "started": datetime.fromtimestamp(self.started).isoformat(timespec="seconds"),
                 "updated": _now(), "elapsed": int(now - self.started),
                 "stage": stage["key"] if stage else "", "eta_stage": eta,
@@ -333,7 +337,8 @@ def status_line(data: dict) -> str:
 
 def render(data: dict) -> str:
     """Multi-line pipeline view for `python -m jobhunter.progress`."""
-    lines = [f"{data['script']}.py — {data['status']} · started {data['started'][11:]} · "
+    status = "stopped from the web UI" if data["status"] == STOPPED else data["status"]
+    lines = [f"{data['script']}.py — {status} · started {data['started'][11:]} · "
              f"elapsed {_duration(data['elapsed'])} · updated {data['updated'][11:]}", ""]
     for n, s in enumerate(data["stages"], 1):
         line = f" {_ICONS[s['status']]} {n:>2}. {s['title']}"
@@ -525,8 +530,67 @@ def eta_total(data: dict) -> int | None:
 
 
 def is_alive(data: dict) -> bool:
-    """Whether the run from progress.json is really going on (the process is alive)."""
-    return data.get("status") == RUNNING and _alive(data["pid"])
+    """Whether the run from progress.json is really going on: the process is alive and it is the same process.
+
+    After a run ends the OS hands its pid to other processes — so the start time (pid_started) is checked too.
+    progress.json from older versions has none — then by pid only.
+    """
+    if data.get("status") != RUNNING or not _alive(data["pid"]):
+        return False
+    recorded = data.get("pid_started")
+    if recorded is None:
+        return True
+    actual = _process_started(data["pid"])
+    return actual is None or abs(actual - recorded) <= PID_START_TOLERANCE
+
+
+def mark_stopped(pid: int) -> None:
+    """After "Stop run": status stopped instead of running with a dead pid. Leaves someone else's run alone."""
+    data = read()
+    if not data or data.get("pid") != pid or data.get("status") != RUNNING:
+        return
+    data["status"] = STOPPED
+    data["updated"] = _now()
+    for s in data.get("stages", []):
+        if s.get("status") == RUNNING:
+            s["status"] = SKIPPED
+            s["finished"] = data["updated"]
+    with contextlib.suppress(OSError):
+        atomic_write_text(PROGRESS_FILE, json.dumps(data, ensure_ascii=False, indent=1))
+
+
+_own_start: list[float | None] = []  # cached start time of our own process: it never changes
+
+
+def _own_started() -> float | None:
+    if not _own_start:
+        _own_start.append(_process_started(os.getpid()))
+    return _own_start[0]
+
+
+def _process_started(pid: int) -> float | None:
+    """Process start time (Unix time), or None if the OS does not report it."""
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return None
+        times = [wintypes.FILETIME() for _ in range(4)]  # creation, exit, kernel, user
+        ok = ctypes.windll.kernel32.GetProcessTimes(handle, *(ctypes.byref(t) for t in times))
+        ctypes.windll.kernel32.CloseHandle(handle)
+        if not ok:
+            return None
+        ticks = (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime  # 100 ns since 1601-01-01
+        return ticks / 10_000_000 - 11_644_473_600
+    try:  # Linux: field 22 of /proc/<pid>/stat — clock ticks since boot; btime — boot time
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
+        start_ticks = int(stat.rsplit(")", 1)[1].split()[19])
+        btime = next(int(line.split()[1]) for line in Path("/proc/stat").read_text(encoding="ascii").splitlines() if line.startswith("btime"))
+        return btime + start_ticks / os.sysconf("SC_CLK_TCK")
+    except (OSError, ValueError, IndexError, StopIteration):
+        return None  # macOS and others — pid check only
 
 
 def read() -> dict | None:

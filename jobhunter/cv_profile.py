@@ -108,6 +108,7 @@ def _clean(value: str) -> str:
     return " ".join(value.split())
 
 
+@cv_base.locked
 def save(name: str, email: str, phone: str, location: str, links: list[dict[str, str]]) -> dict[str, Any]:
     """Writes the name, contacts and links to the CV base and returns the profile read back.
 

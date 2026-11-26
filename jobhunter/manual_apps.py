@@ -12,6 +12,7 @@ import tomllib
 from datetime import datetime
 
 from . import config
+from .fsutil import atomic_write_text
 
 KINDS = {"applied": "Applied", "interview": "Stage / interview", "rejected": "Rejected", "declined": "Declined",
          "offer": "Offer", "other": "Note"}
@@ -64,7 +65,7 @@ def add_event(company: str, kind: str, note: str = "", url: str = "", source: st
         text.encode("utf-8")
     except UnicodeEncodeError as e:
         raise ValueError("the text has broken characters (lone UTF-16 surrogates)") from e
-    path.write_text(text, encoding="utf-8")
+    atomic_write_text(path, text)
     return {"company": company, "kind": kind, "note": note.strip(), "url": url.strip(), "date": when.isoformat()}
 
 

@@ -15,6 +15,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
@@ -39,6 +40,7 @@ from jobhunter import (
     relevance,
     vacancy_lookup,
 )
+from jobhunter.http import PrivateAddress, check_public_url
 from jobhunter.models import norm_name
 from web import cache
 from web.models import (
@@ -123,6 +125,39 @@ REPORTS.mkdir(exist_ok=True)
 # reports refer to CVs as ../cv_out/…, so both folders sit side by side under /files
 app.mount("/files/reports", StaticFiles(directory=REPORTS), name="reports")
 app.mount("/files/cv_out", StaticFiles(directory=ROOT / "cv_out"), name="cv_out")
+
+
+# testserver is the Host TestClient sends (tests and schemathesis); no such name exists outside
+_ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1", "testserver"}
+_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _host_name(host: str) -> str:
+    """'127.0.0.1:8765' -> '127.0.0.1', '[::1]:8765' -> '::1'; a malformed Host -> ''."""
+    try:
+        return (urlsplit("//" + host).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+@app.middleware("http")
+async def local_only(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    """Protects the local server from DNS rebinding and CSRF.
+
+    A foreign Host (evil.test resolving to 127.0.0.1) — 400. A state-changing request from another site's
+    page — 403: Origin differs from our Host, or Sec-Fetch-Site is not same-origin/none. Requests without
+    these headers (curl, tests) pass: a browser always sends them, so this is not a browser.
+    """
+    host = request.headers.get("host", "")
+    if _host_name(host) not in _ALLOWED_HOSTS:
+        return JSONResponse({"detail": "Foreign Host: the server is for local access only"}, status_code=400)
+    if request.method in _UNSAFE_METHODS:
+        origin = request.headers.get("origin")
+        if origin is not None and urlsplit(origin).netloc.lower() != host.lower():
+            return JSONResponse({"detail": "Cross-site request rejected"}, status_code=403)
+        if request.headers.get("sec-fetch-site", "same-origin") not in {"same-origin", "none"}:
+            return JSONResponse({"detail": "Cross-site request rejected"}, status_code=403)
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -498,8 +533,19 @@ def resolve_job(body: CvRequest) -> dict[str, Any]:
         return {"url": body.url, "company": body.company, "title": body.title, "text": body.text, "found_in": "text"}
     if not body.url.strip():
         raise HTTPException(422, "A link to the vacancy or its text is required")
+    try:
+        parts = urlsplit(body.url.strip())
+        ok = parts.scheme in ("http", "https") and bool(parts.hostname)
+    except ValueError:  # 'http://[bad' — urlsplit raises by itself
+        ok = False
+    if not ok:
+        raise HTTPException(422, "The vacancy link must start with http:// or https://")
     job = vacancy_lookup.archived(body.url, body.date)
     if job is None:
+        try:  # a page from this computer or the LAN is not read (Http checks redirects)
+            check_public_url(body.url.strip())
+        except PrivateAddress:
+            raise HTTPException(422, "The link points to this computer or the local network — such links are not read")
         try:
             job = vacancy_lookup.fetch(body.url)
         except vacancy_lookup.VacancyNotFound as e:

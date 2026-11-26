@@ -178,12 +178,13 @@ def test_fetch_saves_cache_every_100_letters(monkeypatch, files):
     monkeypatch.setattr(mail, "credentials", lambda: "creds")
     monkeypatch.setattr(mail, "Gmail", lambda creds: FakeGmail(creds, ids))
     (files / "state").mkdir()
-    real_write = type(config.MAIL_CACHE_FILE).write_text
+    real_write = mail.atomic_write_text
 
-    def spy(self, text, **kw):
-        writes.append(len(json.loads(text)))
-        return real_write(self, text, **kw)
-    monkeypatch.setattr(type(config.MAIL_CACHE_FILE), "write_text", spy)
+    def spy(path, text):
+        if path == config.MAIL_CACHE_FILE:
+            writes.append(len(json.loads(text)))
+        return real_write(path, text)
+    monkeypatch.setattr(mail, "atomic_write_text", spy)
     messages, _ = mail.fetch_messages()
     assert len(messages) == 150
     assert writes == [100, 150]  # intermediate saves — an interrupted sync does not start from scratch

@@ -102,8 +102,13 @@ All keys are commented in `settings.example.toml`.
 | `interview_prep.py`, `market_check.py` | Interview preparation, CV vs market |
 | `report.py`, `html_report.py` | Markdown and HTML reports |
 | `models.py` | `Job`, `Company`, date and HTML parsing |
+| `fsutil.py` | Atomic writes of state files (a temporary file + `os.replace`) |
 
 ## Data between runs (`state/`, in `.gitignore`)
+
+State files and `cv/base.toml` are written atomically (`jobhunter/fsutil.py`: a temporary file next to it and
+`os.replace`): stopping or crashing mid-write leaves the previous version, not an empty file. A broken
+`seen.json` or `ats_mapping.json` does not fail the run: a warning in the log and empty state.
 
 | File | What it keeps |
 |---|---|
