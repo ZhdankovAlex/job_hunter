@@ -356,6 +356,7 @@ def companies_report() -> dict[str, Any]:
 
     Recomputed only when the archive files, companies.txt, applications (the mail cache,
     applications_manual.toml) or the industry rules change; board links from ats_mapping.json — on every request.
+    The recompute runs in the background (cache.cached(stale_ok=True)); until it ends the page shows the previous summary.
     """
     files = sorted(config.JOBS_ARCHIVE_DIR.glob("*.json"))
     # a run rewrites ats_mapping.json all the time — board links are added per request, not cached
@@ -389,7 +390,8 @@ def companies_report() -> dict[str, Any]:
         return {"companies": companies, "counts": counts, "labels": industry.LABELS, "vacancies": len(unique),
                 "market": industry.market_by_industry(unique.values())}
 
-    data: dict[str, Any] = cache.cached("companies_by_industry", key, compute)
+    # a run rewrites the mail cache and the archive, and a cold recompute takes long: serve the previous summary meanwhile
+    data: dict[str, Any] = cache.cached("companies_by_industry", key, compute, stale_ok=True)
     try:
         mapping = json.loads(config.MAPPING_FILE.read_text(encoding="utf-8")) if config.MAPPING_FILE.exists() else {}
     except ValueError:  # a run is writing the file right now
