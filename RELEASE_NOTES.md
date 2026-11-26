@@ -4,6 +4,14 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-26
 
+### CV page: "Built CVs" updates right after a build (#41)
+
+- A new CV showed up in the list only after a page reload. Now cv.js takes the #cv-built section from a fresh /cv after a build and swaps it in: the same template, so the rows, the counter and the empty state are not duplicated in JS
+- tests/test_web.py: the #cv-built section is on the page, cv.js refreshes it after a build
+- Docs: testing.md
+
+<sub>0f7305e</sub>
+
 ### Refactor: build_markdown split by section, market advice as a rule table, golden tests (#40)
 
 - cvgen.build_markdown now only sets the order of the sections; the header comment, contacts, Summary, Skills, a workplace and Education are separate functions, and picking bullets into picks is one _explain instead of three copies. The output did not change
