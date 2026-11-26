@@ -1,0 +1,21 @@
+{
+ "empty": [],
+ "everything": [
+  "Your role is also called this, but your headline does not say so: \"Software Engineer\" (40%), \"Python Developer\" (12%). Recruiters and ATS search by role title. Fix your LinkedIn headline (people find you by it) and the base PDFs, for example: \"Senior Backend / Software Engineer | Python · PostgreSQL · …\". The \"📄 CV\" button already does this: the headline follows the vacancy title.",
+  "Frequent, but different roles: \"AI Engineer\" (20%), \"Full Stack\" (15%). No need to rename yourself. If you have related experience (for example, RAG / LLM for AI roles), you can apply to backend positions in such teams: the CV generator puts an LLM / RAG headline for AI vacancies.",
+  "In the cv/base.toml base, but not in the PDF CV: Kafka (30%) — rebuild the base CVs (cvgen.py --base …).",
+  "Gaps — often required, but missing from the CV: Go (25%). This is about experience, not wording: if you have it — add it to the base, if not — these are candidates to learn.",
+  "Partly present: AWS — S3 only (40%).",
+  "The PDF CV is longer than one page (Backend). For the Western market with 6 years of experience one page is better — the \"1 page\" button in the report and on the CV page builds it.",
+  "Words that make the CV sound like a list of duties or like AI: \"responsible for\", \"leveraged\" — replace them with a concrete action and result.",
+  "All bullets have one form: 9 of 10 start with a past-tense verb. Sameness gives away a template (and AI) — start some bullets with the result or the problem, add a couple of short ones.",
+  "Numbers in almost every bullet: Globex (6) bullets with numbers. A measurable result is strong, but numbers everywhere can look inflated: keep the weightiest, and in the rest show the scale or who uses it. (Opinions differ: some advice says \"numbers everywhere\", some \"no more than two or three per workplace\".)",
+  "Long bullets (more than 45 words): 2 — readers spend 5 seconds on them, one idea per bullet is better."
+ ],
+ "few_numbers": [
+  "Frequent, but different roles: \"AI Engineer\" (25%). No need to rename yourself. If you have related experience (for example, RAG / LLM for AI roles), you can apply to backend positions in such teams: the CV generator puts an LLM / RAG headline for AI vacancies.",
+  "Few bullets with a measurable result: 4 of 10 — where there is a result (time, volume, share), show it."
+ ],
+ "clean": [],
+ "no_bullets": []
+}

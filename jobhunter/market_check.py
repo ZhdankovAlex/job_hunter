@@ -12,6 +12,7 @@ import re
 import statistics
 import tomllib
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 
 from . import config, cv_match, settings
@@ -176,61 +177,127 @@ def analyze(day: str = "") -> dict:
 
 
 def advice(report: dict) -> list[str]:
-    """Conclusions for the page: what to fix in the CV, most useful first."""
-    out = []
-    # role names: the CV generator substitutes honest backend synonyms itself (cvgen.HEADLINE_ROLES),
-    # the rest (AI Engineer, Full Stack, Platform) is not a rename, but a different profile
-    synonyms = {"Software Engineer", "Software Developer", "Python Developer", "Python Engineer",
-                "Backend Developer", "Backend Engineer"}
-    missing = [t for t in report.get("titles", []) if not t["in_headline"] and t["share"] >= 10]
-    same_role = [t for t in missing if t["name"] in synonyms]
-    other_role = [t for t in missing if t["name"] not in synonyms]
-    if same_role:
-        top = same_role[0]
-        names = ", ".join(f'"{t["name"]}" ({t["share"]}%)' for t in same_role)
-        out.append(f"Your role is also called this, but your headline does not say so: {names}. Recruiters and ATS search "
-                   f"by role title. Fix your LinkedIn headline (people find you by it) and the base PDFs, for example: "
-                   f"\"Senior Backend / {top['name']} | Python · PostgreSQL · …\". The \"📄 CV\" button already does this: "
-                   "the headline follows the vacancy title.")
-    if other_role:
-        names = ", ".join(f'"{t["name"]}" ({t["share"]}%)' for t in other_role)
-        out.append(f"Frequent, but different roles: {names}. No need to rename yourself. If you have related experience "
-                   "(for example, RAG / LLM for AI roles), you can apply to backend positions in such teams: the CV generator "
-                   "puts an LLM / RAG headline for AI vacancies.")
-    in_base = [k for k in report.get("keywords", []) if k["in_cv"] == "base" and k["share"] >= 5]
-    if in_base:
-        out.append("In the cv/base.toml base, but not in the PDF CV: " + ", ".join(
-            f"{k['name']} ({k['share']}%)" for k in in_base) + " — rebuild the base CVs (cvgen.py --base …).")
-    gaps = [k for k in report.get("keywords", []) if not k["in_cv"] and k["share"] >= 10]
-    if gaps:
-        out.append("Gaps — often required, but missing from the CV: " + ", ".join(
-            f"{k['name']} ({k['share']}%)" for k in gaps) + ". This is about experience, not wording: if you have it — "
-            "add it to the base, if not — these are candidates to learn.")
-    partial = [k for k in report.get("keywords", []) if k["partial"] and k["share"] >= 10]
-    if partial:
-        out.append("Partly present: " + ", ".join(f"{k['name']} — {k['partial']} ({k['share']}%)" for k in partial) + ".")
+    """Conclusions for the page: what to fix in the CV, most useful first (the order is ADVICE_RULES)."""
+    return [text for rule in ADVICE_RULES if (text := rule(report))]
+
+
+# role names: the CV generator substitutes honest backend synonyms itself (cvgen.HEADLINE_ROLES),
+# the rest (AI Engineer, Full Stack, Platform) is not a rename, but a different profile
+ROLE_SYNONYMS = {"Software Engineer", "Software Developer", "Python Developer", "Python Engineer",
+                 "Backend Developer", "Backend Engineer"}
+
+
+def _missing_titles(report: dict, same_role: bool) -> list[dict]:
+    """Frequent (≥10%) vacancy titles missing from the CV headline: synonyms of your role or other roles."""
+    return [t for t in report.get("titles", [])
+            if not t["in_headline"] and t["share"] >= 10 and (t["name"] in ROLE_SYNONYMS) == same_role]
+
+
+def _titles_list(titles: list[dict]) -> str:
+    return ", ".join(f'"{t["name"]}" ({t["share"]}%)' for t in titles)
+
+
+def _keywords(report: dict, min_share: int, keep: Callable[[dict], object]) -> list[dict]:
+    return [k for k in report.get("keywords", []) if keep(k) and k["share"] >= min_share]
+
+
+def _keywords_list(keywords: list[dict]) -> str:
+    return ", ".join(f"{k['name']} ({k['share']}%)" for k in keywords)
+
+
+def _advice_same_role(report: dict) -> str | None:
+    same_role = _missing_titles(report, same_role=True)
+    if not same_role:
+        return None
+    return (f"Your role is also called this, but your headline does not say so: {_titles_list(same_role)}. Recruiters "
+            f"and ATS search by role title. Fix your LinkedIn headline (people find you by it) and the base PDFs, for "
+            f"example: \"Senior Backend / {same_role[0]['name']} | Python · PostgreSQL · …\". The \"📄 CV\" button "
+            "already does this: the headline follows the vacancy title.")
+
+
+def _advice_other_role(report: dict) -> str | None:
+    other_role = _missing_titles(report, same_role=False)
+    if not other_role:
+        return None
+    return (f"Frequent, but different roles: {_titles_list(other_role)}. No need to rename yourself. If you have "
+            "related experience (for example, RAG / LLM for AI roles), you can apply to backend positions in such "
+            "teams: the CV generator puts an LLM / RAG headline for AI vacancies.")
+
+
+def _advice_in_base(report: dict) -> str | None:
+    in_base = _keywords(report, 5, lambda k: k["in_cv"] == "base")
+    if not in_base:
+        return None
+    return (f"In the cv/base.toml base, but not in the PDF CV: {_keywords_list(in_base)} — rebuild the base CVs "
+            "(cvgen.py --base …).")
+
+
+def _advice_gaps(report: dict) -> str | None:
+    gaps = _keywords(report, 10, lambda k: not k["in_cv"])
+    if not gaps:
+        return None
+    return (f"Gaps — often required, but missing from the CV: {_keywords_list(gaps)}. This is about experience, not "
+            "wording: if you have it — add it to the base, if not — these are candidates to learn.")
+
+
+def _advice_partial(report: dict) -> str | None:
+    partial = _keywords(report, 10, lambda k: k["partial"])
+    if not partial:
+        return None
+    return "Partly present: " + ", ".join(f"{k['name']} — {k['partial']} ({k['share']}%)" for k in partial) + "."
+
+
+def _advice_pages(report: dict) -> str | None:
+    long_cvs = [name for name, pages in report.get("hygiene", {}).get("pages", {}).items() if pages > 1]
+    if not long_cvs:
+        return None
+    return (f"The PDF CV is longer than one page ({', '.join(long_cvs)}). For the Western market with 6 years "
+            "of experience one page is better — the \"1 page\" button in the report and on the CV page builds it.")
+
+
+def _advice_stop_words(report: dict) -> str | None:
+    words = report.get("hygiene", {}).get("stop_words")
+    if not words:
+        return None
+    return ("Words that make the CV sound like a list of duties or like AI: "
+            + ", ".join(f"\"{w}\"" for w in words) + " — replace them with a concrete action and result.")
+
+
+def _advice_same_form(report: dict) -> str | None:
     h = report.get("hygiene", {})
-    long_cvs = [name for name, pages in h.get("pages", {}).items() if pages > 1]
-    if long_cvs:
-        out.append(f"The PDF CV is longer than one page ({', '.join(long_cvs)}). For the Western market with 6 years "
-                   "of experience one page is better — the \"1 page\" button in the report and on the CV page builds it.")
-    if h.get("stop_words"):
-        out.append("Words that make the CV sound like a list of duties or like AI: "
-                   + ", ".join(f"\"{w}\"" for w in h["stop_words"]) + " — replace them with a concrete action and result.")
-    if h.get("bullets") and h["with_verb"] >= SAME_FORM_SHARE * h["bullets"]:
-        out.append(f"All bullets have one form: {h['with_verb']} of {h['bullets']} start with a past-tense verb. "
-                   "Sameness gives away a template (and AI) — start some bullets with the result or the problem, "
-                   "add a couple of short ones.")
+    if not (h.get("bullets") and h["with_verb"] >= SAME_FORM_SHARE * h["bullets"]):
+        return None
+    return (f"All bullets have one form: {h['with_verb']} of {h['bullets']} start with a past-tense verb. "
+            "Sameness gives away a template (and AI) — start some bullets with the result or the problem, "
+            "add a couple of short ones.")
+
+
+def _advice_numbers(report: dict) -> str | None:
+    """Numbers in bullets: too many for one workplace — or, if there is no such workplace, too few overall."""
+    h = report.get("hygiene", {})
     heavy = [f"{job} ({n})" for job, n in h.get("numbers_by_job", {}).items() if n > NUMBERS_PER_JOB_SOFT]
     if heavy:
-        out.append(f"Numbers in almost every bullet: {', '.join(heavy)} bullets with numbers. A measurable result is strong, "
-                   "but numbers everywhere can look inflated: keep the weightiest, and in the rest show the scale "
-                   "or who uses it. (Opinions differ: some advice says \"numbers everywhere\", some \"no more "
-                   "than two or three per workplace\".)")
-    elif h.get("bullets") and h["with_numbers"] < h["bullets"] / 2:
-        out.append(f"Few bullets with a measurable result: {h['with_numbers']} of {h['bullets']} — where there is a result "
-                   "(time, volume, share), show it.")
-    if h.get("long"):
-        out.append(f"Long bullets (more than {BULLET_WORDS_MAX} words): {len(h['long'])} — readers spend 5 seconds on them, "
-                   "one idea per bullet is better.")
-    return out
+        return (f"Numbers in almost every bullet: {', '.join(heavy)} bullets with numbers. A measurable result is "
+                "strong, but numbers everywhere can look inflated: keep the weightiest, and in the rest show the scale "
+                "or who uses it. (Opinions differ: some advice says \"numbers everywhere\", some \"no more "
+                "than two or three per workplace\".)")
+    if h.get("bullets") and h["with_numbers"] < h["bullets"] / 2:
+        return (f"Few bullets with a measurable result: {h['with_numbers']} of {h['bullets']} — where there is a "
+                "result (time, volume, share), show it.")
+    return None
+
+
+def _advice_long(report: dict) -> str | None:
+    long = report.get("hygiene", {}).get("long")
+    if not long:
+        return None
+    return (f"Long bullets (more than {BULLET_WORDS_MAX} words): {len(long)} — readers spend 5 seconds on them, "
+            "one idea per bullet is better.")
+
+
+# advice rules, most useful first: role title, skills, bullet hygiene; a rule returns the text or None
+ADVICE_RULES: tuple[Callable[[dict], str | None], ...] = (
+    _advice_same_role, _advice_other_role,
+    _advice_in_base, _advice_gaps, _advice_partial,
+    _advice_pages, _advice_stop_words, _advice_same_form, _advice_numbers, _advice_long,
+)
