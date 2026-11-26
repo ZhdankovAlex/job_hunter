@@ -6,7 +6,7 @@
 
 - **Keywords**: python / django / flask / fastapi / postgres(ql) / backend in the title or the description.
   The title must also be an engineering role and must not be frontend / mobile / QA / intern / junior, etc.
-  (`TITLE_ROLE_RX`, `TITLE_EXCLUDE_RX` in `config.py`).
+  (`filters.role_ok`: `ROLE_CORE_RX` and its neighbours, `TITLE_EXCLUDE_RX` in `config.py`).
 - **Location**: the home country (`[home]` in `settings.toml`), remote with a worldwide / EMEA / Europe marker,
   or plain "Remote" without a region. Remote only in US / Canada / APAC / LATAM is dropped. Remote bound to a
   specific European country is shown with `❓` (if `country_bound_remote = true`).

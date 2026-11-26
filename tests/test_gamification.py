@@ -26,25 +26,31 @@ def day(n: int) -> date:
 
 # --- streak ---
 
+def streaks(days, today):
+    """(current, best) streak — as the hero block and the "On fire" badge count it."""
+    run, records = g._streak_walk(days, today)
+    return run, len(records)
+
+
 def test_weekend_does_not_break_streak():
     days = {day(i) for i in (0, 1, 2, 3, 4, 7)}  # Mon–Fri, empty weekend, Mon
-    assert g.streaks(days, day(7)) == (6, 6)
+    assert streaks(days, day(7)) == (6, 6)
 
 
 def test_missed_workday_breaks_streak():
     days = {day(0), day(1), day(3), day(4)}  # Wednesday is empty
-    assert g.streaks(days, day(4)) == (2, 2)
+    assert streaks(days, day(4)) == (2, 2)
 
 
 def test_today_without_action_keeps_streak():
     """Today is not over yet: an empty today does not reset the streak."""
     days = {day(0), day(1), day(2)}
-    assert g.streaks(days, day(3)) == (3, 3)
-    assert g.streaks(days, day(4)) == (0, 3)  # but yesterday's gap does
+    assert streaks(days, day(3)) == (3, 3)
+    assert streaks(days, day(4)) == (0, 3)  # but yesterday's gap does
 
 
 def test_weekend_action_does_not_add_to_streak():
-    assert g.streaks({day(4), day(5), day(7)}, day(7)) == (2, 2)
+    assert streaks({day(4), day(5), day(7)}, day(7)) == (2, 2)
 
 
 def test_silent_workdays():
@@ -176,11 +182,14 @@ def test_conversion_goal_needs_enough_applications():
 
 
 def test_icebreakers_need_our_ping_and_a_reply():
+    def icebreakers(apps):
+        return sum(g._first_reply_after_ping(a) is not None for a in apps)
+
     ping = ev(day(0), OTHER, "Wrote to the recruiter", thread="")
-    assert g.icebreakers([Application("Acme", [ping])]) == 0
-    assert g.icebreakers([Application("Acme", [ev(day(0), OTHER, "Recruiter wrote"), ping])]) == 0  # the reply came earlier
+    assert icebreakers([Application("Acme", [ping])]) == 0
+    assert icebreakers([Application("Acme", [ev(day(0), OTHER, "Recruiter wrote"), ping])]) == 0  # the reply came earlier
     replied = Application("Acme", [ping, ev(day(2), OTHER, "Re: Python role")])
-    assert g.icebreakers([replied, Application("Globex", [ping, ev(day(3), INTERVIEW, "Call")])]) == 2
+    assert icebreakers([replied, Application("Globex", [ping, ev(day(3), INTERVIEW, "Call")])]) == 2
 
 
 def test_progress_page_blocks_in_order(monkeypatch, tmp_path):
