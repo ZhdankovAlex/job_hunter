@@ -4,6 +4,16 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-26
 
+### Progress: daily events chart and a 12-week activity hex map (#44)
+
+- Trend: stacked columns by day (no smoothing: a day's count is a whole number) for applications, stages and calls, correspondence and rejections over 30 / 90 days; filter tiles with the period sum and the difference from the previous period, a tooltip for the day. SVG + a little JS, data as JSON in the page
+- Activity over 12 weeks: a hex map instead of the collapsed 8-week table; levels by quartiles of active days; a summary of active days, actions, the busiest day, goal weeks and the weekly record (the streak stays in the main block)
+- Colors from the UI palette only: series --accent / --ok / --warn / --bad, hexes are shades of --accent; hover draws an outline (the fill carries the number), today is dashed
+- Data apart from markup: jobhunter/progress_charts.py (daily, hex_grid, hex_summary, cuts), tests in tests/test_progress_charts.py. Ledger gets a messages book (letters in a thread and pings)
+- plural and short moved to html_report; docs/img/progress.png retaken on demo data
+
+<sub>080fe55</sub>
+
 ### Companies during a run: the page opens at once, the summary is recomputed in the background (#43)
 
 - While a run was going, the page took tens of seconds or longer to open. A run rewrites the mail cache and then the vacancy archive; the Companies cache key went stale, and every request classified the whole archive again. Parallel requests each computed their own copy under one GIL
