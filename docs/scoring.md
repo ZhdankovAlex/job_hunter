@@ -64,10 +64,8 @@ red below; hover for the breakdown) and the "Fit ≥ 80%" filter.
 and converts everything to EUR per month (rates in `[salary.rates_to_eur]`). Samples are grouped into the
 global market and Russian-language Telegram channels (`[telegram].cis_channels`). Every vacancy shows either the
 stated range or an estimate: the interquartile range of the same role and grade. It is a market reference, not a
-company's offer.
-
-Grade (`salary.grade`): from the title (junior / middle / senior / lead), otherwise from the required experience:
-up to 1 year — junior, 2–3 — middle, 4–7 — senior, 8+ — lead.
+company's offer. Amounts in roubles and tenge count as monthly unless the text says "per year" / "annual":
+130,000 ₽ is a month, not a year.
 
 ### levels.fyi: country median
 
@@ -81,6 +79,14 @@ The second line in the salary column (HTML) and the "📊" mark (Markdown): "lev
 - The source is the Markdown pages levels.fyi serves to agents (`…/locations/<country>.md`): by their
   robots.txt they may be read and quoted with a link, not used to train models. Requests go through
   `http.py` (robots.txt, 1 request/s), cached in `state/levels_cache.json` for 7 days.
+
+## Grade
+
+The vacancy grade (`salary.grade`) comes from the title (junior / middle / senior / lead). If the title has none,
+it comes from the required experience ("1–3 years", "5+ years of experience"): up to 1 year — junior, 2–3 — middle,
+4–7 — senior, 8+ — lead. The HTML report has a "Grade" column, and the salary estimate is taken for that grade.
+
+Instead of matched skills the HTML shows "Missing": required skills first, then nice-to-have ones.
 
 ## Applications in the report
 

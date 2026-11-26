@@ -13,7 +13,7 @@ state-changing requests (POST/PUT/PATCH/DELETE) from other sites' pages (`Origin
 `Sec-Fetch-Site` is not `same-origin` / `none`) get 403. A vacancy link (`/api/cv`, `/api/cover`, `/api/prep`,
 `/prep?url=`) must start with `http://` or `https://` and must not point to this computer or the local network
 (loopback, link-local, LAN, `0.0.0.0`, redirects included) — otherwise 422 and the page is not read.
-The interface is in Russian.
+## Pages
 
 | Page | What is there |
 |---|---|
@@ -30,24 +30,39 @@ The interface is in Russian.
 | **Skills** | Profile skills with weights and the share of vacancies: on / off, weight (negative is a penalty), your own skills; edits go to `profile_overrides.json` on top of `profile.toml` and apply from the next run |
 | **Sources** | Every source of the last run: kind, ATS and slug, how many vacancies, error; **why a source gave no vacancies to the report** (`jobhunter/coverage.py`): request error, marked VERIFY in `companies.txt`, own page without an ATS, board not found (with the date of the next attempt), empty board, no vacancies, none matching in the reports of the last 14 days. The table of all sources is collapsed by default (the state is remembered); filters by kind and by reason, search; the "… without vacancies in the report" badge opens the table with that filter. Telegram channels; freehire queries with name, parameters and counts |
 
-**Skipping stages.** In advance — "no: mail / Telegram / freehire / aggregators" checkboxes next to the run
-buttons (mail — do not run `applications.py`, the rest are `--no-…` flags for `main.py`; the checkboxes are
-remembered in the browser). On the fly — the "⏭ Skip stage" button for the freehire, sources, Telegram, CV and
-mail stages: the UI writes a request to `state/progress_control.json`, the stage loop checks it between steps
-(`progress.skip_requested()`) and stops within a second or two; what was collected goes on, the stage is marked
-"skipped by hand at N of M". On the sources stage the button also aborts requests that are already running
-(`http.cancel`), so a long career page does not hold the run.
+## Skip a stage or stop a run
 
-**Stopping a run.** "⏹ Stop run" (`POST /api/runs/current/stop`) ends the running script together with its
-child processes and does not start the next script in the queue (in "run everything" — mail, then vacancies).
-What this run collected is lost; the reports of the previous run stay.
+**In advance.** The run buttons have "no: mail / Telegram / freehire / aggregators" checkboxes. "No mail" means
+`applications.py` is not run; the other checkboxes add `--no-…` flags to `main.py`. The browser remembers them.
+They apply only where they make sense: "Vacancies only" takes all of them except mail, "Mail only" takes none.
+
+**During a run — skip a stage.** The "⏭ Skip stage" button in the "Now" block is there for the freehire, sources,
+Telegram, CV and mail stages. The UI writes the request to `state/progress_control.json`, the stage checks it
+between steps (`progress.skip_requested()`) and stops within a second or two. On the sources stage the button also
+aborts requests that are already running (`http.cancel`), so a long career page does not hold the run. What the
+stage collected goes on, and the stage is marked "skipped by hand at N of M". Skipped mail is not an error: the
+letters read before the click are saved, but the last sync time is not updated, so the report keeps its warning.
+
+**During a run — stop it.** "⏹ Stop run" (visible while a run is going, `POST /api/runs/current/stop`) asks for
+confirmation, then ends the running script together with its child processes and does not start the next script in
+the queue (in "run everything" — mail, then vacancies). What this run collected is not saved; the reports of the
+previous run stay. The button works for a run started from a terminal or a scheduler too. After it the Pipeline
+page shows the run as "stopped" (`stopped` in `progress.json`), not "interrupted".
+
+## How a run starts
 
 A run started from the UI is a child process of the server in its own process group: Ctrl+C in the server window
 does not stop it, but **restarting or closing the server interrupts a running run** — restart the server when
-nothing is running. Only one run at a time — the UI knows it even if the run was started from a terminal or a
-scheduler (checked via `state/progress.json` and whether the process is alive — the same pid and the same start
-time). Output goes to `last_run.log`. After "Stop" the Pipeline page shows the run as "stopped"
-(`stopped` in `progress.json`), not "interrupted".
+nothing is running (the run pill at the bottom of the left panel is empty). An interrupted run is marked
+"interrupted" on the Pipeline page; the reports of the previous run stay.
+
+Only one run at a time. The UI sees a run started from a terminal or a scheduler too: it checks
+`state/progress.json` and whether the process that writes it is alive (the same pid and the same start time).
+A run started from the UI writes its output to `last_run.log`.
+
+Navigation is the left panel. The "Collapse" button shrinks it to icons, and the browser remembers that. The theme
+button sits above it (see "Theme" below). The pill of a running run is visible at the bottom of the panel on every
+page.
 
 **Speed.** "CV vs market", "Companies" and "Skills" are computed in the background when the server starts and after each
 run and kept in `state/web_cache.json` (keyed by the modification time of vacancies, CVs and letters): after a

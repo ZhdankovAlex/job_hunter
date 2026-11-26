@@ -71,3 +71,15 @@ with "Contract" in the title, and texts that mention outstaffing / outsourcing /
 "Staffing/outsourcing" appendix.
 
 The same vacancy (company + title) in several locations is merged into one row.
+
+## Experience and an office with relocation
+
+- 8+ years of required experience does not hide a vacancy: it gets a penalty (`penalty_experience_8` on top of
+  `years_8_plus` in `profile.toml`), stays in the report lower down and does not get into "⭐ Top to review".
+  7 years — the `penalty_experience_7` penalty. The freehire query does not cut by experience in advance:
+  `max_experience_years = 15` in `[freehire]` of `settings.example.toml` (7 if the key is missing).
+- An office in another country with help to move ("Cyprus — Onsite, employment contract with relocation
+  support") is not an "on-site outside the home country" rejection: it gets the 🌍 "relocation" status with a
+  quote. The country comes from the title ("… - Relocation to Cyprus"), otherwise from the text. A label like
+  "Remote (Contractor arrangement) or Cyprus Onsite" names an office only as one of the options, so it is not a
+  reason to reject either. This works while relocation is on (`relocation_enabled`).
