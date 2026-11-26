@@ -4,6 +4,15 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-26
 
+### Companies during a run: the page opens at once, the summary is recomputed in the background (#43)
+
+- While a run was going, the page took tens of seconds or longer to open. A run rewrites the mail cache and then the vacancy archive; the Companies cache key went stale, and every request classified the whole archive again. Parallel requests each computed their own copy under one GIL
+- cache.cached(..., stale_ok=True): with a stale key it returns the previous value and starts a background recompute, at most one per name; it waits only if there is no value yet. cache.wait_refresh — for tests
+- Test: tests/test_industry.py — the recompute is blocked, a request still gets the previous summary, a second request does not start another recompute
+- Docs: docs/web-ui.md (heavy computations cache), docs/industry.md (Companies summary cache)
+
+<sub>a668295</sub>
+
 ### Report: no crash on a vacancy without a link in the Staffing and Local-language appendices (#42)
 
 - The run crashed while building the report with AttributeError: 'Job' object has no attribute 'post_url'. These appendices mix site vacancies and Telegram posts; the link was taken as `j.url or j.post_url`, and only Telegram posts have post_url
