@@ -35,6 +35,7 @@ after `pytest`, `git status` is clean.
 | `tests/test_applications_report.py` | Application status and the funnel: a new application after a rejection, cancelled meetings, "declined", rejection after silence, events in the future; the freshest events on top |
 | `tests/test_gamification.py` | Gamification: the workday streak (weekends don't break it, today is not over yet), one company a day — one application, goal weeks and stars, XP only for your own actions (tailored CV — double, a ping — only ours), ranks, the next step by priority, recent wins, the badge collection (three rarities per track, the showcase, conversion from 20 applications, "Icebreaker" — only after our ping), an interview soon from a note or an invitation subject, the message of the day and quotes, a typo date; Applications has the funnel on top and no game block |
 | `tests/test_relevance.py` | The vacancy score: skills and their order by weight, title-only adjustments, outsourcing, Russian language, Go vs "Python not primary", JVM and 8+ years, CV gaps with a floor, freehire data (an EUR range from 60k), location, company priority, skill edits from the UI and broken patterns |
+| `tests/test_ci_config.py` | Reproducible build: the lock is `pip-compile` output, `requirements-lock.txt` has every dependency of `requirements-dev.txt` within its bounds, ruff in pre-commit has the same version, CI installs the lock and runs on Linux and Windows with `pip-audit` |
 | `tests/test_cv_match.py` | Fit %: key and nice-to-have skills, "Python, Go or Java", years of experience, new terms, "except Django" and "Industry: …" labels are not requirements; the combined technology pattern answers the same as the separate ones |
 | `tests/test_sources.py` | Parsing fin.dev (JSON-LD), career pages (the `links` setting, the title from `aria-label`), Teamtailor RSS — on saved pages from `tests/fixtures/`; `[manual_jobs]` entries with `company` / `location`; `Http` and `FakeHttp` fit the `HttpClient` protocol |
 | `tests/test_filters.py` | Selection by role, employment type and the presence of a link |
@@ -138,8 +139,9 @@ Reads go the same way: `-k "read_only and companies"`.
 
 ## CI
 
-`.github/workflows/ci.yml`: on every pull request and push to `main` GitHub Actions installs the dependencies and
-runs `ruff check .`, `mypy` and `pytest --cov`. Ruff (`[tool.ruff.lint]` in `pyproject.toml`) catches bugs — syntax,
+`.github/workflows/ci.yml`: on every pull request and push to `main` GitHub Actions, on Linux and Windows, installs
+the dependencies from `requirements-lock.txt` (exact versions) and runs `ruff check .`, `mypy` and `pytest --cov`; a
+separate `audit` job checks the same versions for known vulnerabilities with `pip-audit`. Ruff (`[tool.ruff.lint]` in `pyproject.toml`) catches bugs — syntax,
 pyflakes, bugbear (`E9`, `F`, `B`) — and keeps the code uniform: import order (`I`), modern Python 3.11 syntax (`UP`:
 `datetime.UTC`, no quotes in annotations), redundant branches (`SIM`), traps such as mutable class attributes without
 `ClassVar` (`RUF`). `ruff check . --fix` repairs almost all of it. `RUF001`–`RUF003` are off (Cyrillic, "—" and "…"
@@ -158,7 +160,12 @@ list of uncovered lines:
 ```
 
 `.pre-commit-config.yaml` runs ruff, mypy and basic file checks (TOML/YAML syntax, merge markers, trailing spaces)
-before every commit; enable it once with `pre-commit install`. `.github/dependabot.yml` opens a weekly PR with
+before every commit; enable it once with `pre-commit install`.
+The lock file `requirements-lock.txt` is built by `pip-compile` (the `pip-tools` package) from `requirements-lock.in`,
+that is, from `requirements-dev.txt`: `.venv\Scripts\pip-compile --strip-extras requirements-lock.in`; add `--upgrade`
+to bump versions. Dependabot rebuilds such files as a whole, resolving compatibility; a lock in another format it would
+edit line by line, and versions could drift apart. Ruff in `.pre-commit-config.yaml` has the same version as in the
+lock (`tests/test_ci_config.py` compares them). `.github/dependabot.yml` opens a weekly PR with
 updated Python dependencies and a monthly one for GitHub Actions; CI checks each of them.
 
 mypy checks `jobhunter`, `web`, `main.py`, `cvgen.py`, `tests/conftest.py` and `.claude/hooks`, including the bodies

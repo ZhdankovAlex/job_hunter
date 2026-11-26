@@ -2,6 +2,7 @@
 pytest>=9.2.0
 pytest-cov>=7.1.0  # coverage in CI: pytest --cov, floor in [tool.coverage.report]
 pre-commit>=4.7.0  # git hooks from .pre-commit-config.yaml
+pip-tools>=7.7.0  # pip-compile: requirements-lock.in -> requirements-lock.txt
 httpx>=0.28.1  # TestClient FastAPI
 ruff>=0.17.6
 mypy>=2.4.1
