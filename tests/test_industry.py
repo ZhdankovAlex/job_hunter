@@ -146,3 +146,44 @@ def test_companies_page_and_filter(client):  # noqa: F811
     assert "Shopco" in page and "Acme Play" not in page
     data = http.get("/api/companies").json()
     assert data["vacancies"] == 2 and data["counts"]["igaming"] == 1
+
+
+def test_companies_page_is_fast_while_run_rewrites_inputs(client, monkeypatch):  # noqa: F811
+    """A run rewrites the mail cache and the archive — the page serves the previous summary at once,
+    the recompute runs in the background.
+
+    Before, every request during a run classified the whole archive again (minutes on real data).
+    """
+    import threading
+
+    import web.cache
+
+    http, _, jobs_dir = client
+    (jobs_dir / "2026-11-16.json").write_text(json.dumps([
+        {"url": "u1", "company": "Globex", "title": "Python Developer", "text": "Fintech"}]), encoding="utf-8")
+    assert http.get("/api/companies").json()["vacancies"] == 1
+
+    release, started = threading.Event(), threading.Event()
+    overview = industry.companies_overview
+
+    def slow_overview(*args, **kwargs):  # a long recompute: waits until the test lets it go
+        started.set()
+        assert release.wait(10)
+        return overview(*args, **kwargs)
+    monkeypatch.setattr(industry, "companies_overview", slow_overview)
+    (jobs_dir / "2026-11-17.json").write_text(json.dumps([  # a run added a day — the cache key changed
+        {"url": "u2", "company": "Acme", "title": "Python Developer", "text": "Django"}]), encoding="utf-8")
+
+    answer: list[dict] = []
+    request = threading.Thread(target=lambda: answer.append(http.get("/api/companies").json()))
+    request.start()
+    request.join(5)
+    try:
+        assert answer and answer[0]["vacancies"] == 1  # the previous summary, no wait for the recompute
+        assert started.wait(5)  # while the recompute runs in the background
+        assert http.get("/companies").status_code == 200  # a second request neither waits nor starts another one
+    finally:
+        release.set()
+        request.join(10)
+    web.cache.wait_refresh("companies_by_industry", 10)
+    assert http.get("/api/companies").json()["vacancies"] == 2  # recomputed

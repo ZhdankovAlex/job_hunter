@@ -81,6 +81,8 @@ The list of companies:
 
 The summary is cached (`state/web_cache.json`) by the modification times of the archive, `companies.txt`,
 `settings.toml`, the applications and the industry rules, and is warmed up in the background after a run.
+When the key changes (say, a run wrote new mail), the page shows the previous summary while the new one is computed
+in the background.
 `ats_mapping.json` is not part of the cache key: a run rewrites it all the time, so boards are added per request.
 
 ## How to fix

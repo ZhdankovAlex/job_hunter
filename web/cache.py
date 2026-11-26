@@ -21,8 +21,15 @@ _cache_lock = threading.Lock()
 _memory_cache: dict[str, dict[str, Any]] = {}
 
 
-def cached(name: str, key: list[Any], compute: Callable[[], Any]) -> Any:
-    """The cached value if the key matches; otherwise compute() and a write to the cache."""
+_refreshing: dict[str, threading.Thread] = {}  # background recomputes of stale values: at most one per name
+
+
+def cached(name: str, key: list[Any], compute: Callable[[], Any], stale_ok: bool = False) -> Any:
+    """The cached value if the key matches; otherwise compute() and a write to the cache.
+
+    stale_ok — for long computations whose inputs a run rewrites: with an old key it returns the previous
+    value at once and runs compute() in the background (one thread per name). It waits only if there is no value yet.
+    """
     key = json.loads(json.dumps(key, default=str))  # tuple -> list, Path -> str: comparable with what was read from disk
     with _cache_lock:
         if not _memory_cache and WEB_CACHE_FILE.exists():
@@ -31,9 +38,32 @@ def cached(name: str, key: list[Any], compute: Callable[[], Any]) -> Any:
         entry = _memory_cache.get(name)
         if entry and entry.get("key") == key:
             return entry["value"]
+        if entry and stale_ok:
+            running = _refreshing.get(name)
+            if not (running and running.is_alive()):
+                thread = threading.Thread(target=_refresh, args=(name, key, compute), daemon=True,
+                                          name=f"cache-refresh-{name}")
+                _refreshing[name] = thread
+                thread.start()
+            return entry["value"]
     value = compute()
     put(name, key, value)
     return value
+
+
+def _refresh(name: str, key: list[Any], compute: Callable[[], Any]) -> None:
+    try:
+        put(name, key, compute())
+    except Exception as e:  # the page stays on the previous value; the next request tries again
+        import sys
+        print(f"background cache recompute {name}: {e}", file=sys.stderr)
+
+
+def wait_refresh(name: str, timeout: float | None = None) -> None:
+    """Waits for the background recompute of name, if one is running (tests, warm-up after a run)."""
+    thread = _refreshing.get(name)
+    if thread:
+        thread.join(timeout)
 
 
 def put(name: str, key: list[Any], value: Any) -> None:

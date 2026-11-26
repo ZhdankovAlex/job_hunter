@@ -81,6 +81,9 @@ Pages are built by the server, there is no separate frontend and no build step:
   with the same spacing) keep their own layout. Checked by `tests/test_styles.py`.
 - **Heavy computations are cached** in `state/web_cache.json` (see "Speed" above). Board links are not part of the
   key: a run rewrites `ats_mapping.json` all the time, so they are added on every request.
+  The Companies page does not wait during a run: the run rewrites mail and the archive, and with a stale key the page
+  serves the previous summary at once while one shared recompute runs in the background
+  (`cache.cached(..., stale_ok=True)`).
 - **Responses and errors** — see "Responses" below.
 
 ## Design system: how to build a new page
