@@ -638,12 +638,12 @@ def _appendix(s: _Split, stats: dict, with_tg: bool) -> list[str]:
     if s.staffing:
         lines += _compact_appendix(
             f"Appendix: Staffing/outsourcing — {len(s.staffing)}", _by_company(s.staffing),
-            lambda j: j.url or j.post_url, lambda j: f" ({j.staffing})",
+            lambda j: j.url or getattr(j, "post_url", ""), lambda j: f" ({j.staffing})",
         )
     if s.lang_blocked:
         lines += _compact_appendix(
             f"Appendix: Local language required — {len(s.lang_blocked)}", _by_company(s.lang_blocked),
-            lambda j: j.url or j.post_url,
+            lambda j: j.url or getattr(j, "post_url", ""),
         )
     if s.refused or s.refused_tg or s.refused_filtered:
         lines += _previously_rejected_section(s.refused, s.refused_tg, s.refused_filtered)
