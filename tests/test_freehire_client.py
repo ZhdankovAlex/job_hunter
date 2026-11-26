@@ -7,8 +7,6 @@ from conftest import RouteHttp
 from jobhunter import freehire
 from jobhunter.http import FetchError
 
-SEARCH = freehire.BASE_URL + "/agent/jobs/search"
-
 
 @pytest.fixture(autouse=True)
 def files(tmp_path, monkeypatch):

@@ -95,7 +95,7 @@ def build(company: str, title: str, text: str, style: str = "short") -> dict:
             "fit": holder.cv_fit, "have": have, "missing": list(holder.cv_core_missing), "picks": picks}
 
 
-def save(result: dict, url: str = "", out_dir: Path | None = None) -> Path:
+def save(result: dict, out_dir: Path | None = None) -> Path:
     """The letter goes to cv_out/<date>/<company>_<role>_cover_<style>.txt — next to the CV for the same vacancy."""
     out_dir = out_dir or cvgen.OUT_DIR / date.today().isoformat()
     out_dir.mkdir(parents=True, exist_ok=True)

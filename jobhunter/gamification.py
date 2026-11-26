@@ -72,10 +72,6 @@ class Ledger:
     rejects: dict[date, set[str]] = field(default_factory=lambda: defaultdict(set))
     messages: dict[date, set[str]] = field(default_factory=lambda: defaultdict(set))  # correspondence: letters and pings
 
-    def actions(self, d: date) -> int:
-        """Useful actions in a day: applications, pings, stages (a rejection is not our action)."""
-        return len(self.applies.get(d, ())) + len(self.pings.get(d, ())) + len(self.stages.get(d, ()))
-
     def action_days(self) -> set[date]:
         return {d for book in (self.applies, self.pings, self.stages) for d, names in book.items() if names}
 
@@ -122,15 +118,6 @@ def _streak_walk(action_days: set[date], today: date) -> tuple[int, list[date]]:
                 run = 0
         d += timedelta(days=1)
     return run, records
-
-
-def streaks(action_days: set[date], today: date) -> tuple[int, int]:
-    """(current, best) streak of workdays with an action. Sat and Sun neither break nor extend the streak.
-
-    Today is not over yet: if today is still empty, the streak counts up to the previous workday.
-    """
-    run, records = _streak_walk(action_days, today)
-    return run, len(records)
 
 
 def workdays_silent(action_days: set[date], today: date) -> int:
@@ -225,11 +212,6 @@ def _first_reply_after_ping(app: mail.Application) -> date | None:
     replies = [e.when for e in app.events if e.when > min(pings)
                and (e.thread or e.kind in (mail.INTERVIEW, mail.OFFER, mail.REJECTED))]
     return local_day(min(replies)) if replies else None
-
-
-def icebreakers(apps: list[mail.Application]) -> int:
-    """Companies where we wrote to a recruiter first (a ping from applications_manual.toml) and got an answer after it."""
-    return sum(_first_reply_after_ping(app) is not None for app in apps)
 
 
 _DATE_DMY_RX = re.compile(r"(?<![\d.])(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?(?![\d.])")  # 25.11, 25.11.2026

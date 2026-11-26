@@ -580,7 +580,7 @@ def api_cover(body: CoverRequest) -> dict[str, Any]:
     job = resolve_job(body)
     result = cover_letter.build(body.company or job.get("company") or "Company",
                                 body.title or job.get("title") or "Vacancy", job["text"], body.style)
-    path = cover_letter.save(result, job.get("url", ""))
+    path = cover_letter.save(result)
     return {**result, "source": job.get("found_in", ""), "file": f"/files/{path.relative_to(ROOT).as_posix()}"}
 
 

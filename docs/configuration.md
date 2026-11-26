@@ -115,13 +115,13 @@ compiled there and in `verify` / `telegram`.
 | `aggregators.py`, `sites.py` | Arbeitnow, Remote OK, Himalayas; job boards and company sites without an ATS |
 | `freehire.py` | freehire.me |
 | `telegram.py` | Telegram channels via the web preview, a parser per channel format |
-| `filters.py`, `verify.py`, `language.py` | Selection: role, location, primary language, full-text checks |
+| `filters.py`, `verify.py`, `language.py`, `stack.py` | Selection: role, location, primary language, full-text checks |
 | `reasons.py` | Codes of reject reasons (`Reject`) and marks (`Mark`): the group on the pipeline chart, the order in "Rejected" and the score go by the code, the shown text can be edited |
 | `staffing.py` | Staffing / outsourcing blacklist |
 | `keys.py` | Normalised keys: vacancy URL, IDs in a URL, company name, ATS board from a link |
 | `applied.py` | Vacancies and companies you already applied to (`applications_manual.toml`) |
 | `mail.py`, `applications_report.py` | Gmail (read-only), letter parsing, the applications page |
-| `gamification.py` | The Progress page (`reports/progress.html`): rank and XP, streak, the next step of the week, wins, badges |
+| `gamification.py`, `progress_charts.py` | The Progress page (`reports/progress.html`): rank and XP, streak, the next step of the week, wins, badges; charts of events by day and activity |
 | `cv_match.py`, `relevance.py`, `tiers.py`, `salary.py`, `levels.py` | Fit % to the CV, score, category, grade, salary ranges, levels.fyi |
 | `cvgen.py` | CV builder: picks bullets for a vacancy, one-page version, Markdown → HTML → PDF via headless Chrome |
 | `cover_letter.py` | Cover letter for a vacancy from `cv/base.toml` (`[summary]`, `[cover]`) |

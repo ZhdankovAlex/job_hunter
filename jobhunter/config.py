@@ -82,13 +82,6 @@ KEYWORD_RX = re.compile(
     r"\b(?:python|django|flask|fastapi|postgres(?:ql)?|back[\s-]?end)\b", I
 )
 
-# The title must look like an engineering role (otherwise "backend" in the text
-# of a sales vacancy passes the filter too).
-TITLE_ROLE_RX = re.compile(
-    r"engineer|developer|programmer|back[\s-]?end|python|django|architect|"
-    r"tech(?:nical)? lead|\bswe\b|\bsde\b|разработчик|программист",
-    I,
-)
 TITLE_EXCLUDE_RX = re.compile(
     r"front[\s-]?end|\bios\b|android|mobile|react native|\bintern(?:ship)?\b|"
     r"\bjunior\b|graduate|\b(?:sales|solutions?|support|customer|field|"
@@ -180,10 +173,7 @@ TITLE_LANGS = {
     "C++": re.compile(r"\bc\+\+", I),
 }
 
-# --- Staffing / Top ---------------------------------------------------------
-CONTRACT_TITLE_RX = re.compile(r"\bcontract(?:or)?\b", I)
-TOP_LIMIT = 15
-TOP_SENIORITY_EXCLUDE_RX = re.compile(r"\b(?:head|director|vp|vice president|principal)\b", I)
+# --- Report ---------------------------------------------------------------
 PRIORITY_MAX_ROWS = 60  # rows in the ✅ section, the rest go to the Appendix
 
 # The 🌍 section: the role must be an engineering one and about Python
@@ -195,11 +185,6 @@ RELOC_EXCLUDE_TITLE_RX = re.compile(
 )
 RELOC_NEEDS_PYTHON_TITLE_RX = re.compile(
     r"back[\s-]?end|software|developer|platform|\bdata\b|\bml\b|machine learning|\bai\b|engineer", I
-)
-TOP_PER_COMPANY = 2  # so the top is not made of one company
-TOP_TITLE_RX = re.compile(r"(?i:python|back[\s-]?end)|\bAI\b")
-TOP_LOCATION_RX = re.compile(
-    r"world[\s-]?wide|global|anywhere|\bemea\b|" + HOME_RX.pattern, I
 )
 
 # --- Role filter for ALL sections -------------------------------------------

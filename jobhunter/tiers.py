@@ -46,7 +46,6 @@ def tier(job) -> int:
 # freshness group borders, in days: yesterday's vacancy with skill gaps matters more than a July one
 # with a full match — a fresh one has a better chance of an invitation
 AGE_BUCKETS = (3, 7, 14, 30)
-AGE_NAMES = ("up to 3 days", "up to a week", "up to 2 weeks", "up to a month", "older than a month")
 UNKNOWN_AGE_BUCKET = 3  # publication date unknown — assume the vacancy is up to a month old
 
 
