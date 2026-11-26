@@ -4,6 +4,16 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-26
 
+### Refactor: build_markdown split by section, market advice as a rule table, golden tests (#40)
+
+- cvgen.build_markdown now only sets the order of the sections; the header comment, contacts, Summary, Skills, a workplace and Education are separate functions, and picking bullets into picks is one _explain instead of three copies. The output did not change
+- market_check.advice goes through ADVICE_RULES: one function per piece of advice (role title, skills in the base, gaps, partial skills, pages, stop words, one bullet form, numbers, long bullets), each returns the text or None; the order and the texts did not change. Role synonyms are the ROLE_SYNONYMS constant
+- tests/test_cvgen_golden.py: golden build_markdown output on cv/base.example.toml (6 cases: base variants, for a vacancy, one page, with Projects) and the picked bullets, in tests/fixtures/cv_golden/
+- tests/test_market_advice.py: golden advice texts on five reports in tests/fixtures/market_advice.json and the order of the advice. Both goldens were recorded before the refactoring; rebuild them on purpose with JOBHUNTER_UPDATE_GOLDEN=1
+- Docs: testing.md (the new test files, JOBHUNTER_UPDATE_GOLDEN)
+
+<sub>3cbf2f7</sub>
+
 ### CI: exact dependency versions from pip-compile, Windows in the matrix, pip-audit (#39)
 
 - requirements-lock.txt is pip-compile output from requirements-lock.in (-r requirements-dev.txt); CI installs it instead of the lower bounds, so a build a month later is the same. Dependabot rebuilds such files as a whole, resolving dependencies, instead of bumping one line at a time; pip-tools is in requirements-dev.txt
