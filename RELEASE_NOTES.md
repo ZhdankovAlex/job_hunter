@@ -4,6 +4,17 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-26
 
+### Reject reasons and marks as StrEnum codes; selection, score, Telegram and ATS in strict mypy (#38)
+
+- jobhunter/reasons.py: Reject (11 reject codes) with GROUPS, BULK and LOCATION_TEXT; Mark for the marks the score depends on, with a detail in brackets (Mark.PYTHON_NOT_PRIMARY.detail("Go")). The pipeline chart group, the order in "Rejected" and part of the score used to match substrings of the reason text, so rewording a reason silently changed them; now they go by job.reject_code (the shown text is unchanged)
+- filters, verify, freehire and main pass a code with every reject; relevance reads marks through has_mark / mark_detail
+- Strict mypy for filters, verify, geo, reasons, relevance, telegram and ats: every function annotated, collections with element types. models.Checked is the protocol of a vacancy checked by verify and scored by relevance; Job and telegram.TgJob match it (TgJob got reloc_country / reloc_type / reloc_quote)
+- Telegram: a channel page where no post date parses no longer fails reading the channel with ValueError (min() over an empty list); such a page ends the paging
+- Tests: test_reasons.py (every code has a group, every reject call passes Reject.X by AST, group and order by the code), a channel page without dates in test_telegram.py
+- Docs: configuration.md (reasons.py), testing.md (strict modules, the Checked protocol, new tests)
+
+<sub>3a1311c</sub>
+
 ### Settings: a checked settings.toml model, modules read it when called (#37)
 
 - jobhunter/settings.py: a Pydantic model of the whole settings.toml (extra="forbid", strict=True) with the defaults that were spread across the code. A typo in a key or a string instead of a number used to give a silent default; now it is an error with the key path: "freehire.max_reqests: unknown key (a typo?)"
