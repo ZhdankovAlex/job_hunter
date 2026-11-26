@@ -4,6 +4,14 @@ Built from the git history automatically after a push to main (`python -m jobhun
 
 ## 2026-11-26
 
+### Docs: Pages, skipping and stopping a run, Grade, experience and relocation offices (#45)
+
+- web-ui.md: the page table gets a "Pages" heading; "Skip a stage or stop a run" and "How a run starts" become sections of their own, with what was missing: skipped mail is not an error (the sync time is not updated), Stop asks for confirmation and works for terminal / scheduler runs, an interrupted run, the collapsible panel and the run pill. The outdated "The interface is in Russian" is gone
+- scoring.md: a "Grade" section (title, then required experience; the Grade column; the Missing column). Roubles and tenge count as monthly unless the text says per year
+- filters.md: "Experience and an office with relocation" — 8+ years is a penalty, not hiding; an office abroad with relocation support is 🌍, "Remote or <country> Onsite" is not a rejection
+
+<sub>cb7ac51</sub>
+
 ### Progress: daily events chart and a 12-week activity hex map (#44)
 
 - Trend: stacked columns by day (no smoothing: a day's count is a whole number) for applications, stages and calls, correspondence and rejections over 30 / 90 days; filter tiles with the period sum and the difference from the previous period, a tooltip for the day. SVG + a little JS, data as JSON in the page
