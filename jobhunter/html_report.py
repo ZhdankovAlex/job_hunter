@@ -153,6 +153,19 @@ def _e(text) -> str:
     return escape(str(text or ""))
 
 
+def plural(n: int, one: str, many: str | None = None) -> str:
+    """plural(3, "application") -> "3 applications"; plural(1, "day") -> "1 day"."""
+    return f"{n} {one if n == 1 else many or one + 's'}"
+
+
+MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def short(d: date) -> str:
+    """Nov 25 — independent of the locale."""
+    return f"{MONTH_NAMES[d.month - 1]} {d.day}"
+
+
 def _link(job) -> str:
     return job.url or getattr(job, "post_url", "")
 

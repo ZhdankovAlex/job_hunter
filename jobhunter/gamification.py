@@ -16,14 +16,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
-from . import applications_report as ar, config, mail, settings
+from . import applications_report as ar, config, mail, progress_charts as pc, settings
 from .cvgen import slug
-from .html_report import _CSS, THEME_JS, WEB_URL, _e
+from .html_report import _CSS, THEME_JS, WEB_URL, _e, plural, short
 from .keys import company_key
 
 CV_DIR = config.ROOT / "cv_out"  # tailored CVs: cv_out/<date>/<Company>_<Role>.md
 JOBS_DIR = config.JOBS_ARCHIVE_DIR  # vacancies of every report: state/jobs/<date>.json
-HEAT_WEEKS = 8
 FRESH_DAYS = 3  # a rejection or a stage within this many days is "fresh"
 SOON_DAYS = 7  # an interview within this many days is "soon"
 PING_AFTER_DAYS = 7  # waiting for an answer longer than this — worth a follow-up
@@ -38,16 +37,6 @@ XP = {"apply": 10, "apply_tailored": 20, "ping": 5}
 RANKS = [(0, "Scout"), (400, "Organizer"), (1200, "Active candidate"), (3000, "Strategist"),
          (6000, "Search expert")]
 STAGE_NAMES = {ar.SCREEN: "screening", ar.TECH: "technical", ar.FINAL: "final", ar.OFFER: "offer"}
-
-
-def plural(n: int, one: str, many: str | None = None) -> str:
-    """plural(3, "application") -> "3 applications"; plural(1, "day") -> "1 day"."""
-    return f"{n} {one if n == 1 else many or one + 's'}"
-
-
-def short(d: date) -> str:
-    """Nov 25 — independent of the locale."""
-    return f"{_MONTH_NAMES[d.month - 1]} {d.day}"
 
 
 def local_day(when: datetime) -> date:
@@ -81,6 +70,7 @@ class Ledger:
     pings: dict[date, set[str]] = field(default_factory=lambda: defaultdict(set))
     stages: dict[date, set[str]] = field(default_factory=lambda: defaultdict(set))
     rejects: dict[date, set[str]] = field(default_factory=lambda: defaultdict(set))
+    messages: dict[date, set[str]] = field(default_factory=lambda: defaultdict(set))  # correspondence: letters and pings
 
     def actions(self, d: date) -> int:
         """Useful actions in a day: applications, pings, stages (a rejection is not our action)."""
@@ -100,8 +90,10 @@ def ledger(apps: list[mail.Application]) -> Ledger:
                 continue
             if e.kind == mail.APPLIED:
                 led.applies[d].add(app.company)
-            elif e.kind == mail.OTHER and not e.thread:  # a ping or a letter to a recruiter — written by hand
-                led.pings[d].add(app.company)
+            elif e.kind == mail.OTHER:
+                led.messages[d].add(app.company)
+                if not e.thread:  # a ping or a letter to a recruiter — written by hand
+                    led.pings[d].add(app.company)
             elif e.kind in (mail.INTERVIEW, mail.OFFER) and e not in cancelled and not ar._CANCELLED_RX.search(e.subject):
                 led.stages[d].add(app.company)
             elif e.kind == mail.REJECTED:
@@ -242,7 +234,6 @@ def icebreakers(apps: list[mail.Application]) -> int:
 
 _DATE_DMY_RX = re.compile(r"(?<![\d.])(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?(?![\d.])")  # 25.11, 25.11.2026
 _MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
-_MONTH_NAMES = [m.capitalize() for m in _MONTHS]
 # "@ Wed Nov 25, 2026 2pm" — the subject of a calendar invitation
 _DATE_EN_RX = re.compile(rf"\b({'|'.join(_MONTHS)})[a-z]*\.? (\d{{1,2}})(?:, (\d{{4}}))?\b", re.I)
 RECENT_STAGE_DAYS = 30  # interview dates are looked for in letters and stage notes of this period
@@ -704,7 +695,8 @@ class Game:
     next_rank: str | None
     need_xp: int
     progress: float
-    heat: list[list[tuple[date, int] | None]]  # weeks (columns) × days Mon–Sun; None — the day hasn't come yet
+    heat: list[list[pc.HexDay | None]]  # weeks (columns) × days Mon–Sun; None — the day hasn't come yet
+    daily: list[dict]  # events by day over 2 × the longest chart period (to compare with the previous one)
     badges: list[Badge]
     step: NextStep
     wins: list[Win]
@@ -735,10 +727,6 @@ def build(today: date, staged: list[tuple[mail.Application, str]], goal: int | N
     stats, dates = goal_stats(led, staged, stems, today, goal)
     rejections = stats["rejections"]
     got = badges(stats, dates)
-
-    start = this_week - timedelta(weeks=HEAT_WEEKS - 1)
-    heat = [[(d, led.actions(d)) if d <= today else None
-             for d in (start + timedelta(days=w * 7 + i) for i in range(7))] for w in range(HEAT_WEEKS)]
 
     soon = upcoming_interview(apps, today)
     step = next_step(today, soon, waiting_long(apps, today), fit_leads(apps, jobs_dir or JOBS_DIR), goal, week_n)
@@ -807,7 +795,8 @@ def build(today: date, staged: list[tuple[mail.Application, str]], goal: int | N
         today=today, goal=goal, week_n=week_n, best_week=best_week,
         best_week_start=max(weeks, key=lambda w: (weeks[w], w)) if weeks else None, stars=stars,
         streak=streak, best_streak=best_streak, xp=xp, xp_parts=parts, rank=rank_name, next_rank=next_rank,
-        need_xp=need, progress=rank_progress(xp), heat=heat, badges=got, step=step,
+        need_xp=need, progress=rank_progress(xp), heat=pc.hex_grid(led, today),
+        daily=pc.daily(led, today, 2 * max(pc.PERIODS)), badges=got, step=step,
         wins=recent_wins(today, led, staged, got, weeks, streak_records),
         message=message_of_day(ctx, situations, today), quote=quote_of_day(today),
     )
@@ -860,21 +849,8 @@ CSS = """
 .game .badge.fresh .tag.new { display: inline-block; }
 .game details { margin-top: var(--sp-3); }
 .game details > summary { cursor: pointer; color: var(--accent); }
-.game details > .badges, .game details > .heat-box { margin-top: var(--sp-3); }
+.game details > .badges { margin-top: var(--sp-3); }
 details.game > summary { font-weight: var(--fw-medium); }
-/* activity heatmap */
-.game table.heat { border-collapse: separate; border-spacing: 3px; margin: 0; width: auto; }
-.game table.heat td, .game table.heat th { padding: 0; border: 0; background: none; font-size: var(--fs-xs);
-                                           color: var(--muted); font-weight: normal; position: static; }
-.game table.heat th { text-align: left; padding-right: var(--sp-1); white-space: nowrap; }
-.game .cell { display: inline-block; width: 13px; height: 13px; border-radius: var(--r-xs); background: var(--chip);
-              vertical-align: middle; }
-.game .cell.l1 { background: color-mix(in srgb, var(--ok) 30%, var(--chip)); }
-.game .cell.l2 { background: color-mix(in srgb, var(--ok) 55%, var(--chip)); }
-.game .cell.l3 { background: color-mix(in srgb, var(--ok) 80%, var(--chip)); } .game .cell.l4 { background: var(--ok); }
-.game .cell.today { outline: 1px solid var(--fg); }
-.game .legend-heat { display: flex; gap: 3px; align-items: center; font-size: var(--fs-xs); color: var(--muted);
-                     margin-top: var(--sp-1); }
 @media (max-width: 600px) {
   .game.hero { grid-template-columns: 1fr; }
   .game.hero .streak { text-align: left; }
@@ -893,39 +869,6 @@ try {
   localStorage.setItem(KEY, JSON.stringify(got.map(el => el.dataset.badge)));
 } catch (e) { /* no localStorage — just no "new" mark */ }
 </script>"""
-
-WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-_ROW_LABELS = ["Mon", "", "Wed", "", "Fri", "", ""]  # like GitHub: every other row is labelled
-
-
-def _level(n: int) -> int:
-    return 0 if n == 0 else 1 if n == 1 else 2 if n == 2 else 3 if n <= 4 else 4
-
-
-def _heat_html(g: Game) -> str:
-    """A table like GitHub's: rows — days of the week, columns — weeks (the label is the Monday's date)."""
-    head = "".join(f"<th>{short(w[0][0])}</th>" if i % 2 == 0 and w[0] else "<th></th>"
-                   for i, w in enumerate(g.heat))
-    rows = []
-    for i, label in enumerate(_ROW_LABELS):
-        cells = []
-        for week in g.heat:
-            cell = week[i]
-            if cell is None:
-                cells.append("<td></td>")
-                continue
-            d, n = cell
-            today = " today" if d == g.today else ""
-            what = plural(n, "action") if n else "no actions"
-            cells.append(f'<td><span class="cell l{_level(n)}{today}" '
-                         f'data-tip="{WEEKDAYS[i]} {short(d)}: {_e(what)}" tabindex="0"></span></td>')
-        rows.append(f"<tr><th>{label}</th>{''.join(cells)}</tr>")
-    legend = "".join(f'<span class="cell l{i}"></span>' for i in range(5))
-    return (
-        f'<div class="heat-wrap"><table class="heat"><tr><th></th>{head}</tr>{"".join(rows)}</table></div>'
-        f'<div class="legend-heat">applications, stages and pings: fewer {legend} more</div>'
-    )
-
 
 def hero_html(g: Game) -> str:
     """The main block: rank, XP with a bar to the next one, streak, message of the day."""
@@ -1003,16 +946,13 @@ def badges_html(g: Game) -> str:
 
 
 def activity_html(g: Game) -> str:
-    """The heatmap, goal weeks and the record — collapsed."""
-    weeks_line = f"⭐ Weeks with the goal met ({g.goal}+ applications): <b>{g.stars}</b>"
-    record = ""
+    """The hex map over pc.HEX_WEEKS weeks and the summary (the streak is in the main block): busiest day, goal weeks, weekly record."""
+    extra = [("Weeks with the goal ⭐", f'{g.stars} <span class="small">({g.goal}+ applications)</span>')]
     if g.best_week_start:
         end = g.best_week_start + timedelta(days=6)
-        record = (f"<br>🏅 Record — {_e(plural(g.best_week, 'application'))} in the week "
-                  f"{short(g.best_week_start)}–{short(end)}")
-    return (f'<details class="game"><summary>Activity over {HEAT_WEEKS} weeks</summary>'
-            f'<div class="heat-box">{_heat_html(g)}</div>'
-            f'<div class="small" style="margin-top:var(--sp-2)">{weeks_line}{record}</div></details>')
+        extra.append(("Weekly record", f"{_e(plural(g.best_week, 'application'))} "
+                                       f'<span class="small">{short(g.best_week_start)}–{short(end)}</span>'))
+    return pc.hexes_html(g.heat, g.today, extra)
 
 
 def page(today: date, staged: list[tuple[mail.Application, str]]) -> str:
@@ -1021,7 +961,8 @@ def page(today: date, staged: list[tuple[mail.Application, str]]) -> str:
     return (
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-        f"<title>Progress — {today.isoformat()}</title>{THEME_JS}<style>{_CSS}{CSS}</style></head><body>"
+        f"<title>Progress — {today.isoformat()}</title>{THEME_JS}<style>{_CSS}{CSS}{pc.CSS}</style></head><body>"
         f"<h1>Search progress — {today.isoformat()}</h1>"
-        f"{hero_html(g)}{next_html(g)}{wins_html(g)}{badges_html(g)}{activity_html(g)}{SCRIPT}</body></html>"
+        f"{hero_html(g)}{next_html(g)}{pc.trend_html(g.daily)}{activity_html(g)}{wins_html(g)}{badges_html(g)}"
+        f"{SCRIPT}{pc.SCRIPT}</body></html>"
     )

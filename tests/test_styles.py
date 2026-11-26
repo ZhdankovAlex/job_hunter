@@ -8,7 +8,7 @@ from datetime import date
 
 import pytest
 
-from jobhunter import applications_report, config, html_report
+from jobhunter import applications_report, config, gamification, html_report, progress_charts
 
 STATIC = config.ROOT / "web" / "static"
 TOKENS = (STATIC / "tokens.css").read_text(encoding="utf-8")
@@ -16,6 +16,8 @@ SOURCES = {
     "app.css": (STATIC / "app.css").read_text(encoding="utf-8"),
     "html_report._CSS": html_report._CSS.removeprefix(html_report.TOKENS_CSS),
     "applications_report._CSS_COLORS": applications_report._CSS_COLORS,
+    "gamification.CSS": gamification.CSS,
+    "progress_charts.CSS": progress_charts.CSS,
 }
 DEFINED_RX = re.compile(r"(--[\w-]+)\s*:")
 USED_RX = re.compile(r"var\((--[\w-]+)\s*\)")  # with a fallback (var(--n, 3)) — set from a template / JS
